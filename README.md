@@ -5,6 +5,8 @@
 一个可以直接在浏览器里跑的单机像素动作 RPG。手绘级程序化像素美术（24 色锁定板），
 武侠表达（银两 / 历练 / 境界 / 侠名 / 道行），砍杀、刷宝、昼夜流转、村庄 NPC 生态与三层地宫。
 
+**在线试玩**：https://xiaoyaoxing.app.workbuddy.host/?sharecode=KYHJXXANU5
+
 ![青云集·正午](dawn-s1/screenshot-village-noon.png)
 
 | 青云古洞·洞主 | 村中对话 |
