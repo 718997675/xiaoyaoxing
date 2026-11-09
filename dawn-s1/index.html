@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>逍遥行 · 第一章 青云野</title>
+<style>
+  html,body{margin:0;height:100%;background:#12161F;overflow:hidden;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
+    overscroll-behavior:none;touch-action:none}
+  #wrap{position:relative;margin:0 auto;top:50%;transform:translateY(-50%)}
+  canvas{position:absolute;left:0;top:0;image-rendering:pixelated;image-rendering:crisp-edges;
+    touch-action:none;display:block}
+  #gl{z-index:1} #ov{z-index:2}
+  .panel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    background:#E8DFC8;border:3px solid #000;box-shadow:0 0 0 2px #8A6520;
+    color:#12161F;font:14px/1.7 SimSun,monospace;padding:18px 26px;text-align:center;z-index:10}
+  .panel h1{margin:0 0 4px;font-size:22px;letter-spacing:7px;color:#12161F}
+  .panel p{margin:4px 0 12px;color:#4A5568;font-size:12px;line-height:1.7}
+  .panel button{display:block;width:100%;margin:6px 0;padding:8px 0;cursor:pointer;
+    background:#C9BFA3;color:#12161F;border:2px solid #000;box-shadow:0 0 0 1px #8A6520;
+    font:14px SimSun,monospace;letter-spacing:4px}
+  .panel button:hover{background:#D9A441;color:#12161F}
+  .panel button:disabled{opacity:.45;cursor:default}
+  .hidden{display:none!important}
+  /* 竖屏时的一句话提示（横过来自动消失） */
+  #rot{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:50;display:none;
+    background:rgba(232,223,200,.94);border:2px solid #8A6520;color:#12161F;
+    padding:5px 12px;font:12px SimSun,monospace;letter-spacing:1px;white-space:nowrap;
+    box-shadow:0 2px 10px rgba(0,0,0,.4)}
+
+  /* ---------- 窄屏（手机竖屏）自适应 ---------- */
+  @media (max-width:700px){
+    .panel{max-width:94vw;max-height:88vh;overflow:auto;padding:12px 14px}
+    #inv{min-width:0;width:94vw}
+    #inv .body{flex-wrap:wrap}
+    #inv .grid{grid-template-columns:repeat(6,28px)}
+    #skills{width:94vw}
+    #skills .cols{flex-wrap:wrap}
+    #skills .branch{flex:1 1 100%}
+    #forge{width:94vw}
+  }
+
+  /* ---------- 行囊 ---------- */
+  #inv{display:none;text-align:left;padding:12px 16px 10px;z-index:12;min-width:560px}
+  #inv .top{font-size:12px;color:#2F6E6A;line-height:1.7;margin-bottom:6px}
+  #inv .top b{color:#12161F}
+  #inv .body{display:flex;gap:12px;align-items:flex-start}
+  #inv .eqCol{display:flex;flex-direction:column;gap:5px;width:132px}
+  #inv .eqCol .hd{font:11px SimSun;letter-spacing:3px;color:#8A6520;text-align:center}
+  #inv .eq{position:relative;display:flex;align-items:center;gap:6px;height:44px;padding:2px 6px;
+    box-sizing:border-box;background:#C9BFA3;border:2px solid #000;box-shadow:0 0 0 1px #8A8268;cursor:default}
+  #inv .eq i{position:absolute;left:4px;top:1px;font:9px SimSun;color:#8A6520;font-style:normal;letter-spacing:1px}
+  #inv .eq img{width:26px;height:26px;image-rendering:pixelated;margin-top:6px}
+  #inv .eq .eqName{margin-top:8px;font:11px SimSun;line-height:1.25;color:#12161F;
+    overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  #inv .eq .eqEmpty{margin-top:8px;font:11px SimSun;color:#8A8268}
+  #inv .eq .eqEnh{position:absolute;right:4px;bottom:2px;font:bold 9px monospace;background:#D9A441;padding:0 2px}
+  #inv .eq.empty{opacity:.62;border-style:dashed;border-color:#8A8268;box-shadow:none}
+  #inv .eq.r1{box-shadow:0 0 0 2px #5FA8A0} #inv .eq.r2{box-shadow:0 0 0 2px #8A6FC4}
+  #inv .eq.r3{box-shadow:0 0 0 2px #C8453B} #inv .eq.r4{box-shadow:0 0 0 2px #D9A441}
+  #inv .grid{display:grid;grid-template-columns:repeat(10,28px);gap:3px;margin:0}
+  #inv .slot{box-sizing:border-box;width:28px;height:28px;background:#C9BFA3;border:2px solid #000;
+    box-shadow:0 0 0 1px #8A8268;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative}
+  #inv .slot img{width:20px;height:20px;image-rendering:pixelated}
+  #inv .slot.r0{box-shadow:0 0 0 2px #E8DFC8} #inv .slot.r1{box-shadow:0 0 0 2px #5FA8A0}
+  #inv .slot.r2{box-shadow:0 0 0 2px #8A6FC4} #inv .slot.r3{box-shadow:0 0 0 2px #C8453B}
+  #inv .slot.r4{box-shadow:0 0 0 2px #D9A441}
+  #inv .badge{position:absolute;right:-1px;bottom:-2px;font:bold 8px/1 monospace;color:#12161F;
+    background:#E8DFC8;padding:1px 2px;pointer-events:none}
+  #inv .badge.r1{background:#5FA8A0} #inv .badge.r2{background:#8A6FC4;color:#E8DFC8}
+  #inv .badge.r3{background:#C8453B;color:#E8DFC8} #inv .badge.r4{background:#D9A441}
+  #inv .badge.enh{background:#D9A441;color:#12161F}
+  #inv .tip{color:#8A8268;font-size:11px;margin-top:6px}
+  #inv .tools{margin-top:2px}
+  #inv .tools button{display:inline-block;width:auto;margin:0 6px 0 0;padding:3px 10px;font-size:11px;letter-spacing:1px}
+  #tip{display:none;position:fixed;z-index:50;pointer-events:none;background:#E8DFC8;color:#12161F;
+    border:2px solid #000;box-shadow:0 0 0 2px #8A6520;padding:6px 10px;font:12px/1.5 SimSun,monospace;width:190px}
+
+  /* ---------- 铁匠台 ---------- */
+  #forge{z-index:12;width:420px;max-height:78vh;overflow:auto}
+  #forge .forgeRow{margin:7px 0;text-align:left;border-bottom:1px solid #8A8268;padding-bottom:5px;font-size:12px}
+  #forge .forgeRow:last-child{border-bottom:none}
+  #forge button{display:inline-block;width:auto;margin:5px 4px 0 0;padding:3px 8px;font-size:11px;letter-spacing:0}
+  #forge .tip{color:#8A8268;font-size:11px}
+
+  /* ---------- 商铺（药铺 / 酒馆 / 客栈 / 铁匠） ---------- */
+  #shop{z-index:12;width:400px;max-height:76vh;overflow:auto;text-align:left}
+  #shop h1{letter-spacing:6px}
+  #shop .sp{font-size:11px;color:#2F6E6A;margin:0 0 8px;letter-spacing:0}
+  #shop .say{font-size:12px;line-height:1.7;color:#4A5568;background:#DCD2B8;
+    border-left:3px solid #8A6520;padding:6px 9px;margin-bottom:9px}
+  #shop .goods{border-bottom:1px solid #8A8268;padding:5px 0 7px;margin-bottom:2px}
+  #shop .gn{font-size:13px;color:#12161F;letter-spacing:1px;display:flex;justify-content:space-between}
+  #shop .gn b{font:11px monospace;color:#8A6520;letter-spacing:0}
+  #shop .gd{font:11px/1.5 SimSun;color:#4A5568;margin:1px 0 4px}
+  #shop button{display:inline-block;width:auto;margin:0;padding:2px 12px;font-size:11px;letter-spacing:2px}
+
+  /* ---------- 对话 ---------- */
+  #talk{z-index:12;width:430px;text-align:left}
+  #talk h1{letter-spacing:4px}
+  #talk .sp{font-size:11px;color:#2F6E6A;margin:0 0 8px;letter-spacing:0}
+  /* 正文区给足高度：一行话吐到一半时面板不能跳高，否则选项会乱动 */
+  #talk .say{font-size:13px;line-height:1.85;color:#2A2F38;background:#DCD2B8;
+    border-left:3px solid #8A6520;padding:9px 11px;margin-bottom:10px;min-height:56px;cursor:pointer}
+  #talk .opts{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+  #talk button{display:inline-block;width:auto;margin:0;padding:3px 14px;font-size:11px;letter-spacing:2px}
+
+  /* ---------- 道行 ---------- */
+  #skills{z-index:13;width:660px;max-height:80vh;overflow:auto}
+  #skills h1{letter-spacing:10px}
+  #skills .sp{font-size:12px;color:#8A6520;margin-bottom:6px}
+  #skills .sp b{color:#C8453B;font-size:15px}
+  #skills .cols{display:flex;gap:10px;align-items:flex-start;text-align:left}
+  #skills .branch{flex:1;background:#DCD2B8;border:2px solid #000;padding:6px 7px 8px;box-shadow:0 0 0 1px #8A6520}
+  #skills .branch h4{margin:0 0 5px;font:bold 13px SimSun;letter-spacing:3px;color:var(--bc);border-bottom:1px solid #8A8268;padding-bottom:3px}
+  #skills .branch h4 span{display:block;font:9px SimSun;letter-spacing:0;color:#8A8268;font-weight:normal}
+  #skills .node{position:relative;background:#E8DFC8;border:1px solid #8A6520;padding:4px 6px 5px;margin-bottom:5px;cursor:pointer;transition:background .12s}
+  #skills .node:hover{background:#F2E9CE}
+  #skills .node.locked{opacity:.55;cursor:not-allowed}
+  #skills .node.maxed{background:#E2E9C8;border-color:#2F6E6A;cursor:default}
+  #skills .nTop{display:flex;justify-content:space-between;font-size:11px}
+  #skills .nTop b{color:#12161F;letter-spacing:1px}
+  #skills .nTop span{color:#8A6520;font:10px monospace}
+  #skills .nDesc{font:10px/1.35 SimSun;color:#4A5568;margin:1px 0 2px}
+  #skills .nBar{display:flex;gap:2px;margin:2px 0}
+  #skills .nBar i{width:100%;height:3px;background:#B6AB8F}
+  #skills .nBar i.on{background:var(--bc)}
+  #skills .nHint{font:9px SimSun;color:#8A8268}
+  #skills .node.maxed .nHint{color:#2F6E6A}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="gl"></canvas>
+  <canvas id="ov"></canvas>
+  <div id="menu" class="panel">
+    <h1>逍遥行</h1>
+    <p>天地任逍遥 · 第一章 青云野<br>
+      WASD/方向键 移动 · J/空格 斩击 · K 剑气 · L 剑舞 · H 天雷<br>
+      Shift 身法 · Q 回春丹 · T 道行 · Tab 行囊 · E 铁匠台 · R 御风</p>
+    <button id="btnNew">踏入江湖</button>
+    <button id="btnCont">继续闯荡</button>
+  </div>
+  <div id="dead" class="panel hidden">
+    <h1>侠陨</h1>
+    <p>损失 20% 银两，被救回土地庙</p>
+    <button id="btnRespawn">回到土地庙</button>
+  </div>
+  <div id="clear" class="panel hidden">
+    <h1>第一章 · 通关</h1>
+    <p>青云野匪患已清，江湖路远<br>第二章 · 未开放（按章制作中）</p>
+    <button id="btnRoam">继续游历</button>
+    <button id="btnCh2" disabled>第二章 · 敬请期待</button>
+  </div>
+
+  <div id="inv" class="panel">
+    <div class="top" id="invStats"></div>
+    <div class="body">
+      <div class="eqCol">
+        <div class="hd">装 备</div>
+        <div id="eqSlots"></div>
+      </div>
+      <div>
+        <div class="hd" style="font:11px SimSun;letter-spacing:3px;color:#8A6520;margin-bottom:5px">行 囊</div>
+        <div class="grid" id="invGrid"></div>
+        <div class="tools">
+          <button id="btnBulk0">分解凡品</button>
+          <button id="btnBulk1">分解凡品+精品</button>
+        </div>
+        <div class="tip">左键：装备/服用　右键：分解　装备槽右键卸下　Tab 关闭</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="forge" class="panel hidden">
+    <h1>铁匠台</h1>
+    <div id="forgeBody"></div>
+    <button id="btnForgeClose">离开（Esc）</button>
+  </div>
+
+  <div id="shop" class="panel hidden">
+    <h1 id="shopTitle">铺子</h1>
+    <div class="sp" id="shopSub"></div>
+    <div id="shopBody"></div>
+    <button id="btnShopClose">离开（Esc）</button>
+  </div>
+
+  <div id="talk" class="panel hidden">
+    <h1 id="talkName">人</h1>
+    <div class="sp" id="talkRole"></div>
+    <div class="say" id="talkLine"></div>
+    <div class="opts" id="talkOpts"></div>
+    <button id="btnTalkClose">作别（Esc）</button>
+  </div>
+
+  <div id="skills" class="panel hidden">
+    <h1>道行</h1>
+    <div class="sp">余下参悟点 <b id="spLeft">0</b> · 每次境界提升得 1 点</div>
+    <div class="cols" id="skillTree"></div>
+    <button id="btnSkillClose">收功（T / Esc）</button>
+  </div>
+</div>
+<div id="tip"></div>
+<div id="rot">建议横屏游玩 · 左下摇杆走位，右侧按键出招</div>
+<script id="boot">
+  // 双击打开（file://）时浏览器会用 origin 'null' 去取 ES module，被 CORS 直接拦掉，
+  // game.js 一行都不会执行 —— 表现就是「只有菜单外壳，按钮点了没反应」。
+  // 所以：http 下走原生 ES module（开发流程不变）；file:// 下改用同目录的打包版（经典脚本）。
+  if (location.protocol === 'file:') {
+    const boot = () => {
+      if (window.__xiaoyaoBooted) return; // 单文件版已内联，别重复加载
+      const s = document.createElement('script');
+      s.src = './xiaoyao-bundle.js';
+      s.onerror = () => {
+        const tip = document.createElement('div');
+        tip.style.cssText = 'position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:99999;' +
+          'background:#E8DFC8;color:#12161F;border:2px solid #8A6520;padding:10px 14px;' +
+          'font:13px/1.6 ui-monospace,monospace;box-shadow:0 4px 18px rgba(0,0,0,.35);max-width:80vw';
+        tip.innerHTML = '本地双击模式需要打包文件：请在该目录执行 <b>node build.js</b>，' +
+          '或执行 <b>node server.js</b> 后访问 http://127.0.0.1:8124/';
+        document.body.appendChild(tip);
+      };
+      document.head.appendChild(s);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+    else boot();
+  } else {
+    // 动态注入 module：等价于原来的 <script type="module" src>，但 file:// 下不会留下一条 CORS 红字
+    const m = document.createElement('script');
+    m.type = 'module';
+    m.src = './game.js';
+    document.head.appendChild(m);
+  }
+</script>
+<script>
+  const fire = (maxR) => { if (window.__game) window.__game.salvageBulk(maxR); };
+  document.getElementById('btnBulk0').onclick = () => fire(0);
+  document.getElementById('btnBulk1').onclick = () => fire(1);
+  // game.js 现在是动态注入的 module，加载完成时间不定 —— 等 __game 就绪再跑测试钩子，
+  // 否则 ?dev=1 会在游戏还没起来时就去调 runDevTests（表现为「测试没跑」）。
+  const whenGame = (fn) => {
+    if (window.__game) return fn();
+    let n = 0;
+    const t = setInterval(() => {
+      if (window.__game) { clearInterval(t); fn(); }
+      else if (++n > 240) clearInterval(t);
+    }, 50);
+  };
+  if (location.search.indexOf('dev=1') >= 0) {
+    whenGame(() => import('./devtest.js').then(m => setTimeout(() => m.runDevTests(), 200)));
+  }
+  if (location.search.indexOf('scene=') >= 0) {
+    const mode = (location.search.match(/scene=(\w+)/) || [])[1] || 'fight';
+    whenGame(() => import('./devtest.js').then(m => setTimeout(() => m.setupScene(mode), 200)));
+  }
+</script>
+</body>
+</html>

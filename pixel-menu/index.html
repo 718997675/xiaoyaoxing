@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>九重天梯 - 主菜单</title>
+<style>body{margin:0;background:#000}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="out" width="1920" height="1080"></canvas>
+<script>
+const P = {
+  ink1:'#12161F', ink2:'#2A3140', ink3:'#4A5568',
+  paper1:'#8A8268', paper2:'#C9BFA3', paper3:'#E8DFC8',
+  jade1:'#2F6E6A', jade2:'#5FA8A0', jade3:'#9BD4CC',
+  red1:'#7A2420', red2:'#C8453B', red3:'#E8806F',
+  gold1:'#8A6520', gold2:'#D9A441', gold3:'#F2D089',
+  pur1:'#4A3A6B', pur2:'#8A6FC4', pur3:'#C0A8E0',
+  black:'#000000', white:'#FFFFFF'
+};
+const W = 480, H = 270;
+const cv = document.createElement('canvas');
+cv.width = W; cv.height = H;
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+function rect(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x|0, y|0, w|0, h|0); }
+function frame(x, y, w, h, c) {
+  rect(x, y, w, 1, c); rect(x, y+h-1, w, 1, c);
+  rect(x, y, 1, h, c); rect(x+w-1, y, 1, h, c);
+}
+function box(x, y, w, h, fill, border) {
+  rect(x-1, y-1, w+2, h+2, border);
+  rect(x, y, w, h, fill);
+}
+
+// hard-edged bitmap text: render then threshold alpha, no anti-aliasing survives
+function pText(str, x, y, size, color, align) {
+  const oc = document.createElement('canvas');
+  const w = Math.ceil(str.length * size * 1.3) + 8, h = size + 10;
+  oc.width = w; oc.height = h;
+  const c = oc.getContext('2d');
+  c.font = size + 'px SimSun, serif';
+  c.textBaseline = 'top';
+  c.fillStyle = '#fff';
+  c.fillText(str, 4, 4);
+  const d = c.getImageData(0, 0, w, h).data;
+  let minX = w, minY = h, maxX = -1, maxY = -1;
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    if (d[(j*w+i)*4+3] >= 128) {
+      if (i < minX) minX = i; if (i > maxX) maxX = i;
+      if (j < minY) minY = j; if (j > maxY) maxY = j;
+    }
+  }
+  if (maxX < 0) return;
+  const tw = maxX - minX + 1;
+  const dx = align === 'center' ? x - (tw >> 1) : align === 'right' ? x - tw : x;
+  ctx.fillStyle = color;
+  for (let j = minY; j <= maxY; j++) for (let i = minX; i <= maxX; i++) {
+    if (d[(j*w+i)*4+3] >= 128) ctx.fillRect(dx + i - minX, y + j - minY, 1, 1);
+  }
+}
+
+// ---- background ----
+rect(0, 0, W, H, P.ink1);
+// sparse dim stars
+[[40,18],[80,52],[150,12],[220,26],[260,10],[350,16],[420,24],[455,60],[28,90],[240,60],[430,100],[390,56]].forEach(([x,y]) => rect(x, y, 1, 1, P.ink3));
+rect(150, 12, 1, 1, P.jade1);
+rect(430, 100, 1, 1, P.jade1);
+
+// ---- nine-storey pagoda silhouette, center-right ----
+const cx = 282;
+// spire
+box(cx-1, 46, 3, 12, P.ink2, P.black);
+rect(cx-1, 43, 3, 2, P.gold2);
+for (let i = 0; i < 9; i++) {
+  const ty = 58 + i * 19;
+  const bw = 16 + i * 6;
+  const rw = bw + 14;
+  const bx = cx - (bw >> 1), rx = cx - (rw >> 1);
+  // roof slab with upturned pixel eave tips
+  box(rx, ty, rw, 3, P.ink2, P.black);
+  rect(rx-1, ty-1, 2, 1, P.ink2); rect(rx+rw-1, ty-1, 2, 1, P.ink2);
+  rect(rx-2, ty-2, 1, 1, P.ink2); rect(rx+rw+1, ty-2, 1, 1, P.ink2);
+  // body
+  box(bx, ty+3, bw, 16, P.ink2, P.black);
+  // narrow jade band at the tower waist (middle storey)
+  if (i === 4) rect(bx, ty+9, bw, 2, P.jade2);
+  // small dark doorway on lower storeys
+  if (i >= 6) rect(cx-2, ty+9, 4, 8, P.ink1);
+}
+
+// ---- solid stepped mist blocks at tower foot and bottom edge ----
+rect(260, 210, 90, 4, P.paper1);
+rect(245, 214, 120, 4, P.paper1);
+rect(230, 218, 150, 22, P.paper1);
+rect(0, 240, 480, 30, P.paper1);
+rect(30, 236, 70, 4, P.paper1);
+rect(140, 233, 60, 7, P.paper1);
+rect(250, 236, 80, 4, P.paper1);
+rect(370, 232, 70, 8, P.paper1);
+rect(0, 246, 110, 1, P.ink1);
+rect(200, 248, 150, 1, P.ink1);
+rect(400, 245, 80, 1, P.ink1);
+
+// ---- cloud-curl corner motif ----
+function curl(x, y) {
+  rect(x, y+2, 5, 1, P.ink2);
+  rect(x+1, y+1, 4, 1, P.ink2);
+  rect(x+2, y, 3, 1, P.ink2);
+  rect(x+4, y+3, 2, 1, P.ink2);
+  rect(x+3, y+2, 1, 1, P.ink2);
+}
+
+// ---- left top: vertical paper scroll panel ----
+const px = 24, py = 32, pw = 178, ph = 88;
+// scroll rods top & bottom
+box(px-4, py-4, pw+8, 3, P.gold1, P.black);
+box(px-4, py+ph+1, pw+8, 3, P.gold1, P.black);
+box(px, py, pw, ph, P.paper3, P.black);
+curl(px+3, py+3); curl(px+pw-9, py+3);
+curl(px+3, py+ph-7); curl(px+pw-9, py+ph-7);
+// vertical four big characters
+const title = '九重天梯';
+for (let i = 0; i < 4; i++) pText(title[i], px + pw/2, py+5 + i*17, 16, P.ink1, 'center');
+pText('登塔问道 · 本地验证', px + pw/2, py+74, 12, P.ink2, 'center');
+
+// ---- left bottom: horizontal scroll frame with realm + progress ----
+const sx = 24, sy = 140, sw = 178, sh = 28;
+box(sx-3, sy-2, 3, sh+4, P.gold1, P.black);
+box(sx+sw, sy-2, 3, sh+4, P.gold1, P.black);
+box(sx, sy, sw, sh, P.paper3, P.black);
+curl(sx+2, sy+2); curl(sx+2, sy+sh-6);
+curl(sx+sw-8, sy+2); curl(sx+sw-8, sy+sh-6);
+pText('金丹', sx+14, sy+7, 14, P.ink1, 'left');
+// progress bar ~60%
+const bx0 = sx+52, by0 = sy+9, bw0 = 112, bh0 = 10;
+box(bx0, by0, bw0, bh0, P.ink2, P.black);
+rect(bx0, by0, Math.round(bw0*0.6), bh0, P.jade2);
+rect(bx0, by0, Math.round(bw0*0.6), 1, P.jade3);
+frame(bx0, by0, bw0, bh0, P.black);
+
+// ---- right top: four pixel buttons ----
+const labels = ['开始入塔', '境界总览', '传承灵韵', '设置'];
+const bx = 336, bw = 120, bh = 24;
+labels.forEach((s, i) => {
+  const by = 36 + i * 34;
+  box(bx, by, bw, bh, P.ink2, P.black);
+  rect(bx+1, by+1, bw-2, 1, P.ink3);
+  rect(bx+1, by+1, 1, bh-2, P.ink3);
+  rect(bx+1, by+bh-2, bw-2, 1, P.ink1);
+  rect(bx+bw-2, by+1, 1, bh-2, P.ink1);
+  pText(s, bx + bw/2, by+6, 12, P.paper3, 'center');
+  if (i === 0) {
+    frame(bx-3, by-3, bw+6, bh+6, P.gold2);
+    frame(bx-5, by-5, bw+10, bh+10, P.gold2);
+    rect(bx, by+bh+6, bw, 1, P.gold2);
+  }
+});
+
+// ---- right bottom: heritage slots, 6 pointed hexagons ----
+pText('传承灵韵', 322, 182, 12, P.paper2, 'left');
+const hexRows = [[5,16],[4,17],[4,17],[3,18],[3,18],[2,19],[2,19],[1,20],[1,20],[0,21],[0,21],[1,20],[1,20],[2,19],[2,19],[3,18],[3,18],[4,17],[4,17],[5,16]];
+function hexSlot(x, y, filled) {
+  hexRows.forEach(([s, e], r) => rect(x+s, y+r, e-s+1, 1, P.black));
+  hexRows.forEach(([s, e], r) => {
+    if (r === 0 || r === 19) return;
+    const ss = r === 1 || r === 18 ? s+1 : s+1;
+    const ee = r === 1 || r === 18 ? e-1 : e-1;
+    rect(x+ss, y+r, ee-ss+1, 1, P.ink2);
+  });
+  if (filled) {
+    // gold bright edge on upper-left diagonal
+    rect(x+5, y, 6, 1, P.gold2);
+    rect(x+3, y+2, 2, 1, P.gold2);
+    rect(x+1, y+4, 1, 3, P.gold2);
+  }
+}
+for (let i = 0; i < 6; i++) {
+  const x = 322 + i * 26, y = 198;
+  hexSlot(x, y, i < 2);
+  if (i === 0) {
+    // embedded diamond sigil
+    rect(x+10, y+6, 2, 1, P.gold2);
+    rect(x+9, y+7, 4, 1, P.gold2);
+    rect(x+8, y+8, 6, 2, P.gold2);
+    rect(x+10, y+8, 2, 2, P.gold3);
+    rect(x+9, y+10, 4, 1, P.gold2);
+    rect(x+10, y+11, 2, 1, P.gold2);
+  } else if (i === 1) {
+    // embedded cloud sigil
+    rect(x+7, y+8, 8, 2, P.jade2);
+    rect(x+9, y+6, 4, 1, P.gold2);
+    rect(x+8, y+7, 6, 1, P.gold2);
+    rect(x+10, y+10, 3, 1, P.gold3);
+    rect(x+9, y+11, 5, 1, P.gold2);
+  }
+}
+
+// ---- footer ----
+pText('九重天梯 · 像素验证版 v0.2', 236, 252, 12, P.ink1, 'right');
+pText('本地存档：已存在', 244, 252, 12, P.ink1, 'left');
+
+// ---- integer 4x nearest-neighbor upscale ----
+const out = document.getElementById('out');
+const octx = out.getContext('2d');
+octx.imageSmoothingEnabled = false;
+octx.drawImage(cv, 0, 0, 1920, 1080);
+
+// save to local server
+fetch('/save', { method: 'POST', body: out.toDataURL('image/png').split(',')[1] })
+  .then(() => { document.title = 'SAVED'; });
+</script>
+</body>
+</html>

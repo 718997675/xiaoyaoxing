@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# 本地工作区数据（记忆 / 会话缓存）
+.workbuddy/
+
+# AI 生成的美术中间稿（单张 png，体积大，不入库）
+vibe_images/
+
+# 与游戏无关的其它项目文档
+搭配了吗-移动端研发方案.md
