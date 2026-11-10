@@ -112,7 +112,11 @@ async function waitFor(fn, timeout, label) {
       }
     };
 
-    const url = 'http://127.0.0.1:' + PORT + '/index.html?' + (process.env.QS || 'dev=1');
+    // PAGE= 换入口页。默认跑 index.html（module 版）；
+    // 传 PAGE=逍遥行.html 才能验打包产物 —— 单文件版走的是另一套代码路径
+    // （build.js 把 ESM 拆成 __M.xxx），module 版绿了不代表它能跑。
+    const page = process.env.PAGE || 'index.html';
+    const url = 'http://127.0.0.1:' + PORT + '/' + encodeURIComponent(page) + '?' + (process.env.QS || 'dev=1');
     await api.send('Page.navigate', { url });
     await sleep(500);
     await waitFor(() => api.send('Runtime.evaluate', { expression: '!!window.__game', returnByValue: true })
@@ -168,6 +172,8 @@ async function waitFor(fn, timeout, label) {
     if (logs.length) console.log('\n--- 页面报错 ---\n' + logs.join('\n'));
   } catch (e) {
     console.error('FAILED:', e.message);
+    // 失败时也要把页面报错打出来 —— 否则"等 __game 超时"完全看不出是哪个模块炸了
+    try { if (logs && logs.length) console.error('\n--- 页面报错 ---\n' + logs.join('\n')); } catch (e2) { }
     process.exitCode = 1;
   } finally {
     if (api) api.close();

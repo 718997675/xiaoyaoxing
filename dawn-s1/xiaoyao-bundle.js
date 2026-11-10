@@ -54738,6 +54738,407 @@ const ACTIVES = {
 return { BRANCHES, NODES, NODE_BY_ID, nodeLevel, computeSkillStats, canLearn, ACTIVES };
 })();
 
+/* ==================== arts.js ==================== */
+__M.arts = (function () {
+// arts.js · 兵器招式（技能框架的数据层）
+//
+// 为什么叫 arts 而不是 skills：
+//   skills.js 里已经有一棵"道行树"（三支被动 + 气/舞/雷三个主动），那是境界带来的
+//   通用手段，跟手里拿什么兵器无关。这一层是"兵器招式"—— 换刀就没有剑招，
+//   两者是不同的轴，硬塞进同一个名字里，读代码的人会一直猜。
+//
+// 纯数据 + 纯函数，无 DOM / 无 three.js 依赖，可单测。
+
+// ============ 专精 ============
+// 专精靠"拿这件兵器杀敌"涨，不花道行点 —— 道行点是境界给的，属于"修为"；
+// 专精是"手上功夫"，练出来的。两套成长曲线刻意分开，否则点数永远不够分。
+const PROF_MAX = 10;
+// 累计击杀达到 PROF_NEED[n-1] 即第 n 级。1 级只要 2 只 —— 玩家第一次换兵器
+// 打两只怪就能看见"招式解锁"的提示，不然这套系统在前期完全不存在。
+const PROF_NEED = [2, 6, 14, 26, 42, 62, 88, 118, 156, 200];
+// 精英与首领按倍数折算，省得刷小怪刷到吐
+const PROF_WEIGHT = { normal: 1, elite: 3, boss: 12 };
+
+function profLevel(kills) {
+  const k = kills || 0;
+  let lv = 0;
+  for (let i = 0; i < PROF_NEED.length; i++) if (k >= PROF_NEED[i]) lv = i + 1;
+  return lv;
+}
+// 距离下一级还差几只（已满级返回 0）
+function profLeft(kills) {
+  const k = kills || 0;
+  for (let i = 0; i < PROF_NEED.length; i++) if (k < PROF_NEED[i]) return PROF_NEED[i] - k;
+  return 0;
+}
+// 当前等级内的进度 0~1，给进度条用
+function profFrac(kills) {
+  const k = kills || 0;
+  const lv = profLevel(k);
+  if (lv >= PROF_MAX) return 1;
+  const lo = lv === 0 ? 0 : PROF_NEED[lv - 1];
+  const hi = PROF_NEED[lv];
+  return Math.max(0, Math.min(1, (k - lo) / Math.max(1, hi - lo)));
+}
+
+// ============ 招式 ============
+// fx 是"效果原语"，game.js 里只有 execArt 一个分派器 —— 加一招不改运行时。
+//   melee  身前/环身判定（reach + arc，arc 给 6.28 就是环身）
+//   proj   打出一枚（或数枚）弹体，可穿透、可挂状态
+//   spin   持续旋转若干秒，每 tick 一次判定（可反弹飞行物）
+//   orbit  召出若干把飞剑环绕，每把独立追敌结算
+//   blink  连续短距闪烁，穿过敌人造成伤害
+//   bolt   在目标头顶落雷（复用首领天雷的 bolts 通道）
+//
+// 修饰字段：
+//   pierceDef  本次伤害无视对方多少防御（0~1）
+//   status     命中附加状态 { kind, dur, pct }，pct 是"每秒按本次伤害的百分之几"
+//   launch     上挑击飞，落地再受一次摔伤
+//   centerBonus 环身技的中心额外倍率
+//   lifeOnHit  每次命中回多少比例气血（0~1）
+//
+// 数值口径见 SKILLS-STORY-PLAN.md §2.2：以"普攻 DPS = 100"为基准，
+// 技能总伤 ≈ atk × 系数(CD)，系数 3s→1.6 / 6s→2.4 / 10s→3.4 / 20s→5.0 / 30s→6.5。
+// 真气消耗 = CD × 1.2。
+const ARTS = {
+  // ---------- 剑 · 中庸 / 精准 / 连击 ----------
+  sword_1: {
+    id: 'sword_1', fam: 'sword', slot: 'dmg', name: '破锋式', prof: 1,
+    cd: 4, cost: 4.8, fx: 'melee',
+    reach: 40, arc: 1.2, mul: 6.6, kb: 9, pierceDef: 0.3,
+    desc: '一剑直取，无视三成防御。',
+  },
+  sword_8: {
+    id: 'sword_8', fam: 'sword', slot: 'special', name: '万剑归宗', prof: 4,
+    cd: 30, cost: 36, fx: 'orbit',
+    count: 12, dur: 6, mul: 1.9, radius: 34,
+    desc: '十二剑环绕六息，各自追敌，每把独立结算。',
+  },
+
+  // ---------- 刀 · 大开大合 / 流血 ----------
+  blade_2: {
+    id: 'blade_2', fam: 'blade', slot: 'dmg', name: '血刃', prof: 1,
+    cd: 4, cost: 4.8, fx: 'melee',
+    reach: 36, arc: 2.4, mul: 4.4, kb: 8,
+    status: { kind: 'bleed', dur: 5, pct: 0.12 },
+    desc: '割开一道口子，五息内持续流血。',
+  },
+  blade_8: {
+    id: 'blade_8', fam: 'blade', slot: 'special', name: '血战八方', prof: 4,
+    cd: 28, cost: 33.6, fx: 'spin',
+    dur: 2.0, tick: 0.25, mul: 2.2, kb: 7, radius: 52, lifeOnHit: 0.02,
+    desc: '八段环斩，每一段命中都回两分气血。',
+  },
+
+  // ---------- 枪 · 距离 / 穿刺 ----------
+  spear_1: {
+    id: 'spear_1', fam: 'spear', slot: 'dmg', name: '贯甲刺', prof: 1,
+    cd: 5, cost: 6, fx: 'proj',
+    count: 1, speed: 340, size: 10, life: 0.42, pierce: 5, mul: 7.5, pierceDef: 0.4,
+    desc: '一枪贯穿，沿途所有敌手俱伤，无视四成防御。',
+  },
+  spear_8: {
+    id: 'spear_8', fam: 'spear', slot: 'special', name: '挑飞', prof: 4,
+    cd: 8, cost: 9.6, fx: 'melee',
+    reach: 44, arc: 1.6, mul: 5.6, kb: 4, launch: true,
+    desc: '上挑掀飞，落地再受一记摔伤。',
+  },
+
+  // ---------- 棍 · 范围 / 格挡 ----------
+  staff_1: {
+    id: 'staff_1', fam: 'staff', slot: 'dmg', name: '扫棍', prof: 1,
+    cd: 3, cost: 3.6, fx: 'melee',
+    reach: 42, arc: 3.4, mul: 5.6, kb: 9,
+    desc: '半圆横扫，冷却最短的棍法。',
+  },
+  staff_8: {
+    id: 'staff_8', fam: 'staff', slot: 'special', name: '舞棍', prof: 4,
+    cd: 10, cost: 12, fx: 'spin',
+    dur: 2.0, tick: 0.25, mul: 1.5, kb: 6, radius: 44, reflect: true,
+    desc: '舞棍两息，格开并反弹所有飞来之物。',
+  },
+
+  // ---------- 双刀 · 多段 / 位移 ----------
+  dual_1: {
+    id: 'dual_1', fam: 'dual', slot: 'dmg', name: '双牙', prof: 1,
+    cd: 2.5, cost: 3, fx: 'melee',
+    reach: 32, arc: 1.8, mul: 2.5, hits: 2, kb: 4,
+    desc: '极快两连，最短冷却。',
+  },
+  dual_8: {
+    id: 'dual_8', fam: 'dual', slot: 'special', name: '疾影', prof: 4,
+    cd: 9, cost: 10.8, fx: 'blink',
+    times: 3, dist: 52, mul: 3.5, radius: 26,
+    desc: '三次短距闪烁，每次穿过敌手都留下一刀。',
+  },
+
+  // ---------- 锤 · 破防 / 震地 ----------
+  hammer_1: {
+    id: 'hammer_1', fam: 'hammer', slot: 'dmg', name: '碎骨锤', prof: 1,
+    cd: 6, cost: 7.2, fx: 'melee',
+    reach: 36, arc: 1.4, mul: 8.4, kb: 16,
+    status: { kind: 'break', dur: 4, pct: 0 },
+    desc: '一锤碎骨，四息内对方防御减四成。',
+  },
+  hammer_8: {
+    id: 'hammer_8', fam: 'hammer', slot: 'special', name: '开天辟地', prof: 4,
+    cd: 32, cost: 38.4, fx: 'melee',
+    reach: 130, arc: 6.28, mul: 22.8, kb: 24, centerBonus: 2, centerR: 46,
+    desc: '砸地开山，中心一记双倍。',
+  },
+
+  // ---------- 法杖 · 元素 / 控制 ----------
+  mage_1: {
+    id: 'mage_1', fam: 'mage', slot: 'dmg', name: '灵珠', prof: 1,
+    cd: 2, cost: 2.4, fx: 'proj',
+    count: 1, speed: 250, size: 11, life: 0.9, pierce: 1, mul: 4.0,
+    desc: '一枚灵珠，两息一发。',
+  },
+  mage_8: {
+    id: 'mage_8', fam: 'mage', slot: 'special', name: '天雷引', prof: 4,
+    cd: 30, cost: 36, fx: 'bolt',
+    count: 5, mul: 4.6, radius: 30, range: 200,
+    desc: '五道天雷随机落下，各算各的。',
+  },
+
+  // ---------- 暗器 · 毒 / 陷阱 ----------
+  dart_1: {
+    id: 'dart_1', fam: 'dart', slot: 'dmg', name: '飞蝗', prof: 1,
+    cd: 1.8, cost: 2.16, fx: 'proj',
+    count: 1, speed: 320, size: 7, life: 0.55, pierce: 1, mul: 3.5, kind: 'dart',
+    desc: '一镖出手，全武器最短冷却。',
+  },
+  dart_8: {
+    id: 'dart_8', fam: 'dart', slot: 'special', name: '毒镖', prof: 4,
+    cd: 5, cost: 6, fx: 'proj',
+    count: 1, speed: 300, size: 8, life: 0.6, pierce: 2, mul: 4.2, kind: 'dart',
+    status: { kind: 'poison', dur: 6, pct: 0.10, spread: true },
+    desc: '淬毒六息；中毒者倒下时毒气四散，沾上的人一起中毒。',
+  },
+};
+
+const ART_IDS = Object.keys(ARTS);
+const ART_SLOTS = 6;
+const ART_KEYS = ['1', '2', '3', '4', '5', '6'];
+
+function artById(id) { return ARTS[id] || null; }
+
+function artsOfWeapon(fam) {
+  return ART_IDS.map(id => ARTS[id]).filter(a => a.fam === fam)
+    .sort((a, b) => a.prof - b.prof);
+}
+
+function artUnlocked(kills, art) {
+  return profLevel(kills) >= (art.prof || 1);
+}
+
+// 当前兵器下"已悟"的招式
+function unlockedArts(fam, profMap) {
+  const k = (profMap && profMap[fam]) || 0;
+  return artsOfWeapon(fam).filter(a => artUnlocked(k, a));
+}
+
+// 注意：名字带 ART_ 前缀 —— items.js 已经导出了一个 SLOT_LABEL（兵器/衣甲/项链/法宝），
+// 同一个文件里再 import 一个同名的会把前一个覆盖掉，那种 bug 查起来极费劲。
+const ART_SLOT_LABEL = { dmg: '输出', aoe: '清场', move: '位移', ctrl: '控制', buff: '增益', special: '特色' };
+
+// 招式的一句话数值摘要，给面板与 tooltip 用
+function artBrief(a) {
+  const out = ['冷却 ' + a.cd + ' 息', '真气 ' + (Math.round(a.cost * 10) / 10)];
+  if (a.fx === 'melee' && a.hits > 1) out.push(a.hits + ' 段');
+  if (a.pierceDef) out.push('破防 ' + Math.round(a.pierceDef * 100) + '%');
+  if (a.status && a.status.kind === 'bleed') out.push('流血 ' + a.status.dur + ' 息');
+  if (a.status && a.status.kind === 'poison') out.push('中毒 ' + a.status.dur + ' 息');
+  if (a.status && a.status.kind === 'break') out.push('破甲 ' + a.status.dur + ' 息');
+  if (a.launch) out.push('击飞');
+  if (a.reflect) out.push('格挡反弹');
+  if (a.lifeOnHit) out.push('每击回血');
+  return out.join(' · ');
+}
+
+return { PROF_MAX, PROF_NEED, PROF_WEIGHT, profLevel, profLeft, profFrac, ARTS, ART_IDS, ART_SLOTS, ART_KEYS, artById, artsOfWeapon, artUnlocked, unlockedArts, ART_SLOT_LABEL, artBrief };
+})();
+
+/* ==================== quests.js ==================== */
+__M.quests = (function () {
+// quests.js · 任务系统数据层
+// 纯数据 + 纯函数，无 DOM / 无 three.js 依赖，可单测。
+//
+// 为什么任务不塞进 items.js 或 village.js：
+// 任务是**跨系统**的 —— 它要引用地图坐标、怪物类型、NPC、装备、银两。
+// 放进任何一个现有模块都会造成反向依赖（items 不该知道地图坐标）。
+// 单独一个模块，只被 game.js 单向引用，谁都不脏。
+//
+// 目标（objective）只有五种，够用且不会失控：
+//   reach  走到某处（含"进古洞第 N 层"）
+//   kill   击杀 N 只某类怪
+//   item   持有 N 件某信物（信物在 player.relics，不占行囊）
+//   have   持有 N 单位某种资源（精铁 / 银两 / 等级）
+//   talk   与某个 NPC 说过话
+//
+// 刻意不做"收集 10 个狼牙"这种掉落物任务：那需要给行囊加一类不可分解、
+// 不可装备、不可卖的新物件，会把已经稳定的行囊 UI 再撬开一次。
+// 需要"带东西回来"的地方一律走 relics（信物），它在任务面板里显示，不进背包。
+
+const QUEST_ITEMS = {
+  bamboo_heart: { name: '竹心', note: '青鳞蟒腹中取出的竹节，剖开是空的，风过会响。' },
+  stone_marrow: { name: '石髓', note: '石母胎里凝的一滴，凉的，握着却烫手。' },
+  yin_soil:     { name: '阴土', note: '坟头三尺下的土，捏在手里是湿的，闻着是干的。' },
+  hunter_knife: { name: '猎刀', note: '刀柄缠着麻绳，绳上有一道很深的牙印。' },
+  snake_gall:   { name: '蛇胆', note: '药童要的，说能镇惊。' },
+  well_stone:   { name: '井底石', note: '一面有凿痕，像是被人从里面凿过。' },
+};
+
+// 三物：齐了才开古洞封碑
+const RELICS_TRIPLE = ['yin_soil', 'bamboo_heart', 'stone_marrow'];
+
+// 任务表。坐标一律用世界像素（一格 16px），和 game.js 里的 camps / dens 同一套。
+const QUESTS = {
+  // ============ 主线三条：一区一件「三物」 ============
+  q_main_bamboo: {
+    id: 'q_main_bamboo', kind: 'main', place: '南岭竹海',
+    title: '竹海的哭声',
+    giver: 'w_hunter',
+    brief: '猎户吴老六的兄弟进了竹海，再没出来。',
+    steps: [
+      { text: '去青鳞潭看看', kind: 'reach', at: { x: 288, y: 1408, r: 70 } },
+      { text: '斩了那条青鳞蟒', kind: 'kill', types: ['qingshe'], count: 1 },
+    ],
+    reward: { relic: 'bamboo_heart', gold: 400, fame: 5, xp: 120 },
+    outro: '吴老六接过刀，看了很久那道牙印，没说话。',
+  },
+  q_main_cave: {
+    id: 'q_main_cave', kind: 'main', place: '西荒石窟',
+    title: '塌方的矿道',
+    giver: 'w_stone',
+    brief: '守碑人说，石髓在矿道最深处，可那地方塌了三十年。',
+    steps: [
+      { text: '走到塌方矿道', kind: 'reach', at: { x: 576, y: 544, r: 90 } },
+      { text: '凿开石母', kind: 'kill', types: ['shimu'], count: 1 },
+    ],
+    reward: { relic: 'stone_marrow', gold: 500, fame: 5, xp: 160 },
+    outro: '碑奴用指甲刮了刮石髓，说：“还是热的。它在等人。”',
+  },
+  q_main_grave: {
+    id: 'q_main_grave', kind: 'main', place: '北坡乱葬岗',
+    title: '北坡不葬人',
+    giver: 'dao',
+    brief: '玄阳子说，阴土只在夜里长，且得问过守墓人。',
+    steps: [
+      { text: '夜里清六只阴魂', kind: 'kill', types: ['yinhun', 'fukui'], count: 6, night: true },
+      { text: '问过守墓人', kind: 'kill', types: ['yinhun'], count: 1, lord: '守墓人' },
+    ],
+    reward: { relic: 'yin_soil', gold: 600, fame: 8, xp: 200 },
+    outro: '“土你拿去。”守墓人背过身，“碑，别碰。”',
+  },
+
+  // ============ 支线七条 ============
+  q_side_dog: {
+    id: 'q_side_dog', kind: 'side', place: '青云集',
+    title: '恶犬成群',
+    giver: 'qiao',
+    brief: '石大的腿是山魈啃的，可他说最近咬人的是狗。',
+    steps: [{ text: '打八只恶犬', kind: 'kill', types: ['fox'], count: 8 }],
+    reward: { gold: 180, fame: 2, xp: 60 },
+    outro: '“狗比人实在。”他把柴刀往肩上一扛，“至少它咬你之前会叫。”',
+  },
+  q_side_bandit: {
+    id: 'q_side_bandit', kind: 'side', place: '青云集',
+    title: '账要清',
+    giver: 'inn',
+    brief: '柳三娘的账本上，黑风寨欠了三年房钱。',
+    steps: [{ text: '清六名山贼', kind: 'kill', types: ['zhiren'], count: 6 }],
+    reward: { gold: 250, fame: 3, xp: 80 },
+    outro: '“死了就死了。”她把账页撕下来，扔进灶膛，“账清了。”',
+  },
+  q_side_herb: {
+    id: 'q_side_herb', kind: 'side', place: '南岭竹海',
+    title: '蛇胆',
+    giver: 'w_herbboy',
+    brief: '药童小满要五枚蛇胆，说镇惊用。',
+    steps: [{ text: '取五枚蛇胆', kind: 'kill', types: ['snake'], count: 5 }],
+    reward: { gold: 120, fame: 1, xp: 50, potion: 2 },
+    outro: '“师父说蛇胆苦。”他把药罐抱在怀里，“苦才镇得住。”',
+  },
+  q_side_forge: {
+    id: 'q_side_forge', kind: 'side', place: '青云集',
+    title: '炉子饿了',
+    giver: 'smith',
+    brief: '张五的炉子要十五块精铁才烧得起来。',
+    steps: [{ text: '交十五块精铁', kind: 'have', field: 'iron', count: 15, spend: true }],
+    reward: { gear: { r: 2, kind: 'weapon' }, gold: 100, xp: 90 },
+    outro: '“铁留下，东西拿走。”他连头都没抬。',
+  },
+  q_side_wine: {
+    id: 'q_side_wine', kind: 'side', place: '北坡乱葬岗',
+    title: '一坛酒',
+    giver: 'tavern',
+    brief: '阿七说，守墓人每月十五会来打酒，这个月没来。',
+    steps: [{ text: '把酒送到守墓人小屋', kind: 'reach', at: { x: 1952, y: 512, r: 90 } }],
+    reward: { gold: 200, fame: 2, xp: 70 },
+    outro: '酒坛放在门口。第二天再去看，坛子空了，坛口压着一枚铜钱。',
+  },
+  q_side_well: {
+    id: 'q_side_well', kind: 'side', place: '青云古洞',
+    title: '井底那块石',
+    giver: 'zui',
+    brief: '王二说井通地底。你不信，但他说得像个真事。',
+    steps: [{ text: '下到古洞第一层', kind: 'dg', floor: 1 }],
+    reward: { relic: 'well_stone', gold: 300, fame: 3, xp: 100 },
+    outro: '石头上真有凿痕，从里往外凿的。',
+  },
+  q_side_tale: {
+    id: 'q_side_tale', kind: 'side', place: '青云古洞',
+    title: '说书人缺个结尾',
+    giver: 'shuo',
+    brief: '柳先生讲了三十年的故事，缺一个真结局。',
+    steps: [{ text: '斩了无面剑客', kind: 'kill', types: ['wumian'], count: 1 }],
+    reward: { gold: 800, fame: 10, xp: 400, gear: { r: 3, kind: 'weapon' } },
+    outro: '“成了。”他把醒木一拍，“从明日起，讲你。”',
+  },
+};
+
+const QUEST_IDS = Object.keys(QUESTS);
+
+// 主线按区域顺序解锁：后一条要先拿到前一条的三物之一。
+// 不做硬性前置锁 —— 玩家想先去石窟就去，只是主线任务得按顺序接。
+const MAIN_ORDER = ['q_main_bamboo', 'q_main_cave', 'q_main_grave'];
+
+function questById(id) { return QUESTS[id] || null; }
+
+// 目标是否已达成（只判"当前这一步"，进度由 game.js 维护）
+function objDone(o, prog) {
+  return (prog || 0) >= (o.count || 1);
+}
+
+// 目标的一句话说明。HUD 追踪条与任务面板共用，避免两处文案不一致。
+function objText(o, prog) {
+  const p = prog || 0;
+  switch (o.kind) {
+    case 'kill': return o.text + '（' + Math.min(p, o.count) + '/' + o.count + '）';
+    case 'item': return o.text + '（' + Math.min(p, o.count || 1) + '/' + (o.count || 1) + '）';
+    case 'have': return o.text + '（' + Math.min(p, o.count) + '/' + o.count + '）';
+    default: return o.text;
+  }
+}
+
+// 三物齐了没有
+function tripleReady(relics) {
+  return RELICS_TRIPLE.every(id => (relics && relics[id]) > 0);
+}
+function tripleMissing(relics) {
+  return RELICS_TRIPLE.filter(id => !(relics && relics[id] > 0));
+}
+function relicName(id) { return (QUEST_ITEMS[id] || {}).name || id; }
+
+// 某个 NPC 能接 / 能交的任务
+function questsOfGiver(npcId) {
+  return QUEST_IDS.map(id => QUESTS[id]).filter(q => q.giver === npcId);
+}
+
+return { QUEST_ITEMS, RELICS_TRIPLE, QUESTS, QUEST_IDS, MAIN_ORDER, questById, objDone, objText, tripleReady, tripleMissing, relicName, questsOfGiver };
+})();
+
 /* ==================== time.js ==================== */
 __M.time = (function () {
 // time.js · 昼夜循环（S3 批次 A）

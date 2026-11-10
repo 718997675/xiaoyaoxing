@@ -40,6 +40,14 @@ node tools/run.js eval tools/arts.js      # 招式（16 招/专精/状态/平衡
 node tools/run.js shot out.png 1440 900   # 截图
 ```
 
+**改完记得验一次单文件版**（`逍遥行.html` 走的是另一套代码路径：`build.js` 把 ESM
+拆成 `__M.xxx`，module 版绿了不代表它能跑）：
+
+```bash
+node build.js
+PAGE="逍遥行.html" QS=x=1 node tools/run.js eval tools/arts.js   # 应该和 module 版一样全绿
+```
+
 截图想拍"某一瞬间"（毒雾正在炸、Boss 正在抬手）用环境变量：
 
 ```bash
@@ -181,6 +189,18 @@ dawn-s1/
   访问**线上**不能加，会绕过网关会话 → 403。
 - `github.com:443` 偶尔完全不通。应急可以走 Git Data API
   （`POST /git/blobs` → `/git/trees` → `/git/commits` → `PATCH /git/refs/heads/main`）。
+
+### 打包（最坑的一条）
+
+- **`build.js` 的 `ORDER` 是手写清单，漏一个模块不会报错**。module 版照样能跑，
+  单文件版会在运行时 `Cannot destructure property 'X' of undefined` 直接白屏。
+  `quests.js`（P4）和 `arts.js`（P5）都漏过，线上 `dist/index.html` 因此坏了两轮。
+  现在 `build.js` 开头有 `verifyOrder()`：拿源码里的 `import ... from './x.js'`
+  反查 ORDER，漏了直接 build 失败。
+- **发布后一定要真的打开一次线上页面**，不能只 `grep` 关键字 —— 打包版白屏时，
+  HTML 里的文案照样在，grep 全都能命中。
+- `PAGE="逍遥行.html"` 可以换入口页跑自检（`tools/run.js`）。传中文文件名要传**原文**，
+  它内部会 `encodeURIComponent`，自己先编码一次会变成 `%25E9...` → 404。
 
 ### 招式 / 状态（P5 踩的）
 

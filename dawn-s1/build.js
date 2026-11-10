@@ -17,6 +17,9 @@ const path = require('path');
 const ROOT = __dirname;
 
 // 依赖顺序（拓扑序，改依赖关系要同步改这里）
+// ⚠️ 这份清单是手写的，漏一个模块不会报错 —— 单文件版会在运行时
+// "Cannot destructure property 'X' of undefined" 直接白屏。
+// 所以下面 verifyOrder() 会拿源码里的 import 反查，漏了就直接 build 失败。
 const ORDER = [
   { id: 'three', file: 'lib/three.module.js' },
   { id: 'pixel', file: 'pixel.js' },
@@ -26,11 +29,34 @@ const ORDER = [
   { id: 'weapons', file: 'weapons.js' },
   { id: 'items', file: 'items.js' },
   { id: 'skills', file: 'skills.js' },
+  { id: 'arts', file: 'arts.js' },
+  { id: 'quests', file: 'quests.js' },
   { id: 'time', file: 'time.js' },
   { id: 'village', file: 'village.js' },
   { id: 'dungeon', file: 'dungeon.js' },
   { id: 'game', file: 'game.js' },
 ];
+
+// 拿每个源文件里的 import 反查 ORDER，漏一个就报错。
+// 没有这道检查，新加一个模块后 module 版照样能跑、单文件版白屏，
+// 而且只会在"发布之后"才被发现（P4 的 quests.js 就是这么漏的）。
+function verifyOrder() {
+  const known = new Set(ORDER.map(m => m.id));
+  const missing = [];
+  for (const m of ORDER) {
+    const src = fs.readFileSync(path.join(ROOT, m.file), 'utf8');
+    const re = /import\s+[\s\S]*?\s+from\s+['"](\.[^'"]+)['"]/g;
+    let hit;
+    while ((hit = re.exec(src))) {
+      const id = depId(hit[1]);
+      if (!known.has(id)) missing.push(m.file + ' → ' + hit[1]);
+    }
+  }
+  if (missing.length) {
+    throw new Error('build.js 的 ORDER 缺模块：\n  ' + missing.join('\n  ')
+      + '\n（单文件版会白屏。把缺的文件按拓扑序加进 ORDER 再打包。）');
+  }
+}
 
 function depId(src) {
   const base = path.basename(src).replace(/\.js$/, '');
@@ -113,6 +139,7 @@ function buildSingle(bundle) {
   return out;
 }
 
+verifyOrder();          // 先查清单，别等打包完了才发现漏模块
 const bundle = buildBundle();
 fs.writeFileSync(path.join(ROOT, 'xiaoyao-bundle.js'), bundle, 'utf8');
 const kb = (bundle.length / 1024).toFixed(0);
