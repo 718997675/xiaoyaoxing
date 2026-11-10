@@ -143,11 +143,15 @@ export const WEAPONS = {
   },
   dual: {
     id: 'dual', name: '双刃', kindLabel: '双刀', atkMul: 0.80, spdMul: 0.74, reach: 24, dropW: 10,
-    trail: [C.pur3, C.pur2], fx: 'cross', desc: '双刀合击，每段两次判定', hits: 2,
+    trail: [C.pur3, C.pur2], fx: 'cross', desc: '左劈、右劈、双刀合击（每段两次判定）', hits: 2,
+    // 双刀的动作靠"两只手"表达：主手走 a0→a1，副手在 game.js 里取镜像并滞后 dualDelay。
+    //   一段左劈：主手右→左，副手左→右（错开 0.30，看得出先后）
+    //   二段右劈：方向反过来
+    //   三段合击：dualDelay 0 = 双手同时抡圆，两刀一起交叉收拢
     swings: [
-      { mode: 'swing', a0: -1.05, a1: 1.05, dur: 0.16, mul: 0.62, kb: 4, lunge: 3, hitArc: 2.5, reach: 24 },
-      { mode: 'swing', a0: 1.05, a1: -1.05, dur: 0.16, mul: 0.66, kb: 4, lunge: 3, hitArc: 2.5, reach: 24 },
-      { mode: 'swing', a0: -1.45, a1: 1.45, dur: 0.22, mul: 1.00, kb: 8, lunge: 3, hitArc: 3.4, reach: 26 },
+      { mode: 'swing', a0: -1.15, a1: 0.95, dur: 0.17, mul: 0.62, kb: 4, lunge: 3, hitArc: 2.5, reach: 24, dualDelay: 0.30 },
+      { mode: 'swing', a0: 1.15, a1: -0.95, dur: 0.17, mul: 0.66, kb: 4, lunge: 3, hitArc: 2.5, reach: 24, dualDelay: 0.30 },
+      { mode: 'swing', a0: -1.55, a1: 1.55, dur: 0.24, mul: 1.00, kb: 8, lunge: 3, hitArc: 3.4, reach: 26, dualDelay: 0 },
     ],
   },
   hammer: {
@@ -172,15 +176,19 @@ export const WEAPONS = {
     ],
   },
   dart: {
-    id: 'dart', name: '暗器', kindLabel: '飞镖', atkMul: 0.78, spdMul: 0.80, reach: 24, dropW: 10,
+    id: 'dart', name: '暗器', kindLabel: '飞镖', atkMul: 0.62, spdMul: 0.80, reach: 24, dropW: 10,
     ranged: true, trail: [C.paper3, C.gold3], fx: 'dart', desc: '一镖、三镖扇射、五镖漫天',
+    // 五镖齐发且每发独立结算命中，理论总伤是单手兵器的两倍多 —— 单发倍率压到比剑还低，
+    // 射程也砍三成（life 0.55~0.60 × speed ≈ 160~180px，原来能飞 230~275px）。
+    // 另外弹体现在撞墙即碎（game.js 的 projectiles 更新里加了 canStand 判定），
+    // 以前能隔着墙磨 boss，这才是它"变态"的主因。
     swings: [
       { mode: 'cast', dur: 0.16, mul: 0.85, kb: 4, lunge: 0, hitArc: 0,
-        proj: { kind: 'dart', count: 1, speed: 285, size: 7, life: 0.80, dmgMul: 1.00, pierce: 1 } },
+        proj: { kind: 'dart', count: 1, speed: 285, size: 7, life: 0.55, dmgMul: 0.90, pierce: 1 } },
       { mode: 'cast', dur: 0.18, mul: 0.72, kb: 4, lunge: 0, hitArc: 0,
-        proj: { kind: 'dart', count: 3, spread: 0.46, speed: 290, size: 6, life: 0.80, dmgMul: 0.72, pierce: 1 } },
+        proj: { kind: 'dart', count: 3, spread: 0.46, speed: 290, size: 6, life: 0.55, dmgMul: 0.62, pierce: 1 } },
       { mode: 'cast', dur: 0.24, mul: 0.68, kb: 6, lunge: 0, hitArc: 0,
-        proj: { kind: 'dart', count: 5, spread: 0.92, speed: 305, size: 6, life: 0.90, dmgMul: 0.68, pierce: 1 } },
+        proj: { kind: 'dart', count: 5, spread: 0.92, speed: 305, size: 6, life: 0.60, dmgMul: 0.52, pierce: 1 } },
     ],
   },
 };

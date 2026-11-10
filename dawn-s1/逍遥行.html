@@ -88,6 +88,15 @@
   #inv .eq.r1{box-shadow:0 0 0 2px #5FA8A0} #inv .eq.r2{box-shadow:0 0 0 2px #8A6FC4}
   #inv .eq.r3{box-shadow:0 0 0 2px #C8453B} #inv .eq.r4{box-shadow:0 0 0 2px #D9A441}
   #inv .grid{display:grid;grid-template-columns:repeat(10,28px);gap:3px;margin:0}
+  /* 行囊标题行：容量计数 + 扩充按钮 */
+  #inv .hdInv{display:flex;align-items:center;gap:6px;font:11px SimSun;letter-spacing:3px;
+    color:#8A6520;margin-bottom:5px}
+  #inv .hdInv #invCap{letter-spacing:0;font-family:monospace;color:#12161F;font-weight:bold}
+  #inv .hdInv #invCap.full{color:#C8453B}
+  #inv .hdInv .mini{margin-left:auto;width:auto;padding:2px 7px;font:10px SimSun;letter-spacing:0;
+    background:#C9BFA3;border:2px solid #000;box-shadow:0 0 0 1px #8A6520;color:#12161F;cursor:pointer}
+  #inv .hdInv .mini:hover:not(:disabled){background:#D9A441}
+  #inv .hdInv .mini:disabled{opacity:.5;cursor:default}
   #inv .slot{box-sizing:border-box;width:28px;height:28px;background:#C9BFA3;border:2px solid #000;
     box-shadow:0 0 0 1px #8A8268;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative}
   #inv .slot img{width:20px;height:20px;image-rendering:pixelated}
@@ -193,7 +202,7 @@
         <div id="eqSlots"></div>
       </div>
       <div>
-        <div class="hd" style="font:11px SimSun;letter-spacing:3px;color:#8A6520;margin-bottom:5px">行 囊</div>
+        <div class="hd hdInv">行 囊 <span id="invCap"></span><button id="btnExpand" class="mini">扩充</button></div>
         <div class="grid" id="invGrid"></div>
         <div class="tools">
           <button id="btnBulk0">分解凡品</button>
@@ -54020,11 +54029,15 @@ const WEAPONS = {
   },
   dual: {
     id: 'dual', name: '双刃', kindLabel: '双刀', atkMul: 0.80, spdMul: 0.74, reach: 24, dropW: 10,
-    trail: [C.pur3, C.pur2], fx: 'cross', desc: '双刀合击，每段两次判定', hits: 2,
+    trail: [C.pur3, C.pur2], fx: 'cross', desc: '左劈、右劈、双刀合击（每段两次判定）', hits: 2,
+    // 双刀的动作靠"两只手"表达：主手走 a0→a1，副手在 game.js 里取镜像并滞后 dualDelay。
+    //   一段左劈：主手右→左，副手左→右（错开 0.30，看得出先后）
+    //   二段右劈：方向反过来
+    //   三段合击：dualDelay 0 = 双手同时抡圆，两刀一起交叉收拢
     swings: [
-      { mode: 'swing', a0: -1.05, a1: 1.05, dur: 0.16, mul: 0.62, kb: 4, lunge: 3, hitArc: 2.5, reach: 24 },
-      { mode: 'swing', a0: 1.05, a1: -1.05, dur: 0.16, mul: 0.66, kb: 4, lunge: 3, hitArc: 2.5, reach: 24 },
-      { mode: 'swing', a0: -1.45, a1: 1.45, dur: 0.22, mul: 1.00, kb: 8, lunge: 3, hitArc: 3.4, reach: 26 },
+      { mode: 'swing', a0: -1.15, a1: 0.95, dur: 0.17, mul: 0.62, kb: 4, lunge: 3, hitArc: 2.5, reach: 24, dualDelay: 0.30 },
+      { mode: 'swing', a0: 1.15, a1: -0.95, dur: 0.17, mul: 0.66, kb: 4, lunge: 3, hitArc: 2.5, reach: 24, dualDelay: 0.30 },
+      { mode: 'swing', a0: -1.55, a1: 1.55, dur: 0.24, mul: 1.00, kb: 8, lunge: 3, hitArc: 3.4, reach: 26, dualDelay: 0 },
     ],
   },
   hammer: {
@@ -54049,15 +54062,19 @@ const WEAPONS = {
     ],
   },
   dart: {
-    id: 'dart', name: '暗器', kindLabel: '飞镖', atkMul: 0.78, spdMul: 0.80, reach: 24, dropW: 10,
+    id: 'dart', name: '暗器', kindLabel: '飞镖', atkMul: 0.62, spdMul: 0.80, reach: 24, dropW: 10,
     ranged: true, trail: [C.paper3, C.gold3], fx: 'dart', desc: '一镖、三镖扇射、五镖漫天',
+    // 五镖齐发且每发独立结算命中，理论总伤是单手兵器的两倍多 —— 单发倍率压到比剑还低，
+    // 射程也砍三成（life 0.55~0.60 × speed ≈ 160~180px，原来能飞 230~275px）。
+    // 另外弹体现在撞墙即碎（game.js 的 projectiles 更新里加了 canStand 判定），
+    // 以前能隔着墙磨 boss，这才是它"变态"的主因。
     swings: [
       { mode: 'cast', dur: 0.16, mul: 0.85, kb: 4, lunge: 0, hitArc: 0,
-        proj: { kind: 'dart', count: 1, speed: 285, size: 7, life: 0.80, dmgMul: 1.00, pierce: 1 } },
+        proj: { kind: 'dart', count: 1, speed: 285, size: 7, life: 0.55, dmgMul: 0.90, pierce: 1 } },
       { mode: 'cast', dur: 0.18, mul: 0.72, kb: 4, lunge: 0, hitArc: 0,
-        proj: { kind: 'dart', count: 3, spread: 0.46, speed: 290, size: 6, life: 0.80, dmgMul: 0.72, pierce: 1 } },
+        proj: { kind: 'dart', count: 3, spread: 0.46, speed: 290, size: 6, life: 0.55, dmgMul: 0.62, pierce: 1 } },
       { mode: 'cast', dur: 0.24, mul: 0.68, kb: 6, lunge: 0, hitArc: 0,
-        proj: { kind: 'dart', count: 5, spread: 0.92, speed: 305, size: 6, life: 0.90, dmgMul: 0.68, pierce: 1 } },
+        proj: { kind: 'dart', count: 5, spread: 0.92, speed: 305, size: 6, life: 0.60, dmgMul: 0.52, pierce: 1 } },
     ],
   },
 };
@@ -56574,7 +56591,7 @@ const player = {
   dashT: 0, dashCd: 0, flash: 0, iframe: 0, shield: 0, hurtFlash: 0,
   poison: 0, poisonT: 0, poisonImmuneT: 0,
   drunkT: 0, drunk: 0, rested: false,
-  inv: [], equip: { weapon: null, armor: null, necklace: null, artifact: null },
+  inv: [], invMax: 20, equip: { weapon: null, armor: null, necklace: null, artifact: null },
   windCd: 0, skillPts: 0, skillLv: {}, kills: 0,
 };
 const pMesh = quad(playerTex.down[0], 16, 18);
@@ -56964,6 +56981,11 @@ function spawnEnemy(type, x, y, camp, eliteMod) {
   const e = {
     type, x, y, hp, maxHp: hp, dmg, def, ls, cd, cdMax: cd, speed: spd,
     flash: 0, aggro: false, wanderT: 0, wx: 0, wy: 0, camp, dead: false,
+    // 交战计时：受击/出手时刷新，用来判断「首领血条该不该还挂着」。
+    // 以前血条条件是 aggro || hp<maxHp —— aggro 一旦为真就再不复位（洞里的怪
+    // 压根没有"退回营地"这条分支），hp<maxHp 更是永远成立，于是打死一波之后
+    // 血条就长在屏幕上了。改成按"最近有没有交过手"来判断。
+    combatT: 0,
     anim: Math.random() * 2, windup: 0, strike: false, elite: eliteMod || null,
     blinkCd: 1 + Math.random() * 2, spinCd: 6, spinWind: 0, phase2: false, hitJit: 0,
     stagger: 0, kvx: 0, kvy: 0, charge: 0, chx: 0, chy: 0, h: art.size[1],
@@ -57054,6 +57076,7 @@ function hitEnemy(e, info, ang, kb) {
   const mul = sneak ? dawnStrike() : 1;
   const dmg = Math.max(1, Math.round(info.dmg * mul * (1 - def)));
   e.hp -= dmg;
+  e.combatT = 4;   // 挨了打就算在交战，首领血条要亮着
   e.flash = 0.16; e.hitJit = 0.2; e.stagger = Math.max(e.stagger, info.crit ? 0.16 : 0.09);
   const kbm = (e.elite ? 0.55 : 1) * (e.type === 'boss' ? 0.1 : e.type === 'treant' ? 0.25 : 1) * (e.type === 'shigan' ? 0.25 : 1);
   e.kvx += Math.cos(ang) * kb * kbm * 4;
@@ -57195,6 +57218,30 @@ function killEnemy(e) {
     msg('千年树妖伏诛 · 天材地宝现世', C.gold3);
     for (let i = 0; i < 2; i++) addDrop('gear', makeGear(SLOTS[(Math.random() * 4) | 0], 3 + ((Math.random() * 2) | 0), player.level + 2));
   }
+}
+
+// ============ 行囊容量 ============
+// 20 格起步，可花银两扩到 60。
+// 以前容量 20 是散在各处写死的：拾取会挡，但卸下 / 买药 / 调试发装备这些入口没挡，
+// 超出的照样 push 进数组，而 renderInv 只画前 20 格 —— 于是「满了还能捡」，
+// 等消耗掉几件之后，那些看不见的装备才「冒出来」。现在统一走 invFull()。
+const INV_BASE = 20, INV_STEP = 10, INV_MAX = 60;
+const INV_COST = [600, 1500, 3600, 8000];   // 每扩一行（+10 格）的价钱
+function invMax() { return Math.min(INV_MAX, player.invMax || INV_BASE); }
+function invFull() { return player.inv.length >= invMax(); }
+function expandCost() {
+  const n = Math.round((invMax() - INV_BASE) / INV_STEP);
+  return n < INV_COST.length ? INV_COST[n] : Infinity;
+}
+function expandInv() {
+  if (invMax() >= INV_MAX) { msg('行囊已是最大 ' + INV_MAX + ' 格', C.paper1); return; }
+  const c = expandCost();
+  if (player.gold < c) { msg('银两不足 · 扩充需 ' + c, C.red3); return; }
+  player.gold -= c;
+  player.invMax = invMax() + INV_STEP;
+  AUDIO.play('equip');
+  msg('行囊扩充至 ' + player.invMax + ' 格', C.jade3);
+  renderInv();
 }
 
 // ============ 掉落 ============
@@ -57364,7 +57411,7 @@ function pickup(d) {
     AUDIO.play('coin');
     return true;
   }
-  if (player.inv.length >= 20) { msg('行囊已满', C.red3); return false; }
+  if (invFull()) { msg('行囊已满 · 可花银两扩充', C.red3); return false; }
   if (d.kind === 'gear') {
     player.inv.push(d.item);
     msg('拾取 ' + RARITY[d.item.r].name + ' · ' + d.item.name, RARITY[d.item.r].color);
@@ -57383,6 +57430,16 @@ const invEl = document.getElementById('inv');
 const tipEl = document.getElementById('tip');
 let tipItem = null;
 let equipDrag = null;
+// 上一次指针是鼠标还是手指。触摸屏上 pointerdown 之后浏览器会补一串
+// mouseenter/mouseover（模拟鼠标），光看事件类型分不出来，得自己记。
+let lastPointerType = 'mouse';
+addEventListener('pointerdown', e => { lastPointerType = e.pointerType || 'mouse'; }, true);
+// 手指点空白处收起 tooltip（点在格子上不算，那个由格子自己处理）
+addEventListener('pointerdown', e => {
+  if (!tipEl || tipEl.style.display !== 'block') return;
+  if (e.target && e.target.closest && e.target.closest('.slot[data-i], .eq')) return;
+  hideTip();
+}, true);
 
 function statRows(it) {
   const m = 1 + (it.enh || 0) * 0.14;
@@ -57408,30 +57465,59 @@ function itemTitle(it) {
   return '<b style="color:' + rr.color + '">' + rr.name + ' · ' + it.name + '</b>'
     + '<span style="color:#8A8268">' + famName + '</span>';
 }
-function showTip(it, evt) {
+// 对比时要逐项过一遍的属性（顺序 = tooltip 里的显示顺序）
+const DIFF_KEYS = ['atk', 'def', 'hp', 'qiMax', 'skillDmg', 'crit', 'critDmg', 'atkSpd', 'spd', 'cdr', 'lifesteal', 'qiRegen', 'comboPct', 'qiOnHit', 'luck'];
+const PCT_KEYS = ['critDmg', 'skillDmg', 'comboPct', 'spd', 'atkSpd', 'crit', 'lifesteal', 'cdr', 'qiRegen'];
+
+// tooltip 定位：鼠标跟着光标，触摸则贴在格子旁边（手指会挡住格子，不能压在格子上）
+function placeTip(x, y) {
+  const w = tipEl.offsetWidth || 200, h = tipEl.offsetHeight || 190;
+  tipEl.style.left = Math.round(Math.max(6, Math.min(x, innerWidth - w - 8))) + 'px';
+  tipEl.style.top = Math.round(Math.max(6, Math.min(y, innerHeight - h - 8))) + 'px';
+}
+function showTip(it, evt, anchorEl) {
   if (!it || it.kind === 'potion') { tipEl.style.display = 'none'; return; }
   tipItem = it;
-  const rr = RARITY[it.r];
   const cur = player.equip[it.kind];
   let html = itemTitle(it) + '<br>';
   html += '<span style="color:#8A8268">品阶 ' + it.ilvl + ' · 评分 ' + itemScore(it) + '</span><br>';
   for (const [k, v] of statRows(it)) html += '<span style="color:#2A3140">' + k + ' +' + v + '</span><br>';
-  if (cur) {
+
+  if (cur && cur !== it) {
+    // 逐项和身上那件比：绿=提升 红=下降，和界面其它地方的配色保持一致
     const cg = gearStats(cur), ig = gearStats(it);
-    const dscore = itemScore(it) - itemScore(cur);
-    html += '<span style="color:#4A5568">当前: ' + cur.name + '</span><br>';
-    html += '<span style="color:' + (dscore > 0 ? '#2F6E6A' : '#8A8268') + '">综合 ' + (dscore > 0 ? '+' : '') + dscore + '</span><br>';
-    const datk = (ig.atk || 0) - (cg.atk || 0);
-    if (datk) html += '<span style="color:' + (datk > 0 ? '#2F6E6A' : '#C8453B') + '">攻击 ' + (datk > 0 ? '+' : '') + datk + '</span><br>';
+    const rows = [];
+    for (const k of DIFF_KEYS) {
+      const d = (ig[k] || 0) - (cg[k] || 0);
+      if (!d) continue;
+      const pct = PCT_KEYS.indexOf(k) >= 0;
+      const num = pct ? (Math.round(d * 10) / 10) : Math.round(d);
+      if (!num) continue;
+      rows.push('<span style="color:' + (num > 0 ? '#2F6E6A' : '#C8453B') + '">'
+        + (STAT_LABEL[k] || k) + ' ' + (num > 0 ? '+' : '') + num + (pct ? '%' : '') + '</span>');
+    }
+    const ds = itemScore(it) - itemScore(cur);
+    html += '<br><span style="color:#4A5568">对比身上：' + cur.name + '</span><br>';
+    html += '<span style="color:' + (ds > 0 ? '#2F6E6A' : ds < 0 ? '#C8453B' : '#8A8268') + '"><b>综合 ' + (ds > 0 ? '+' : '') + ds + '</b></span><br>';
+    html += rows.length ? rows.join('<br>') : '<span style="color:#8A8268">各项属性持平</span>';
+  } else if (cur === it) {
+    html += '<br><span style="color:#4A5568">当前已装备</span>';
   } else {
-    html += '<span style="color:#8A8268">未装备</span><br>';
+    html += '<br><span style="color:#8A8268">该槽位未装备，装备后属性直接生效</span>';
   }
   html += '<br><span style="color:#8A8268">左键装备 · 右键分解</span>';
   tipEl.innerHTML = html;
   tipEl.style.display = 'block';
-  const x = Math.min(evt.clientX + 14, innerWidth - 200);
-  const y = Math.min(evt.clientY + 10, innerHeight - 190);
-  tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px';
+
+  if (anchorEl) {
+    // 触摸：贴格子右侧，右边放不下就翻到左边
+    const r = anchorEl.getBoundingClientRect();
+    const w = tipEl.offsetWidth || 200;
+    const x = (r.right + 8 + w <= innerWidth) ? r.right + 8 : r.left - w - 8;
+    placeTip(x, r.top - 24);
+  } else if (evt && evt.clientX !== undefined) {
+    placeTip(evt.clientX + 14, evt.clientY + 10);
+  }
 }
 function hideTip() { tipEl.style.display = 'none'; }
 
@@ -57454,7 +57540,7 @@ function equipItem(i) {
 function unequip(slot) {
   const it = player.equip[slot];
   if (!it) return;
-  if (player.inv.length >= 20) { msg('行囊已满', C.red3); return; }
+  if (invFull()) { msg('行囊已满 · 可花银两扩充', C.red3); return; }
   player.inv.push(it);
   player.equip[slot] = null;
   invalidateStats();
@@ -57503,7 +57589,7 @@ function renderInv() {
 
   const grid = document.getElementById('invGrid');
   const rowsHtml = [];
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < invMax(); i++) {
     const it = player.inv[i];
     let cls = 'slot';
     if (it) {
@@ -57522,22 +57608,51 @@ function renderInv() {
     '<br>侠名 <b style="color:' + fameTier().color + '">' + fameTier().name + '</b>（' + (player.fame || 0) + '）' +
     (priceMul() < 1 ? ' · 店家让价 <b>' + Math.round((1 - priceMul()) * 100) + '%</b>' : '');
 
+  // 容量计数 + 扩充按钮
+  const capEl = document.getElementById('invCap');
+  if (capEl) {
+    capEl.textContent = player.inv.length + '/' + invMax();
+    capEl.classList.toggle('full', invFull());
+  }
+  const expBtn = document.getElementById('btnExpand');
+  if (expBtn) {
+    const maxed = invMax() >= INV_MAX;
+    expBtn.textContent = maxed ? '已扩满' : '扩充 +' + INV_STEP + '（' + expandCost() + ' 两）';
+    expBtn.disabled = maxed || player.gold < expandCost();
+    expBtn.onclick = () => expandInv();
+  }
+
   document.getElementById('eqSlots').querySelectorAll('.eq').forEach(el => {
     const slot = el.dataset.slot;
     const it = player.equip[slot];
     if (it) {
-      el.onmouseenter = e => showTip(it, e);
-      el.onmouseleave = hideTip;
+      el.onmouseenter = e => { if (lastPointerType === 'mouse') showTip(it, e); };
+      el.onmouseleave = () => { if (lastPointerType === 'mouse') hideTip(); };
       el.oncontextmenu = e => { e.preventDefault(); unequip(slot); };
-      el.onclick = () => { msg('右键可卸下 ' + it.name, C.paper1); };
+      el.onclick = e => {
+        // 触摸：点一下先看属性（已装备的那件没有对比，只看数值），再点一下才卸
+        if (lastPointerType !== 'mouse') {
+          if (tipItem === it && tipEl.style.display === 'block') { hideTip(); unequip(slot); return; }
+          showTip(it, null, el); return;
+        }
+        msg('右键可卸下 ' + it.name, C.paper1);
+      };
     }
   });
   grid.querySelectorAll('.slot[data-i]').forEach(el => {
     const i = +el.dataset.i;
     const it = player.inv[i];
-    el.onmouseenter = e => showTip(it, e);
-    el.onmouseleave = hideTip;
-    el.onclick = () => equipItem(i);
+    el.onmouseenter = e => { if (lastPointerType === 'mouse') showTip(it, e); };
+    el.onmouseleave = () => { if (lastPointerType === 'mouse') hideTip(); };
+    el.onclick = () => {
+      // 触摸屏没有 hover：第一下先把「和身上那件的差值」摆出来，
+      // 确认过再点第二下才真换装。否则手指一碰就换了，根本看不到对比。
+      if (lastPointerType !== 'mouse' && it) {
+        if (tipItem === it && tipEl.style.display === 'block') { hideTip(); equipItem(i); return; }
+        showTip(it, null, el); return;
+      }
+      equipItem(i);
+    };
     el.oncontextmenu = e => { e.preventDefault(); salvageItem(i); };
   });
 }
@@ -58045,7 +58160,7 @@ function save() {
     x: player.x, y: player.y, hp: player.hp, qi: player.qi,
     maxHpBase: player.maxHpBase, xp: player.xp, level: player.level,
     gold: player.gold, iron: player.iron, atkBase: player.atkBase,
-    inv: player.inv, equip: player.equip,
+    inv: player.inv, invMax: player.invMax || INV_BASE, equip: player.equip,
     skillPts: player.skillPts, skillLv: player.skillLv, kills: player.kills || 0,
     rested: !!player.rested, fame: player.fame || 0,
     clock: clock.serialize(),
@@ -58097,7 +58212,10 @@ function load() {
   Object.assign(player, {
     x: s.x, y: s.y, hp: s.hp, qi: s.qi || 60, maxHpBase: s.maxHpBase, xp: s.xp, level: s.level,
     gold: s.gold, iron: s.iron || 0, atkBase: s.atkBase,
+    // 老存档可能已经塞了超过 20 件（以前只有拾取挡，别的入口不挡），
+    // 读档时按实际件数把容量抬到能装下，别让玩家一进游戏就看到 "25/20"
     inv: (s.inv || []).map(normGear),
+    invMax: Math.max(s.invMax || INV_BASE, Math.ceil(((s.inv || []).length) / INV_STEP) * INV_STEP),
     equip: {
       weapon: normGear(s.equip && s.equip.weapon), armor: normGear(s.equip && s.equip.armor),
       necklace: normGear(s.equip && s.equip.necklace), artifact: normGear(s.equip && s.equip.artifact),
@@ -58132,7 +58250,7 @@ function startGame(cont) {
     meditateT = 0;
     Object.assign(player, {
       x: SPAWN.x, y: SPAWN.y, hp: 100, qi: 60, maxHpBase: 100, xp: 0, level: 1, gold: 0, iron: 0,
-      atkBase: 8, inv: [], equip: { weapon: null, armor: null, necklace: null, artifact: null },
+      atkBase: 8, inv: [], invMax: INV_BASE, equip: { weapon: null, armor: null, necklace: null, artifact: null },
       skillPts: 0, skillLv: {}, kills: 0, atkStep: 0, swing: null, shield: 0, poison: 0, poisonT: 0,
       poisonImmuneT: 0, drunkT: 0, drunk: 0, rested: false, fame: 0,
     });
@@ -58558,6 +58676,7 @@ function update(dt) {
     if (e.dead) continue;
     const m = MONSTERS[e.type];
     e.cd -= dt; e.flash -= dt; e.anim += dt; e.hitJit -= dt; e.stagger -= dt;
+    if (e.combatT > 0) e.combatT -= dt;
     // 击退惯性
     if (Math.abs(e.kvx) > 1 || Math.abs(e.kvy) > 1) {
       const kx = e.kvx * dt, ky = e.kvy * dt;
@@ -58736,6 +58855,13 @@ function update(dt) {
     }
     p.x += p.vx * dt; p.y += p.vy * dt;
     if (p.spin) p.mesh.rotation.z += p.spin * dt;
+    // 弹体撞墙就碎。以前压根没做墙体判定，飞镖 / 法球能直接穿墙打人，
+    // 隔着一堵墙也能磨死 boss —— 远程兵器因此强得离谱。
+    if (!canStand(p.x, p.y)) {
+      burst(p.x, p.y, p.friendly ? C.paper3 : C.red3, 5, 45);
+      p.t = 0;
+      continue;
+    }
     // 村外射进来的东西在城墙处就被挡下
     if (!p.friendly && inVillage(p.x, p.y, 0)) {
       burst(p.x, p.y, C.jade3, 7, 60);
@@ -58797,11 +58923,19 @@ function update(dt) {
     d.mesh.position.set(d.x, d.y - 4 + Math.sin(d.t * 4) * 1.5, 0);
     d.mesh.renderOrder = 500 + Math.round(d.y);
     const dd = Math.hypot(d.x - player.x, d.y - player.y);
-    if (dd < 26 && dd > 8) {
+    // 背包满时不要吸附。以前是先无条件吸到脚下、再判断能不能捡，
+    // 捡不起来时光柱就黏在人物身上跟着跑 —— 看着像掉在地上，其实永远拿不走。
+    const full = d.kind !== 'coin' && invFull();
+    if (!full && dd < 26 && dd > 8) {
       const sp = 150 * dt;
       d.x += (player.x - d.x) / dd * sp; d.y += (player.y - d.y) / dd * sp;
     }
     if (dd < 9 && pickup(d)) d.taken = true;
+    // 满包又凑近了，提示一下（带冷却，否则每帧刷屏）
+    if (full && dd < 30) {
+      d.warnT = (d.warnT || 0) - dt;
+      if (d.warnT <= 0) { d.warnT = 2.5; msg('行囊已满 · Tab 整理，或花银两扩充', C.red3); }
+    }
   }
   drops = drops.filter(d => {
     if (d.taken) { scene.remove(d.mesh); if (d.beam) scene.remove(d.beam); return false; }
@@ -58867,6 +59001,16 @@ const SHOW_IDLE_WEAPON = (location.search.match(/[?&]weapon=([^&]+)/) || [])[1] 
 // 手部锚点（相对 16×18 主角贴图中心）：让兵器从「手」上长出去，不是从胸口
 const HAND_OFF = { right: [4, 2], left: [-4, 2], up: [-3, 1], down: [3, 1] };
 
+// 挥砍角度曲线：主手用真实进度，副手用滞后进度 + 绕朝向镜像，
+// 这样两把刀一正一反、有先有后，才看得出是"双刀交替劈"。
+function swingAng(sw, base, p) {
+  const e = 1 - Math.pow(1 - Math.max(0, Math.min(1, p)), 2.2);
+  if (sw.mode === 'ring') return { ang: base - Math.PI * 1.1 + e * Math.PI * 2.2, off: 0, cast: false };
+  if (sw.mode === 'thrust') return { ang: base, off: e * 9, cast: false };
+  if (sw.mode === 'cast') return { ang: base - 0.62 + e * 0.42, off: e * 3, cast: true };
+  return { ang: base + sw.a0 + (sw.a1 - sw.a0) * e, off: 0, cast: false };
+}
+
 function drawWeaponHeld(camX, camY) {
   const fam = weaponFam();
   const W = WEAPONS[fam];
@@ -58876,35 +59020,44 @@ function drawWeaponHeld(camX, camY) {
   const cv = weaponCanvas(fam, color, r, it ? it.skin : 0);
   const px = player.x - camX, py = player.y - 8 - camY;
   const base = DIRA[player.dir];
+  const dual = fam === 'dual';
   let ang = 0, alpha = 1, off = 0, casting = false;
+  let dualAng = 0, dualP = 0, hasDual = false;
 
   if (player.swing) {
     const sw = player.swing.sw;
     const p = 1 - player.swing.t / player.swing.dur;
-    const e = 1 - Math.pow(1 - p, 2.2);
-    if (sw.mode === 'ring') {
-      ang = base - Math.PI * 1.1 + e * Math.PI * 2.2;
-    } else if (sw.mode === 'thrust') {
-      ang = base; off = e * 9;
-    } else if (sw.mode === 'cast') {
-      // 抬杖 / 抖腕：短促前点，不画近战刀光
-      ang = base - 0.62 + e * 0.42; off = e * 3; casting = true;
-    } else {
-      ang = base + sw.a0 + (sw.a1 - sw.a0) * e;
-    }
+    const s1 = swingAng(sw, base, p);
+    ang = s1.ang; off = s1.off; casting = s1.cast;
     alpha = p > 0.88 ? 1 - (p - 0.88) / 0.12 * 0.4 : 1;
+    if (dual) {
+      // 副手晚 dualDelay 个进度、角度绕朝向镜像：主手从左劈到右，副手正好从右劈到左。
+      // 以前副手写死成 ang+0.55，是个不随动作变化的固定偏移，两把刀永远平行，
+      // 看着就像一把刀在挥 —— 这才是"双刀不像双刀"的根因。
+      const delay = sw.dualDelay === undefined ? 0.26 : sw.dualDelay;
+      dualP = Math.max(0, p - delay);
+      dualAng = base * 2 - swingAng(sw, base, dualP).ang;
+      hasDual = true;
+    }
   } else {
     // 待机：贴着手斜垂，缩小到掌中尺寸
     if (player.dir === 'left') ang = Math.PI - 1.05;
     else if (player.dir === 'up') ang = -Math.PI + 1.25;
     else if (player.dir === 'right') ang = 1.05;
     else ang = Math.PI * 0.78;
+    // 待机时两把刀张开成 V 形，一眼能看出是双持
+    if (dual) { dualAng = ang - 0.72; hasDual = true; }
   }
   const [hox, hoy] = HAND_OFF[player.dir] || HAND_OFF.down;
-  const hx = px + hox + Math.cos(ang) * (1 + off) * 0.4;
+  // 双持时两只手要分得更开，否则两把刀挤在角色胸口那一小片
+  const handK = dual ? 1.75 : 1;
+  const hx = px + hox * handK + Math.cos(ang) * (1 + off) * 0.4;
   const hy = py + hoy + Math.sin(ang) * (1 + off) * 0.4;
   const sc = player.swing ? SWING_SCALE : HELD_SCALE;
-  const tipLen = cv.height * sc * 0.85;
+  // 双刀精灵只有 5×10，按通用缩放画出来不足 4px 宽，两把叠在角色身上完全看不出是两把。
+  // 双持单独放大一档（出招更明显），这是"能看出在挥双刀"的前提。
+  const scDual = sc * (player.swing ? 1.5 : 1.32);
+  const tipLen = cv.height * (dual ? scDual : sc) * 0.85;
 
   // 挥砍刀光（攻距已整体收小，弧半径跟着缩）
   if (player.swing && !casting) {
@@ -58914,6 +59067,11 @@ function drawWeaponHeld(camX, camY) {
       const a0 = base + sw.a0;
       const cur = base + sw.a0 + (sw.a1 - sw.a0) * (1 - Math.pow(1 - p, 2.2));
       drawArcFx(octx, px, py, a0, cur, (sw.reach || W.reach) * 0.78, W.trail, 0.6 + p * 0.4, 0.9);
+      // 双刀：副手也带一道镜像刀光，两道弧交叉才叫"双刀合击"
+      if (hasDual) {
+        const cur2 = base * 2 - (base + sw.a0 + (sw.a1 - sw.a0) * (1 - Math.pow(1 - dualP, 2.2)));
+        drawArcFx(octx, px, py, base * 2 - a0, cur2, (sw.reach || W.reach) * 0.74, W.trail, 0.45 + dualP * 0.4, 0.7);
+      }
     } else if (sw.mode === 'ring') {
       drawRingFx(octx, px, py, (sw.reach || W.reach) * 0.70, W.trail, 0.55, 0.9);
     } else if (sw.mode === 'thrust') {
@@ -58929,9 +59087,14 @@ function drawWeaponHeld(camX, camY) {
   }
 
   if (!player.swing && !SHOW_IDLE_WEAPON) return;   // 方案二：平时不显示兵器
-  drawWeaponAt(octx, cv, hx, hy, ang, alpha, sc);
-  if (fam === 'dual') {
-    drawWeaponAt(octx, cv, px - hox, py + hoy, ang + 0.55, alpha * 0.92, sc * 0.86);
+  drawWeaponAt(octx, cv, hx, hy, ang, alpha, dual ? scDual : sc);
+  if (hasDual) {
+    // 副手：另一只手出发，角度与主手镜像，尺寸略小（左手非惯用手）。
+    // 锚点放在另一侧、但只偏出八成，刀身贴着身体斜过去 —— 再往外就横穿角色，
+    // 完全放中线又和主手叠成一团，两种都看不出是两把刀。
+    const hx2 = px - hox * handK * 0.85 + Math.cos(dualAng) * 3;
+    const hy2 = py + hoy + Math.sin(dualAng) * 3;
+    drawWeaponAt(octx, cv, hx2, hy2, dualAng, alpha * 0.95, scDual * 0.9);
   }
 }
 
@@ -59311,7 +59474,15 @@ function drawOverlay(camX, camY) {
   }
 
   // 首领血条
-  const boss = enemies.find(e => (e.type === 'boss' || e.type === 'treant') && !e.dead && (e.aggro || e.hp < e.maxHp));
+  // 条件改成「最近交过手」或「它还盯着你且就在附近」：
+  // 原来写的是 aggro || hp<maxHp，两个条件都只会变真、不会变假，
+  // 于是 boss 一被惊动血条就永远挂在屏幕顶上了。
+  const boss = enemies.find(e => {
+    if (e.dead || (e.type !== 'boss' && e.type !== 'treant')) return false;
+    if (e.combatT > 0) return true;
+    if (!e.aggro) return false;
+    return Math.hypot(player.x - e.x, player.y - e.y) < 240;
+  });
   if (boss) {
     const bw = 140;
     octx.fillStyle = C.black; octx.fillRect(LW / 2 - bw / 2 - 1, 54, bw + 2, 10);
@@ -59584,8 +59755,34 @@ function resize() {
   const cw = Math.round(LW * s), ch = Math.round(LH * s);
   wrap.style.width = cw + 'px'; wrap.style.height = ch + 'px';
   for (const c of [glCanvas, ov]) { c.style.width = cw + 'px'; c.style.height = ch + 'px'; }
+  applyHiDPI(cw, ch);
   fitPanels();
   checkRotateHint();
+}
+
+// ---- 高分辨率渲染 ----
+// 画布的 backing store 原来固定 480×270，全靠 CSS 放大到屏幕尺寸。
+// 1366 的屏上那是 2.844 倍的非整数拉伸：像素块大小在 2px / 3px 之间跳，
+// HUD 那点 8~9px 的字更是被拉成一团糊。
+//
+// 现在按「设备像素」渲染：backing store = CSS 尺寸 × devicePixelRatio，
+// CSS 再 1:1 铺满，等于一个 backing 像素对应一个屏幕像素。
+// 绘制代码一行没动 —— overlay 依旧按 480×270 的逻辑坐标写，靠 setTransform 放大，
+// 所以 fillText 会以真实的 22~24px 字号光栅化，文字是清楚的矢量边缘，不再是放大出来的马赛克。
+// WebGL 那边正交相机仍是 0..LW / 0..LH，改的是 viewport 尺寸，
+// 纹理早就设了 NearestFilter，放大后是干净的像素方块而不是双线性糊边。
+let renderDpr = 1;
+function applyHiDPI(cw, ch) {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const bw = Math.round(cw * dpr), bh = Math.round(ch * dpr);
+  // 改 canvas.width/height 会清掉全部 2D 状态（transform、smoothing），
+  // 所以每次都要重新设一遍；尺寸没变时也设，代价可忽略。
+  if (ov.width !== bw || ov.height !== bh) { ov.width = bw; ov.height = bh; }
+  octx.setTransform(bw / LW, 0, 0, bh / LH, 0, 0);
+  octx.imageSmoothingEnabled = false;
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(cw, ch, false);
+  renderDpr = dpr;
 }
 
 // ---- 面板自适应（开始菜单 / 侠陨 / 通关）----
@@ -59780,7 +59977,9 @@ window.__game = {
     const c = document.createElement('canvas');
     c.width = LW; c.height = LH;
     const g = c.getContext('2d');
-    g.drawImage(glCanvas, 0, 0); g.drawImage(ov, 0, 0);
+    // glCanvas / ov 的 backing store 现在是设备像素级（cw*dpr），
+    // 截图要的是 480×270 的逻辑图，必须显式给目标尺寸，否则会被裁掉大半
+    g.drawImage(glCanvas, 0, 0, LW, LH); g.drawImage(ov, 0, 0, LW, LH);
     return c.toDataURL('image/png');
   },
 };

@@ -88,6 +88,15 @@
   #inv .eq.r1{box-shadow:0 0 0 2px #5FA8A0} #inv .eq.r2{box-shadow:0 0 0 2px #8A6FC4}
   #inv .eq.r3{box-shadow:0 0 0 2px #C8453B} #inv .eq.r4{box-shadow:0 0 0 2px #D9A441}
   #inv .grid{display:grid;grid-template-columns:repeat(10,28px);gap:3px;margin:0}
+  /* 行囊标题行：容量计数 + 扩充按钮 */
+  #inv .hdInv{display:flex;align-items:center;gap:6px;font:11px SimSun;letter-spacing:3px;
+    color:#8A6520;margin-bottom:5px}
+  #inv .hdInv #invCap{letter-spacing:0;font-family:monospace;color:#12161F;font-weight:bold}
+  #inv .hdInv #invCap.full{color:#C8453B}
+  #inv .hdInv .mini{margin-left:auto;width:auto;padding:2px 7px;font:10px SimSun;letter-spacing:0;
+    background:#C9BFA3;border:2px solid #000;box-shadow:0 0 0 1px #8A6520;color:#12161F;cursor:pointer}
+  #inv .hdInv .mini:hover:not(:disabled){background:#D9A441}
+  #inv .hdInv .mini:disabled{opacity:.5;cursor:default}
   #inv .slot{box-sizing:border-box;width:28px;height:28px;background:#C9BFA3;border:2px solid #000;
     box-shadow:0 0 0 1px #8A8268;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative}
   #inv .slot img{width:20px;height:20px;image-rendering:pixelated}
@@ -193,7 +202,7 @@
         <div id="eqSlots"></div>
       </div>
       <div>
-        <div class="hd" style="font:11px SimSun;letter-spacing:3px;color:#8A6520;margin-bottom:5px">行 囊</div>
+        <div class="hd hdInv">行 囊 <span id="invCap"></span><button id="btnExpand" class="mini">扩充</button></div>
         <div class="grid" id="invGrid"></div>
         <div class="tools">
           <button id="btnBulk0">分解凡品</button>

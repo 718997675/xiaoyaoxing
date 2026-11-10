@@ -88,16 +88,24 @@
   g.attack();                                   // 暗器 / 法杖 cast 收招
   for (let i = 0; i < 14; i++) g.tick(1 / 60);
   T('远程普攻只留灵气圈、不画近战刀光', g.slashGhosts.every(x => x.ring), g.slashGhosts.length);
-  const e = g.enemies.find(x => !x.dead && x.type !== 'boss' && x.type !== 'treant');
-  if (e) {
+  // 弹体现在撞墙即碎，随机挑到的敌人若隔着树/竹，这一发必然打在障碍物上 ——
+  // 所以逐个换目标重试，别让「随机站位」变成假失败。
+  let hit = 0, tried = 0, target = null;
+  const cands = g.enemies.filter(x => !x.dead && x.type !== 'boss' && x.type !== 'treant');
+  for (const e of cands) {
+    if (tried >= 8) break;
+    tried++;
     g.setPos(e.x - 40, e.y); g.setDir('right');
     e.aggro = false; e.hp = e.maxHp = 99999;
     const hp0 = e.hp;
     g.player.atkCd = 0; g.player.lastAtkT = -9;
     g.attack();
     for (let i = 0; i < 25; i++) g.tick(1 / 60);
-    T('飞弹能命中敌人', e.hp < hp0, Math.round(hp0 - e.hp));
-  } else T('飞弹能命中敌人', false, '无存活敌人');
+    hit = hp0 - e.hp;
+    target = e;
+    if (hit > 0) break;
+  }
+  T('飞弹能命中敌人', hit > 0, hit + '（试了 ' + tried + ' 个目标）');
 
   // ---------- 4. 史诗/传说地面特效 ----------
   const d = g.giveGearToGround(4, 'weapon');
