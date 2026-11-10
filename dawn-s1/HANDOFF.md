@@ -32,10 +32,11 @@ npx serve .        # 或 python -m http.server
 cd dawn-s1
 node tools/run.js devtest        # 全量断言，当前基线 137 pass / 0 fail
 node tools/run.js eval tools/weapons.js   # 八兵器 / 触屏专项，当前 32 pass / 0 fail
-node tools/run.js eval tools/map.js       # 大地图连通性与地貌，当前 13 pass / 0 fail
+node tools/run.js eval tools/map.js       # 大地图连通性与地貌，当前 12 pass / 0 fail
 node tools/run.js eval tools/camps.js     # 营地生态（巡逻/吹哨/食物链/作息），当前 17 pass / 0 fail
-node tools/run.js eval tools/bosses.js    # 首领（招式表/巢穴/危险区/首杀专属），当前 22 pass / 0 fail
-node tools/run.js eval tools/quests.js    # 任务（10 条全通/三物门禁/存档），当前 28 pass / 0 fail
+node tools/run.js eval tools/bosses.js    # 首领（招式表/巢穴/危险区/首杀专属），当前 23 pass / 0 fail
+node tools/run.js eval tools/quests.js    # 任务（10 条全通/三物门禁/存档），当前 29 pass / 0 fail
+node tools/run.js eval tools/arts.js      # 招式（16 招/专精/状态/平衡/存档），当前 53 pass / 0 fail
 node tools/run.js shot out.png 1440 900   # 截图
 ```
 
@@ -81,13 +82,13 @@ for(let i=0;i<25;i++)g.tick(0.016)" \
 | **P2 营地生态：巡逻 / 吹哨 / 食物链 / 作息 / 营地道具 / 3 个营地首领** | ✅ 2026-11-10 |
 | **P3 首领 3→8：招式表引擎 + 4 个巢穴 + 地面危险区 + 5 件首杀专属装备** | ✅ 2026-11-10 |
 | **P4 任务系统：`quests.js` 10 条 + 面板 + 追踪条 + 三物门禁 + 4 个新 NPC** | ✅ 2026-11-10 |
+| **P5 招式系统：`arts.js` 16 招 + 六种效果原语 + 兵器专精 0→10 + 状态系统 + 招式页** | ✅ 2026-11-10 |
 | 双渠道发布（GitHub Pages + workbuddy） | ✅ |
 
 ### 未完成（按顺序）
 
 | 批次 | 内容 | 文档 |
 |---|---|---|
-| **P5** | 技能框架 + 兵器专精 + 16 个技能 | `SKILLS-STORY-PLAN.md` §二 |
 | **P5.5** | 心法系统（22 条 + 一主二辅 + 心法页 UI） | `SKILLS-STORY-PLAN.md` §三 |
 | **P6** | 补齐剩余 48 个技能 + 装配 UI | 同上 |
 | **P7~P9** | 剧情框架 + 三幕 + 终章 | `SKILLS-STORY-PLAN.md` §四 |
@@ -116,7 +117,9 @@ dawn-s1/
 ├── weapons.js     八类兵器的挥砍参数（a0→a1 角度、hitArc、reach、lunge、弹道）
 ├── monsters.js    怪物与首领
 ├── items.js       装备生成与词条
-├── skills.js      被动树（NODES）
+├── skills.js      被动树（NODES）+ 气/舞/雷三个通用主动
+├── arts.js        兵器招式（16 个，数据层）+ 专精曲线
+├── quests.js      任务定义表（10 条）+ 信物 + 纯函数
 ├── village.js     青云集：建筑、NPC、摆件、店铺（坐标都是村内绝对像素）
 ├── dungeon.js     青云古洞（占地图上一块矩形，进洞时重写该块的 tiles）
 ├── pixel.js       调色板 C 与精灵工具
@@ -128,6 +131,9 @@ dawn-s1/
     ├── map.js     大地图连通性自检
     ├── mapview.js 把整张地图画成一张 png，肉眼检查地貌
     ├── weapons.js 兵器与触屏专项自检
+    ├── bosses.js  首领与危险区自检
+    ├── quests.js  任务线自检
+    ├── arts.js    招式与专精自检
     └── play.js / shot.js / touch.js  交互与截图工具
 ```
 
@@ -176,26 +182,54 @@ dawn-s1/
 - `github.com:443` 偶尔完全不通。应急可以走 Git Data API
   （`POST /git/blobs` → `/git/trees` → `/git/commits` → `PATCH /git/refs/heads/main`）。
 
+### 招式 / 状态（P5 踩的）
+
+- **刀光不能在 `update()` 里画**。`drawOverlay()` 开头就 `clearRect`，update 阶段画的东西
+  下一帧就没了；而且那里拿不到 overlay 的 ctx。正确做法是往 `slashGhosts` 里 push
+  一条 `{x,y,a0,a1,R,colors,t,max}`（或 `{ring:true}` / `{thrust:ang,len}`），
+  它自己按世界坐标画、自己淡出。
+- **`drawArcFx / drawRingFx / drawThrustFx` 第一个参数是 ctx**，颜色是**数组**不是单色。
+  签名不对时表现为 `ctx.save is not a function`，一眼能看出来，但很容易写错。
+- **`.panel button` 是 `width:100%` 的整行按钮**。往 flex 卡片里塞按钮必须显式写
+  `display:inline-block;width:auto;flex:0 0 auto`，否则按钮吃掉整行，
+  左边的名字和描述会被挤成一列单字。
+- **`spawnEnemy` 会把刷在青云集界内的怪搬回营地**（`inVillage(x,y,24)`）。
+  写自检时如果站在村里放木桩，木桩会全跑到几百像素外，弹体与落雷自然一个都打不中。
+  试招场地要挪到村外，而且**营地圆心经常压着一块实心**（篝火/石台），
+  人站上去弹体一出膛就 `!canStand` 碎掉 —— 要往外螺旋找一块空地。
+- **落雷的命中判定原来写的是 `e.y - b.h / 2`**，而 bolt 对象从来没有 `h` 字段，
+  于是 `NaN < r` 恒为 false —— 天雷诀从 S1 起一发都没打中过人。这个 bug 一直没人发现，
+  因为没人给它写过"真的打到人"的断言。**加新系统时顺手给老系统补一条实测断言，很值。**
+- **`applyStatus` 在 `hitEnemy` 之后调用**，目标当场被打死时状态会被跳过。
+  测"中毒"这类效果要给木桩留足血量，否则测出来的是"没中毒"。
+- **`items.js` 已经导出了 `SLOT_LABEL`**（兵器/衣甲/项链/法宝）。`arts.js` 里的
+  同名导出改名 `ART_SLOT_LABEL` —— 同一个文件 import 两个同名符号，后者静默覆盖前者，
+  那种 bug 查起来极费劲。
+- **触屏按钮的容错圈半径是 `r + BTN_PAD(6)`**，两个键的圆心距必须 ≥ `2*(r+6)`。
+  3×2 的招式键阵用 42px 间距（r=14），余量 2px。
+
 ---
 
 ## 7. 下次开工的第一件事
 
-按 `SKILLS-STORY-PLAN.md` 的 **P5 · 技能框架 + 兵器专精 + 16 个技能** 往下做。
+按 `SKILLS-STORY-PLAN.md` 的 **P5.5 · 心法系统** 往下做（22 条 + 一主二辅 + 心法页 UI）。
 
-P1~P4 已经把第一章的骨架铺完了：
+P1~P5 已经把第一章的骨架和战斗的构筑层铺完了：
 
 - 地图 144×104，四区地貌，12 营地 + 4 巢穴，路网与溪涧竹桥
 - 怪会巡逻、吹哨叫援、追猎物、按时辰睡觉；8 个首领各有一套招式表
 - 10 条任务（3 主线 + 7 支线）全部可完成，三物齐了才开古洞封碑
-- 任务面板 `B`、HUD 追踪条、信物系统、店主「问事」行
+- **16 个兵器招式**：八兵器各 2 个（输出 + 特色），六种效果原语，专精 0→10 解锁
+- **状态系统**：流血 / 灼烧 / 中毒 / 冻结 / 眩晕 / 减速 / 破甲 / 击飞，DoT 不走 `hitEnemy`
 
-P5 要动的是**战斗的构筑层**：现在只有八类兵器 + 一棵道行树，缺"同一把刀打出不同路子"。
-按 `SKILLS-STORY-PLAN.md` §二 的施工单走，先把框架（技能槽 / 装配 / 冷却）搭起来，
-再灌 16 个技能，剩下 48 个放 P6。
+**为什么 P5.5 要排在 P6（补 48 个技能）前面**：心法改的是 `stats()` 与五个伤害钩子。
+技能数量越多，这些钩子被踩到的次数越多。趁现在只有 16 个招式插进去，回归好做得多；
+反过来先做 64 个技能，任何一个钩子写错都要在 64 个招式上排查一遍。
 
 **动手前先读**：
-- `SKILLS-STORY-PLAN.md` §二（技能 64 个 + 兵器专精 0→10）
-- `SKILLS-STORY-PLAN.md` §三（心法 22 条，P5.5 才做）
+- `SKILLS-STORY-PLAN.md` §三（心法 22 条、一主二辅、五个钩子）
+- `SKILLS-STORY-PLAN.md` §3.8（P5.5 施工单）
 
-**注意**：`game.js` 里 `skills` 这个名字已经被"气/舞/雷"三个主动技占用了，
-新的技能系统建议叫 `arts`（招式），别硬改老的。
+**两个命名提醒**：
+- `game.js` 里 `skills` 已经被"气/舞/雷"三个通用主动占用了，兵器招式叫 `arts`。
+- 心法建议叫 `mantra`，别再往 `skills` 上叠。

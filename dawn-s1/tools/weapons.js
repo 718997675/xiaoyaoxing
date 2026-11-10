@@ -125,9 +125,9 @@
     }
   }
   T('动作键容错圈零重叠', overlaps === 0, overlaps + ' 对 / 最小余量 ' + minGap.toFixed(1));
-  // 坐 / 谈 是条件显示键，圆心命中只对常驻键有意义
+  // 坐 / 谈 / 招式键 是条件显示键，圆心命中只对常驻键有意义
   T('点每个常驻键的圆心都命中自己',
-    b.filter(x => x.id !== 'sit' && x.id !== 'talk').every(x => { const h = g.touchHit({ x: x.x, y: x.y }); return h && h.id === x.id; }));
+    b.filter(x => x.id !== 'sit' && x.id !== 'talk' && x.art === undefined).every(x => { const h = g.touchHit({ x: x.x, y: x.y }); return h && h.id === x.id; }));
   // 交界处取最近圆心，主攻键不再越界吃掉小键
   const qi = b.find(x => x.id === 'qi'), slash = b.find(x => x.id === 'slash');
   const mid = { x: (qi.x + slash.x) / 2, y: (qi.y + slash.y) / 2 };

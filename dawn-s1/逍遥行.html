@@ -171,6 +171,58 @@
   #skills .nHint{font:9px SimSun;color:#8A8268}
   #skills .node.maxed .nHint{color:#2F6E6A}
 
+  /* 道行 / 招式两页：用页签而不是两个面板 —— 同一件事（"我这套东西怎么配"）
+     分成两个入口，玩家会忘记另一个的存在 */
+  #skills .tabs{display:flex;gap:6px;margin:0 0 8px;justify-content:center}
+  #skills .tabs button{
+    font:bold 12px SimSun;letter-spacing:3px;padding:3px 18px;cursor:pointer;
+    background:#DCD2B8;color:#6B6248;border:2px solid #8A6520;box-shadow:2px 2px 0 #000;
+  }
+  #skills .tabs button.on{background:#2F6E6A;color:#F2E9CE;border-color:#1D4A46}
+  #skills .tabs button:active{transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
+
+  /* ---------- 招式 ---------- */
+  #artPage{text-align:left}
+  #artPage .profRow{display:flex;align-items:center;gap:6px;font:11px SimSun;color:#4A5568;margin:2px 0}
+  #artPage .profRow b{color:#12161F;letter-spacing:1px;min-width:34px}
+  /* 槽底压暗而不是用浅褐：0 级的空条和满条如果都接近纸色，玩家会以为自己已经练满了 */
+  #artPage .profRow .pb{flex:1;height:7px;background:#5A5344;border:1px solid #3A352A;position:relative}
+  #artPage .profRow .pb i{position:absolute;left:0;top:0;bottom:0;background:#D9A441}
+  #artPage .profRow.cur b{color:#C8453B}
+  #artPage .profRow.cur .pb i{background:#C8453B}
+  #artPage .profRow span{font:10px monospace;color:#8A6520;min-width:52px;text-align:right}
+  /* 装配槽：六个方块，跟 HUD 上那一排一一对应，数字键就是格子序号 */
+  #artLoadout{display:flex;gap:4px;justify-content:center;margin:6px 0 10px}
+  #artLoadout .as{
+    width:56px;height:44px;background:#E8DFC8;border:2px solid #8A6520;position:relative;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;
+  }
+  #artLoadout .as.empty{background:#DCD2B8;border-style:dashed;color:#A99F84}
+  #artLoadout .as .k{position:absolute;top:1px;left:3px;font:9px monospace;color:#8A6520}
+  #artLoadout .as .n{font:bold 11px SimSun;color:#12161F;letter-spacing:1px}
+  #artLoadout .as .s{font:9px SimSun;color:#8A8268}
+  #artLoadout .as:hover{border-color:#C8453B}
+  #artPage .artCard{
+    background:#E8DFC8;border:1px solid #8A6520;padding:5px 7px 6px;margin-bottom:5px;
+    display:flex;gap:8px;align-items:flex-start;
+  }
+  #artPage .artCard.locked{opacity:.55}
+  #artPage .artCard .l{flex:1;min-width:0}
+  #artPage .artCard .t{font:bold 12px SimSun;letter-spacing:1px;color:#12161F}
+  #artPage .artCard .t em{font:9px SimSun;font-style:normal;color:#F2E9CE;background:#8A6520;padding:0 4px;margin-left:5px;letter-spacing:0}
+  #artPage .artCard .t em.sp{background:#C8453B}
+  #artPage .artCard .d{font:10px/1.4 SimSun;color:#4A5568;margin:2px 0}
+  #artPage .artCard .m{font:9px monospace;color:#8A6520}
+  #artPage .artCard button{
+    /* .panel button 是 width:100% 的整行按钮，这里必须显式改回来 ——
+       否则按钮会占满整张卡片，把左边的名字与描述挤成一列单字。 */
+    display:inline-block;width:auto;flex:0 0 auto;margin:0;
+    font:bold 11px SimSun;padding:4px 10px;cursor:pointer;white-space:nowrap;
+    background:#2F6E6A;color:#F2E9CE;border:2px solid #1D4A46;box-shadow:2px 2px 0 #000;
+  }
+  #artPage .artCard button:disabled{background:#B6AB8F;color:#6B6248;border-color:#8A8268;cursor:not-allowed}
+  #artPage .artCard button:active:not(:disabled){transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
+
   /* ---------- 任务 ---------- */
   #quest{z-index:13;width:520px;max-height:80vh;overflow:auto}
   #quest h1{letter-spacing:10px}
@@ -263,9 +315,20 @@
   </div>
 
   <div id="skills" class="panel hidden">
-    <h1>道行</h1>
-    <div class="sp">余下参悟点 <b id="spLeft">0</b> · 每次境界提升得 1 点</div>
-    <div class="cols" id="skillTree"></div>
+    <h1 id="skillTitle">道行</h1>
+    <div class="tabs">
+      <button data-page="dao" class="on">道行</button>
+      <button data-page="art">招式</button>
+    </div>
+    <div id="daoPage">
+      <div class="sp">余下参悟点 <b id="spLeft">0</b> · 每次境界提升得 1 点</div>
+      <div class="cols" id="skillTree"></div>
+    </div>
+    <div id="artPage" class="hidden">
+      <div class="sp" id="artSub">持兵器杀敌可长专精</div>
+      <div id="artLoadout"></div>
+      <div id="artBody"></div>
+    </div>
     <button id="btnSkillClose">收功（T / Esc）</button>
   </div>
 
@@ -56174,6 +56237,7 @@ const { Clock, PHASES, PHASE_EDGES } = __M.time;
 const { VILLAGE, inVillage, villageArt, BUILDINGS, PROPS, NPCS, VILLAGERS, SHOPS } = __M.village;
 const { QUESTS, QUEST_IDS, QUEST_ITEMS, RELICS_TRIPLE, MAIN_ORDER, questById, objDone, objText, tripleReady, tripleMissing, relicName, questsOfGiver } = __M.quests;
 const { DG, DGT, DG_FLOORS, FLOOR_MOBS, inDungeon, genFloor, paintDungeon, dungeonArt } = __M.dungeon;
+const { ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_SLOT_LABEL, PROF_MAX, PROF_WEIGHT, artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief } = __M.arts;
 
 const LW = 480, LH = 270, TILE = 16, MAPW = 144, MAPH = 104;
 const SAVE_KEY = 'xiaoyao-save-v5';
@@ -57278,8 +57342,9 @@ function dgBuild(floor, seed) {
   dgData = genFloor(seed, floor);
   dgCleared = false;
   // 换层 / 重排时把上一层的地面危险区收掉 —— 否则一层留下的毒雾会飘到下一层，
-  // 玩家刚落地就掉血，还找不到来源。
+  // 玩家刚落地就掉血，还找不到来源。飞剑环绕同理。
   clearHazards();
+  clearArts();
   const W = dgData.W, H = dgData.H;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -57399,6 +57464,12 @@ const player = {
   drunkT: 0, drunk: 0, rested: false,
   inv: [], invMax: 20, equip: { weapon: null, armor: null, necklace: null, artifact: null },
   windCd: 0, skillPts: 0, skillLv: {}, kills: 0,
+  // 兵器专精：fam → 累计击杀。跟道行点刻意分开 —— 道行是境界给的"修为"，
+  // 专精是拿这件兵器实打实砍出来的"手上功夫"，两套曲线互不占用。
+  prof: {},
+  // 招式槽 6 格，存 art id。换兵器时只清掉"不属于当前兵器"的格子，
+  // 同一件兵器内部的手动编排保留。
+  loadout: new Array(ART_SLOTS).fill(null),
 };
 const pMesh = quad(playerTex.down[0], 16, 18);
 pMesh.visible = false;
@@ -57412,6 +57483,8 @@ const keys = {};
 // 失焦 / 切模式时清干净方向键，避免「keyup 没送到 → 人朝一个方向一直走」
 function clearKeys() { for (const k in keys) keys[k] = false; }
 const skills = { qi: { cd: 0, max: 2.2 }, wu: { cd: 0, max: 6 }, thunder: { cd: 0, max: 5 } };
+// 招式冷却按 art id 记，不按槽位 —— 同一个招式被挪到别的格子，冷却不该跟着归零。
+const artCds = {};
 let wuT = 0;
 const DIRV = { down: [0, 1], up: [0, -1], left: [-1, 0], right: [1, 0] };
 const DIRA = { down: Math.PI / 2, up: -Math.PI / 2, left: Math.PI, right: 0 };
@@ -57538,6 +57611,21 @@ const TOUCH_BTNS = [
   { id: 'bag', label: '囊', x: 416, y: 104, r: 13, size: 11, run: () => toggleInv(true), cd: () => [0, 0] },
   { id: 'dao', label: '道', x: 456, y: 104, r: 13, size: 11, run: () => toggleSkills(true), cd: () => [0, 0] },
   { id: 'quest', label: '事', x: 296, y: 104, r: 13, size: 11, run: () => toggleQuests(true), cd: () => [0, 0] },
+  // 招式键：底部中间那块（x 150~295 / y 166~262）在触屏上一直是空的 ——
+  // 左边是摇杆热区、右边是动作键，正好塞下 3×2。只画"装了招式的格子"，
+  // 空格子不出现，否则手机上会多出四五个点了没反应的圈。
+  // 间距 42：容错圈半径是 r+PAD=20，两圈相切就要 40，留 2px 余量。
+  ...Array.from({ length: ART_SLOTS }, (_, i) => ({
+    id: 'art' + i, art: i, label: '',
+    x: 180 + (i % 3) * 42, y: 196 + ((i / 3) | 0) * 42, r: 14, size: 11,
+    run: () => castArt(i),
+    labelFn: () => { const id = player.loadout[i]; const a = id ? artById(id) : null; return a ? a.name[0] : ''; },
+    cd: () => {
+      const id = player.loadout[i];
+      const a = id ? artById(id) : null;
+      return [id ? artCdOf(id) : 0, a ? artMaxOf(a) : 1];
+    },
+  })),
 ];
 function touchHit(p) {
   // 取「离圆心最近」的键，而不是数组里第一个：即使容错圈偶然相交，
@@ -57557,6 +57645,13 @@ function nearTemple() { return Math.hypot(player.x - SPAWN.x, player.y - SPAWN.y
 function touchBtnVisible(b) {
   if (b.id === 'sit') return nearTemple();
   if (b.id === 'talk') return !!nearVillager() || !!nearShop() || nearNotice() || !!nearDg();
+  // 招式键只在装了招式的格子上出现
+  if (b.art !== undefined) {
+    const id = player.loadout && player.loadout[b.art];
+    if (!id) return false;
+    const a = artById(id);
+    return !!a && a.fam === weaponFam() && artUnlocked(profKills(a.fam), a);
+  }
   return true;
 }
 
@@ -57819,6 +57914,15 @@ function spawnEnemy(type, x, y, camp, eliteMod) {
     // 不再按 type 一个个判断（以前加一个首领要改七八处）。
     boss: (MONSTERS[type] || {}).behavior === 'boss',
     skillCds: null, skillGap: 1.2, skill: null, skillT: 0,
+    // —— 状态 ——
+    // 灼烧 / 流血 / 中毒是三种 DoT（伤害来源不同、颜色不同，但结算方式一样），
+    // 冻结与眩晕都"不动不出手"，区别是冻结期间受伤加成；减速只改速度。
+    // 破甲改的是 def，所以单独记一个原值，到期还原 —— 直接改 def 不复位，
+    // 挨一次碎骨锤这只怪就永远软了。
+    bleed: 0, bleedT: 0, burn: 0, burnT: 0, poison: 0, poisonT: 0,
+    freezeT: 0, stunT: 0, slowT: 0, slowPct: 0, breakT: 0, breakPct: 0, def0: def,
+    launchT: 0, launchZ: 0, landDmg: 0, poisonSpread: false,
+    lastFam: null,
   };
   e.mesh = quad(art.frames[0], art.size[0], art.size[1]);
   e.shadow = quad(SHADOW_TEX, art.size[0] * 0.95, art.size[1] * 0.3);
@@ -57947,12 +58051,19 @@ function rollDamage(mul, opt) {
 }
 function hitEnemy(e, info, ang, kb) {
   const s = stats();
-  const def = Math.min(0.7, e.def || 0);
+  // 破防 / 贯甲：招式可以按比例无视防御。放在这里而不是各自算一遍，
+  // 是为了让"普攻 / 弹体 / 落雷 / 持续伤害"四条路径共用同一套减伤规则。
+  const def = Math.min(0.7, e.def || 0) * (1 - (info.pierceDef || 0));
+  // 冻结期间受伤 +20%（冰封的代价就是"解冻前那一顿打"）
+  const frozen = e.freezeT > 0 ? 1.2 : 1;
   // 晨雾偷袭 / 摸睡：还没察觉你的怪，第一下 ×1.5 —— 卯时与深夜清营地最划算
   const sneak = (clock.isDawn || e.sleep) && !e.aggro;
   const mul = sneak ? dawnStrike() : 1;
-  const dmg = Math.max(1, Math.round(info.dmg * mul * (1 - def)));
+  const dmg = Math.max(1, Math.round(info.dmg * mul * (1 - def) * frozen));
   e.hp -= dmg;
+  // 记下"这一下是谁打的" —— 专精按最后命中的兵器算，杀敌时结算。
+  // 不记的话，用剑把怪磨到一丝血、切锤补最后一刀，锤就白赚了全部专精。
+  e.lastFam = info.fam || player.lastHitFam || weaponFam();
   // 打醒：睡着了挨一下必然醒，而且立刻叫人
   if (e.sleep) { e.sleep = false; e.wakeT = 25; e.aggro = true; shout(e); }
   e.combatT = 4;   // 挨了打就算在交战，首领血条要亮着
@@ -58032,6 +58143,7 @@ function attack() {
   if (state !== 'play') return;
   if (player.atkCd > 0) { player.atkBuf = 0.26; return; }
   const fam = weaponFam(), W = WEAPONS[fam];
+  player.lastHitFam = fam;
   const list = W.swings;
   if (time - player.lastAtkT < 0.85) player.atkStep = (player.atkStep + 1) % list.length;
   else player.atkStep = 0;
@@ -58090,6 +58202,21 @@ function killEnemy(e) {
   const m = MONSTERS[e.type];
   player.kills = (player.kills || 0) + 1;
   player.xp += m.xp;
+  // 专精：按"最后一下是谁打的"给。普通 1 / 精英 3 / 首领 12 —— 首领一次顶一轮小怪，
+  // 免得玩家为了练专精一直在营地刷杂兵。
+  addProf(e.lastFam || weaponFam(), e.boss ? PROF_WEIGHT.boss : e.elite ? PROF_WEIGHT.elite : PROF_WEIGHT.normal);
+  // 毒镖的传染：中毒者倒下时毒气四散，周围一起中毒。
+  // 不做这个，毒镖就只是一发"伤害高一点的镖"，特色位白占。
+  if (e.poisonSpread) {
+    burst(e.x, e.y - e.h / 2, C.jade2, 14, 90);
+    for (const o of enemies) {
+      if (o === e || o.dead) continue;
+      if (Math.hypot(o.x - e.x, o.y - e.y) > 64) continue;
+      o.poison = Math.max(o.poison, e.poison * 0.8);
+      o.poisonT = Math.max(o.poisonT, 5);
+      o.poisonSpread = true;
+    }
+  }
   // 任务计数放在最前面：后面有通关判定会改 state，改完之后再计数容易被漏掉
   questOnKill(e);
   dmgNum(e.x, e.y - e.h - 6, '+' + m.xp + '历练', C.paper3);
@@ -58311,6 +58438,387 @@ function castThunder() {
   AUDIO.play('thunder');
   msg('天雷诀 · 引', C.gold3);
 }
+// ============ 兵器招式（arts）============
+// 跟"道行"里的气/舞/雷分开：那三个是境界带来的通用手段，换什么兵器都能放；
+// 招式只看手里拿的兵器 —— 换刀就没有剑招。成长也分开：道行点是境界给的，
+// 专精是拿这件兵器一刀一刀砍出来的。
+//
+// 运行时只有一个 execArt 分派器，按 art.fx 走六种原语（melee / proj / spin /
+// orbit / blink / bolt）。加一招只要在 arts.js 写数据，这里一行都不用改 ——
+// 跟首领的招式表（monsters.js 的 skills + execSkill）是同一个思路。
+function profKills(fam) { return (player.prof && player.prof[fam]) || 0; }
+function artCdOf(id) { return artCds[id] || 0; }
+function artMaxOf(a) { return a.cd * (1 - Math.min(45, stats().cdr) / 100); }
+
+function addProf(fam, n) {
+  if (!fam || !WEAPONS[fam] || !n) return;
+  if (!player.prof) player.prof = {};
+  const before = profLevel(player.prof[fam] || 0);
+  player.prof[fam] = (player.prof[fam] || 0) + n;
+  const after = profLevel(player.prof[fam]);
+  if (after <= before) return;
+  const W = WEAPONS[fam];
+  msg(W.name + ' · 专精 ' + after + ' 级', C.gold3);
+  AUDIO.play('levelup');
+  // 升级时顺手把刚悟到的招式自动上阵 —— 否则玩家悟了招却不知道该去哪个页面装，
+  // 这套系统在第一次接触时就断线了。
+  const got = artsOfWeapon(fam).filter(a => a.prof > before && a.prof <= after);
+  for (const a of got) msg('悟得「' + a.name + '」· 已上阵', C.gold3);
+  autoLoadout();
+  renderArts();
+}
+
+// 换兵器时：清掉不属于当前兵器的格子，再把已悟没上阵的补进空格。
+// 同一件兵器内部的手动编排要保留 —— 每次换刀都重排一遍，玩家会以为界面坏了。
+function autoLoadout() {
+  const fam = weaponFam();
+  const L = player.loadout;
+  if (!L || L.length !== ART_SLOTS) player.loadout = new Array(ART_SLOTS).fill(null);
+  const A = player.loadout;
+  for (let i = 0; i < ART_SLOTS; i++) {
+    const a = A[i] ? artById(A[i]) : null;
+    if (a && a.fam !== fam) A[i] = null;
+  }
+  const have = new Set(A.filter(Boolean));
+  for (const a of unlockedArts(fam, player.prof)) {
+    if (have.has(a.id)) continue;
+    const i = A.indexOf(null);
+    if (i < 0) break;
+    A[i] = a.id; have.add(a.id);
+  }
+}
+
+// ---------- 状态 ----------
+// 灼烧 / 流血 / 中毒是三种 DoT：来源与颜色不同，结算方式一样。
+// 冻结与眩晕都"不动不出手"，区别是冻结期间受伤 +20%；减速只改速度。
+function applyStatus(e, st, dealt) {
+  if (!st || !e || e.dead) return;
+  if (st.kind === 'bleed') { e.bleed = dealt * st.pct; e.bleedT = st.dur; }
+  else if (st.kind === 'burn') { e.burn = dealt * st.pct; e.burnT = st.dur; }
+  else if (st.kind === 'poison') {
+    e.poison = dealt * st.pct; e.poisonT = st.dur;
+    if (st.spread) e.poisonSpread = true;
+  } else if (st.kind === 'freeze') { e.freezeT = Math.max(e.freezeT, st.dur); }
+  else if (st.kind === 'stun') { e.stunT = Math.max(e.stunT, st.dur); }
+  else if (st.kind === 'slow') { e.slowT = Math.max(e.slowT, st.dur); e.slowPct = Math.max(e.slowPct, st.pct); }
+  else if (st.kind === 'break') {
+    // 破甲改的是 def 本身，所以必须记下原值 —— 直接改不复位，
+    // 挨一次碎骨锤这只怪就永远软了。
+    e.breakT = Math.max(e.breakT, st.dur);
+    e.def = e.def0 * (1 - (st.pct || 0.4));
+  }
+}
+// DoT 结算：不经过 hitEnemy —— 那会触发顿帧、连击、火花、击退，
+// 一只中了毒的怪会像被每秒砍一刀，屏幕抖个不停。
+function dotTick(e, dt) {
+  let dps = 0;
+  if (e.bleedT > 0) { e.bleedT -= dt; dps += e.bleed; }
+  if (e.burnT > 0) { e.burnT -= dt; dps += e.burn; }
+  if (e.poisonT > 0) { e.poisonT -= dt; dps += e.poison; }
+  if (dps <= 0) return;
+  e.hp -= dps * dt;
+  e.dotAcc = (e.dotAcc || 0) + dps * dt;
+  e.dotShow = (e.dotShow || 0) - dt;
+  if (e.dotShow <= 0 && e.dotAcc >= 1) {
+    e.dotShow = 0.45;
+    const col = e.burnT > 0 ? C.red3 : e.bleedT > 0 ? C.red2 : C.jade2;
+    dmgNum(e.x + (Math.random() * 8 - 4), e.y - e.h * 0.9, '-' + Math.round(e.dotAcc), col);
+    e.dotAcc = 0;
+  }
+  if (e.hp <= 0 && !e.dead) killEnemy(e);
+}
+function tickEnemyStatus(e, dt) {
+  if (e.freezeT > 0) e.freezeT -= dt;
+  if (e.stunT > 0) e.stunT -= dt;
+  if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slowPct = 0; }
+  if (e.breakT > 0) { e.breakT -= dt; if (e.breakT <= 0) e.def = e.def0; }
+  if (e.launchT > 0) {
+    const d = e.launchDur || 0.55;
+    e.launchT -= dt;
+    e.launchZ = Math.sin(Math.max(0, e.launchT) / d * Math.PI) * 20;
+    if (e.launchT <= 0) {
+      e.launchZ = 0;
+      if (e.landDmg > 0) {
+        const dmg = Math.round(e.landDmg); e.landDmg = 0;
+        dmgNum(e.x, e.y - e.h * 0.8, '摔伤 ' + dmg, C.gold3, true);
+        burst(e.x, e.y - 4, C.gold2, 10, 80);
+        shakeX += 3; shakeY += 3;
+        e.hp -= dmg;
+        if (e.hp <= 0 && !e.dead) killEnemy(e);
+      }
+    }
+  }
+  dotTick(e, dt);
+}
+// 招式命中之后的附加效果（状态 / 击飞 / 吸血）
+function afterArtHit(e, a, dealt, ang) {
+  if (a.status) applyStatus(e, a.status, dealt);
+  if (a.launch) {
+    e.launchDur = 0.55; e.launchT = 0.55;
+    e.landDmg = (e.landDmg || 0) + dealt * 1.5;
+    e.aggro = true; e.combatT = 4;
+  }
+  if (a.lifeOnHit) {
+    const heal = Math.max(1, Math.round(maxHp() * a.lifeOnHit));
+    player.hp = Math.min(maxHp(), player.hp + heal);
+    dmgNum(player.x + (Math.random() * 8 - 4), player.y - 18, '+' + heal, C.jade3);
+  }
+}
+
+// ---------- 特效 ----------
+// 飞剑贴图只建一次：每次放招现画十二张 canvas 太浪费，而且武器图标生成不便宜。
+let _orbTex = null;
+function orbTexture() {
+  if (!_orbTex) _orbTex = tex(weaponIcon('sword', 3, 0, C.gold3));
+  return _orbTex;
+}
+// 招式刀光复用 slashGhosts 这条通道（普攻刀光也在用）：
+// 它已经在 drawOverlay 里按世界坐标画、并且自己淡出，直接 push 就完事。
+// 千万别在这里直接调 drawRingFx(octx, ...) —— update 阶段画的东西会被
+// drawOverlay 开头的 clearRect 擦掉，而且 ctx 也不对。
+function artSwingFx(a, base, reach, arc) {
+  const W = WEAPONS[a.fam];
+  const x = player.x, y = player.y - 8;
+  if (arc >= Math.PI * 1.9) {
+    slashGhosts.push({ x, y, ring: true, R: reach * 0.9, colors: W.trail, t: 0.34, max: 0.34 });
+    for (let i = 0; i < 14; i++) {
+      const ang = i / 14 * Math.PI * 2;
+      burst(x + Math.cos(ang) * 18, y + Math.sin(ang) * 18, W.trail[1], 2, 90);
+    }
+  } else if (a.arc && a.arc < 1.8) {
+    slashGhosts.push({ x, y, thrust: base, len: reach * 1.05, colors: W.trail, t: 0.24, max: 0.24 });
+  } else {
+    slashGhosts.push({ x, y, a0: base - arc / 2, a1: base + arc / 2, R: reach * 0.85, colors: W.trail, t: 0.26, max: 0.26 });
+  }
+}
+
+// ---------- 主分派 ----------
+function execArt(a) {
+  const fam = a.fam;
+  const W = WEAPONS[fam];
+  const base = DIRA[player.dir];
+  const [fx, fy] = DIRV[player.dir];
+  player.lastHitFam = fam;
+  player.swing = {
+    fam, base, cast: true,
+    sw: { mode: a.fx === 'proj' ? 'thrust' : 'swing', a0: 0, a1: 0, dur: 0.22 },
+    t: 0.22, dur: 0.22,
+  };
+  AUDIO.play(a.fx === 'bolt' ? 'thunder' : a.fx === 'proj' ? 'qi' : 'slash', fam);
+
+  if (a.fx === 'melee') {
+    const reach = a.reach || 40, arc = a.arc || 1.6, hits = a.hits || 1;
+    artSwingFx(a, base, reach, arc);
+    for (const e of enemies) {
+      if (e.dead) continue;
+      const px = player.x, py = player.y - 8;
+      const dx = e.x - px, dy = (e.y - e.h * 0.5) - py, d = Math.hypot(dx, dy);
+      if (d > reach + e.h * 0.4) continue;
+      const diff = Math.abs(((Math.atan2(dy, dx) - base + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+      // 半径给到 130 的环身技（开天辟地）不做角度筛；小范围扇面才筛
+      if (arc < Math.PI * 1.9 && diff > arc / 2 && d > 15) continue;
+      const ang = Math.atan2(dy, dx);
+      for (let k = 0; k < hits; k++) {
+        const r = rollDamage(a.mul, { skill: true });
+        const cb = a.centerBonus && d < (a.centerR || 46) ? a.centerBonus : 1;
+        const dealt = hitEnemy(e, { dmg: Math.round(r.dmg * cb), crit: r.crit, pierceDef: a.pierceDef || 0 }, ang, a.kb || 8);
+        afterArtHit(e, a, dealt, ang);
+      }
+    }
+    if (a.centerBonus) { shakeX += 6; shakeY += 6; hitstop = Math.max(hitstop, 0.09); }
+
+  } else if (a.fx === 'proj') {
+    const n = a.count || 1;
+    for (let i = 0; i < n; i++) {
+      const ang = base + (n === 1 ? 0 : (i / (n - 1) - 0.5) * (a.spread || 0.4));
+      const r = rollDamage(a.mul, { skill: true });
+      const mesh = quad(a.kind === 'dart' ? DART_TEX : QI_TEX, a.size || 9, a.size || 9);
+      mesh.material.color.set(W.trail[0]);
+      if (a.kind !== 'dart') mesh.material.blending = THREE.AdditiveBlending;
+      projectiles.push({
+        x: player.x + Math.cos(ang) * 12, y: player.y - 8 + Math.sin(ang) * 12,
+        vx: Math.cos(ang) * (a.speed || 260), vy: Math.sin(ang) * (a.speed || 260),
+        t: a.life || 0.8, friendly: true, dmg: r.dmg, crit: r.crit,
+        pierce: a.pierce || 1, mesh, hitSet: new Set(),
+        spin: a.kind === 'dart' ? 16 : 0,
+        art: a,
+      });
+    }
+    burst(player.x + fx * 12, player.y - 8 + fy * 12, W.trail[0], 6, 55);
+
+  } else if (a.fx === 'spin') {
+    player.artSpin = { a, t: a.dur, tick: 0, radius: a.radius || 46 };
+
+  } else if (a.fx === 'orbit') {
+    const n = a.count || 12;
+    player.orbs = [];
+    for (let i = 0; i < n; i++) {
+      // 用兵器图标当飞剑贴图，而不是一颗光点 —— 十二个光点绕着人转，
+      // 玩家读到的是"护体灵气"，读不出"万剑"。图标会跟着角度转，一眼就是剑。
+      const mesh = quad(orbTexture(), 12, 12);
+      mesh.material.blending = THREE.AdditiveBlending;
+      scene.add(mesh);
+      player.orbs.push({ i, mesh, cd: 0.15 + i * 0.04 });
+    }
+    player.orbT = a.dur;
+    player.orbArt = a;
+    player.orbAng = 0;
+
+  } else if (a.fx === 'blink') {
+    player.blinkQ = { a, n: a.times || 3, t: 0 };
+
+  } else if (a.fx === 'bolt') {
+    const n = a.count || 5;
+    const pool = enemies.filter(e => !e.dead &&
+      Math.hypot(e.x - player.x, e.y - player.y) < (a.range || 200));
+    for (let i = 0; i < n; i++) {
+      const r = rollDamage(a.mul, { skill: true });
+      let tx, ty;
+      if (pool.length && i < pool.length) {
+        // 前几道优先劈已经站在附近的，剩下的随机落 —— 全随机会让大招经常劈空地
+        const e = pool[i];
+        tx = e.x + (Math.random() * 20 - 10); ty = e.y - 6 + (Math.random() * 16 - 8);
+      } else {
+        const ang = Math.random() * Math.PI * 2, dd = 30 + Math.random() * (a.range || 200) * 0.7;
+        tx = player.x + Math.cos(ang) * dd; ty = player.y + Math.sin(ang) * dd;
+      }
+      bolts.push({ x: tx, y: ty, t: 0.2 + i * 0.1, dmg: r.dmg, r: a.radius || 30, done: false });
+    }
+  }
+  return true;
+}
+
+function castArt(slot) {
+  if (state !== 'play') return false;
+  const id = player.loadout[slot];
+  if (!id) { msg('此位未装配招式（T 开道行 · 招式页）', C.paper1); return false; }
+  const a = artById(id);
+  if (!a) return false;
+  if (a.fam !== weaponFam()) { msg('此招须持' + WEAPONS[a.fam].name, C.paper1); return false; }
+  if (!artUnlocked(profKills(a.fam), a)) { msg('专精不足，尚未悟得「' + a.name + '」', C.paper1); return false; }
+  if (artCdOf(id) > 0) return false;
+  if (player.qi < a.cost) { msg('真气不足', C.jade3); return false; }
+  player.qi -= a.cost;
+  artCds[id] = artMaxOf(a);
+  execArt(a);
+  return true;
+}
+
+// 招式的持续段（旋转 / 飞剑环绕 / 连闪）每帧走这里。
+// 冷却统一在这里扣 —— 放在各处 cast 里，漏掉一处就会出现"某招永不冷却"。
+function clearArts() {
+  if (player.orbs) for (const o of player.orbs) scene.remove(o.mesh);
+  player.orbs = null; player.orbArt = null; player.orbT = 0;
+  player.artSpin = null; player.blinkQ = null;
+  for (const k in artCds) delete artCds[k];
+}
+function updateArts(dt) {
+  for (const k in artCds) if (artCds[k] > 0) artCds[k] -= dt;
+
+  // ---- 旋转（血战八方 / 舞棍）----
+  const sp = player.artSpin;
+  if (sp) {
+    sp.t -= dt; sp.tick -= dt;
+    if (sp.tick <= 0) {
+      sp.tick = sp.a.tick || 0.25;
+      const W = WEAPONS[sp.a.fam];
+      slashGhosts.push({ x: player.x, y: player.y - 8, ring: true, R: sp.radius * 0.9, colors: W.trail, t: 0.26, max: 0.26 });
+      for (const e of enemies) {
+        if (e.dead) continue;
+        const dx = e.x - player.x, dy = e.y - player.y, d = Math.hypot(dx, dy);
+        if (d > sp.radius + e.h * 0.3) continue;
+        const r = rollDamage(sp.a.mul, { skill: true });
+        const ang = Math.atan2(dy, dx);
+        const dealt = hitEnemy(e, { dmg: r.dmg, crit: r.crit, pierceDef: sp.a.pierceDef || 0 }, ang, sp.a.kb || 6);
+        afterArtHit(e, sp.a, dealt, ang);
+      }
+      // 舞棍：把飞来的弹体反弹回去（敌方弹体 friendly=false）
+      if (sp.a.reflect) {
+        for (const p of projectiles) {
+          if (p.friendly) continue;
+          if (Math.hypot(p.x - player.x, p.y - (player.y - 8)) > sp.radius + 10) continue;
+          p.friendly = true; p.hitSet = new Set();
+          p.vx *= -1.6; p.vy *= -1.6; p.dmg = Math.round(p.dmg * 1.5);
+          p.t = Math.max(p.t, 0.5);
+          burst(p.x, p.y, C.gold3, 8, 80);
+          AUDIO.play('shield');
+        }
+      }
+    }
+    if (sp.t <= 0) player.artSpin = null;
+  }
+
+  // ---- 飞剑环绕（万剑归宗）----
+  if (player.orbs) {
+    const a = player.orbArt;
+    player.orbT -= dt; player.orbAng += dt * 2.2;
+    if (player.orbT <= 0) {
+      for (const o of player.orbs) scene.remove(o.mesh);
+      player.orbs = null; player.orbArt = null;
+    } else {
+      const n = player.orbs.length;
+      for (const o of player.orbs) {
+        const ang = player.orbAng + o.i / n * Math.PI * 2;
+        const ox = player.x + Math.cos(ang) * (a.radius || 34);
+        const oy = player.y - 8 + Math.sin(ang) * (a.radius || 34) * 0.75;
+        o.mesh.position.set(ox, oy, 0);
+        o.mesh.renderOrder = 1500 + Math.round(oy);
+        o.mesh.rotation.z = ang + Math.PI / 2;
+        if (o.cd > 0) { o.cd -= dt; continue; }
+        for (const e of enemies) {
+          if (e.dead) continue;
+          if (Math.hypot(ox - e.x, oy - (e.y - e.h / 2)) > e.h * 0.55 + 8) continue;
+          const r = rollDamage(a.mul, { skill: true });
+          const dmgAng = Math.atan2(e.y - e.h / 2 - oy, e.x - ox);
+          const dealt = hitEnemy(e, { dmg: r.dmg, crit: r.crit }, dmgAng, 3);
+          afterArtHit(e, a, dealt, dmgAng);
+          o.cd = 0.42;
+          break;
+        }
+      }
+    }
+  }
+
+  // ---- 连闪（疾影）----
+  const bq = player.blinkQ;
+  if (bq) {
+    bq.t -= dt;
+    if (bq.t <= 0) {
+      bq.t = 0.09;
+      bq.n--;
+      const a = bq.a;
+      // 有敌人就朝最近的闪，没有就朝面朝方向 —— 原地乱闪会让人以为技能没生效
+      let ang = DIRA[player.dir];
+      let best = null, bd = 1e9;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        const d = Math.hypot(e.x - player.x, e.y - player.y);
+        if (d < 150 && d < bd) { bd = d; best = e; }
+      }
+      if (best) ang = Math.atan2(best.y - player.y, best.x - player.x);
+      const ox = player.x, oy = player.y;
+      const nx = ox + Math.cos(ang) * a.dist, ny = oy + Math.sin(ang) * a.dist;
+      if (canStand(nx, ny)) { player.x = nx; player.y = ny; }
+      afterimage(ox, oy - 8, playerTex[player.dir][0], 16, 18);
+      player.iframe = Math.max(player.iframe, 0.12);
+      // 穿过的敌人受伤：判定的是"这一段的走廊"，不是落点 —— 只看落点的话
+      // 贴身闪过去一次都打不到人。
+      for (const e of enemies) {
+        if (e.dead) continue;
+        const mx = (ox + player.x) / 2, my = (oy + player.y) / 2;
+        if (Math.hypot(e.x - mx, e.y - e.h / 2 - (my - 8)) > a.radius + e.h * 0.4) continue;
+        const r = rollDamage(a.mul, { skill: true });
+        const da = Math.atan2(e.y - e.h / 2 - (my - 8), e.x - mx);
+        const dealt = hitEnemy(e, { dmg: r.dmg, crit: r.crit }, da, 5);
+        afterArtHit(e, a, dealt, da);
+      }
+      burst(player.x, player.y - 8, C.pur3, 6, 60);
+      AUDIO.play('dash');
+      if (bq.n <= 0) player.blinkQ = null;
+    }
+  }
+}
+
 function dash() {
   if (state !== 'play' || player.dashCd > 0) return;
   const s = stats();
@@ -58480,7 +58988,9 @@ function equipItem(i) {
   player.qi = Math.min(player.qi, maxQi());
   msg('装备 ' + it.name, RARITY[it.r].color);
   AUDIO.play('equip');
-  renderInv(); renderForge();
+  // 换了兵器就换一套招式：剑招在刀上是放不出来的，留着格子只会让人点一下骂一句
+  if (slot === 'weapon') autoLoadout();
+  renderInv(); renderForge(); renderArts();
 }
 function unequip(slot) {
   const it = player.equip[slot];
@@ -59288,7 +59798,90 @@ function learnNode(id) {
 function toggleSkills(force) {
   const show = force !== undefined ? force : skillEl.classList.contains('hidden');
   skillEl.classList.toggle('hidden', !show);
-  if (show) renderSkills();
+  if (show) { renderSkills(); if (artPageOn) renderArts(); }
+}
+
+// ============ 招式面板 ============
+// 道行与招式合成一个面板的两页：都是"我这套东西怎么配"，分成两个入口
+// 玩家会忘记另一个的存在。
+const artPageEl = document.getElementById('artPage');
+const daoPageEl = document.getElementById('daoPage');
+const skillTitleEl = document.getElementById('skillTitle');
+let artPageOn = false;
+function showArtPage(show) {
+  artPageOn = !!show;
+  if (daoPageEl) daoPageEl.classList.toggle('hidden', artPageOn);
+  if (artPageEl) artPageEl.classList.toggle('hidden', !artPageOn);
+  if (skillTitleEl) skillTitleEl.textContent = artPageOn ? '招式' : '道行';
+  document.querySelectorAll('#skills .tabs button').forEach(b => {
+    b.classList.toggle('on', (b.dataset.page === 'art') === artPageOn);
+  });
+  if (artPageOn) renderArts();
+}
+document.querySelectorAll('#skills .tabs button').forEach(b => {
+  b.onclick = () => showArtPage(b.dataset.page === 'art');
+});
+
+function renderArts() {
+  const sub = document.getElementById('artSub');
+  if (!sub) return;
+  const fam = weaponFam(), W = WEAPONS[fam];
+  const k = profKills(fam), lv = profLevel(k), left = profLeft(k);
+  sub.innerHTML = '当前持 <b>' + W.name + '</b> · 专精 <b>' + lv + '/' + PROF_MAX + '</b>'
+    + (left ? ' · 再斩 ' + left + ' 名可至 ' + (lv + 1) + ' 级' : ' · 已至圆满')
+    + '<br><span style="font-size:10px;color:#8A8268">专精只长手上这件兵器；招式也只能用对应兵器放</span>';
+
+  const lo = document.getElementById('artLoadout');
+  if (lo) {
+    lo.innerHTML = player.loadout.map((id, i) => {
+      const a = id ? artById(id) : null;
+      return '<div class="as' + (a ? '' : ' empty') + '" data-slot="' + i + '" title="' +
+        (a ? '点一下卸下' : '空位') + '">' +
+        '<span class="k">' + ART_KEYS[i] + '</span>' +
+        '<span class="n">' + (a ? a.name : '空') + '</span>' +
+        '<span class="s">' + (a ? (ART_SLOT_LABEL[a.slot] || '') : '未装配') + '</span>' +
+        '</div>';
+    }).join('');
+    lo.querySelectorAll('.as').forEach(el => {
+      el.onclick = () => { player.loadout[+el.dataset.slot] = null; renderArts(); };
+    });
+  }
+
+  const body = document.getElementById('artBody');
+  if (!body) return;
+  const sec = (t, c) => '<div style="font:bold 11px SimSun;color:' + c + ';letter-spacing:2px;margin:10px 0 4px">' + t + '</div>';
+  let html = sec(W.name + ' 招式', '#2F6E6A');
+  for (const a of artsOfWeapon(fam)) {
+    const un = artUnlocked(k, a);
+    const at = player.loadout.indexOf(a.id);
+    html += '<div class="artCard' + (un ? '' : ' locked') + '">' +
+      '<div class="l"><div class="t">' + a.name +
+      '<em' + (a.slot === 'special' ? ' class="sp"' : '') + '>' + (ART_SLOT_LABEL[a.slot] || '') + '</em></div>' +
+      '<div class="d">' + a.desc + '</div>' +
+      '<div class="m">' + artBrief(a) + (un ? '' : ' · 需专精 ' + a.prof + ' 级') + '</div></div>' +
+      '<button data-art="' + a.id + '"' + (un ? '' : ' disabled') + '>' + (at >= 0 ? '卸下' : '装配') + '</button>' +
+      '</div>';
+  }
+  html += sec('各兵器专精', '#8A6520');
+  for (const f of WEAPON_IDS) {
+    const kk = profKills(f), ll = profLevel(kk);
+    html += '<div class="profRow' + (f === fam ? ' cur' : '') + '"><b>' + WEAPONS[f].name + '</b>' +
+      '<div class="pb"><i style="width:' + Math.round(profFrac(kk) * 100) + '%"></i></div>' +
+      '<span>' + ll + '/' + PROF_MAX + (ll >= PROF_MAX ? ' 满' : ' ·' + profLeft(kk)) + '</span></div>';
+  }
+  body.innerHTML = html;
+  body.querySelectorAll('button[data-art]').forEach(b => {
+    b.onclick = () => {
+      const id = b.dataset.art;
+      const i = player.loadout.indexOf(id);
+      if (i >= 0) player.loadout[i] = null;
+      else {
+        const j = player.loadout.indexOf(null);
+        player.loadout[j >= 0 ? j : 0] = id;
+      }
+      renderArts();
+    };
+  });
 }
 
 // ============ 任务面板 ============
@@ -59374,6 +59967,7 @@ function save() {
     rested: !!player.rested, fame: player.fame || 0,
     bossKills: player.bossKills || {},
     quests: player.quests, relics: player.relics, track: player.track,
+    prof: player.prof || {}, loadout: player.loadout || [],
     clock: clock.serialize(),
   }));
 }
@@ -59435,6 +60029,11 @@ function load() {
     rested: !!s.rested, fame: s.fame || 0,
     bossKills: s.bossKills || {},
     quests: s.quests || {}, relics: s.relics || {}, track: s.track || null,
+    prof: s.prof || {},
+    // 老存档没有 loadout：给空数组，startGame 末尾的 autoLoadout 会补满。
+    // 不能直接 undefined —— 后面 castArt 会读 player.loadout[slot]。
+    loadout: Array.isArray(s.loadout) && s.loadout.length === ART_SLOTS
+      ? s.loadout : new Array(ART_SLOTS).fill(null),
   });
   invalidateStats();
   // 地脉变动：96×72 扩到 144×104 之后，旧存档的坐标可能落在岩层里或地图外。
@@ -59460,6 +60059,7 @@ function resetWorld() {
   enemies = []; drops = []; projectiles = []; particles = []; sparks = []; ghosts = [];
   dmgNums = []; messages = []; slashGhosts = []; bolts = [];
   clearHazards();   // 地面危险区不属于上面任何一类，忘了清就会跨局残留
+  clearArts();      // 飞剑环绕的 mesh 也不属于上面任何一类
   seedCamps();
 }
 function startGame(cont) {
@@ -59476,9 +60076,11 @@ function startGame(cont) {
       skillPts: 0, skillLv: {}, kills: 0, atkStep: 0, swing: null, shield: 0, poison: 0, poisonT: 0,
       poisonImmuneT: 0, drunkT: 0, drunk: 0, rested: false, fame: 0,
       rootT: 0, bossKills: {}, quests: {}, relics: {}, track: null,
+      prof: {}, loadout: new Array(ART_SLOTS).fill(null),
     });
     invalidateStats();
   }
+  autoLoadout();
   document.getElementById('menu').classList.add('hidden');
   document.getElementById('dead').classList.add('hidden');
   document.getElementById('clear').classList.add('hidden');
@@ -59491,7 +60093,7 @@ function startGame(cont) {
   state = 'play';
   combo = 0; comboT = 0; hitstop = 0; shakeX = shakeY = 0;
   msg(cont ? '继续闯荡 · 第一章 青云野' : '第一章 · 青云野', C.gold3);
-  renderInv(); renderSkills(); renderQuests();
+  renderInv(); renderSkills(); renderQuests(); renderArts();
 }
 
 // ============ 输入 ============
@@ -59520,6 +60122,10 @@ addEventListener('keydown', e => {
   if (e.code === 'Tab' || e.code === 'KeyI') { if (state === 'play') toggleInv(); }
   if (e.code === 'Escape') { toggleInv(false); forgeClose(); toggleSkills(false); toggleQuests(false); shopClose(); talkClose(); }
   if (e.code === 'KeyM') { AUDIO.enabled = !AUDIO.enabled; msg(AUDIO.enabled ? '音效开' : '音效关', C.paper2); }
+  // 招式：数字键 1~6。刻意不用 J/K/L/H —— 那四个是"人人都有"的动作，
+  // 招式是跟着兵器走的，混在同一片键区会让人以为换兵器它们也会变。
+  const num = /^Digit([1-6])$/.exec(e.code);
+  if (num) castArt(+num[1] - 1);
   if (e.code === 'F11' || (e.code === 'KeyF' && e.ctrlKey)) { e.preventDefault(); toggleFullscreen(); }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
@@ -59552,6 +60158,9 @@ function respawn() {
   else { player.x = SPAWN.x; player.y = SPAWN.y; }
   player.poison = 0; player.poisonT = 0;
   player.drunkT = 0; player.drunk = 0;
+  // 死的时候如果正放着万剑归宗，飞剑的 mesh 会留在场上 —— update 在非 play 状态
+  // 不再跑 updateArts，它们就永远停在那儿不消失。
+  clearArts();
   // 死在洞里 = 这一趟白跑。下一趟下去是新的一层，别指望回来捡尸。
   dgReset(); wasInDg = false; dgDipT = 0; dgDipAct = null;
   document.getElementById('dead').classList.add('hidden');
@@ -59572,6 +60181,8 @@ document.getElementById('btnCont').disabled = !(localStorage.getItem(SAVE_KEY) |
 
 // 技能栏点击（画布上直接点技能格）
 let skillRects = [];
+// 招式栏的命中矩形，点击用
+let artRects = [];
 function logicalPos(e) {
   const c = document.getElementById('ov');
   const r = c.getBoundingClientRect();
@@ -59621,6 +60232,12 @@ ovEl.addEventListener('pointerdown', e => {
         } catch (err) { st.cap = false; }
       }
       e.preventDefault();
+      return;
+    }
+  }
+  for (const r of artRects) {
+    if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) {
+      castArt(r.i);
       return;
     }
   }
@@ -59976,6 +60593,8 @@ function update(dt) {
   comboPulse = Math.max(0, comboPulse - dt * 4);
   if (player.atkCd <= 0) player.atkBuf -= dt;
   skills.qi.cd -= dt; skills.wu.cd -= dt; skills.thunder.cd -= dt; wuT -= dt;
+  // 招式冷却 + 持续段（旋转 / 飞剑 / 连闪）统一在这里走
+  updateArts(dt);
   shakeX *= Math.pow(0.0025, dt); shakeY *= Math.pow(0.0025, dt);
   if (Math.abs(shakeX) < 0.05) shakeX = 0;
   if (Math.abs(shakeY) < 0.05) shakeY = 0;
@@ -60106,6 +60725,10 @@ function update(dt) {
     const m = MONSTERS[e.type];
     e.cd -= dt; e.flash -= dt; e.anim += dt; e.hitJit -= dt; e.stagger -= dt;
     if (e.combatT > 0) e.combatT -= dt;
+    // 状态先结算：中毒 / 流血可能在上一帧就把这只怪耗死了，
+    // 接着往下跑会看到"尸体还在追人"。
+    tickEnemyStatus(e, dt);
+    if (e.dead) continue;
     // 击退惯性
     if (Math.abs(e.kvx) > 1 || Math.abs(e.kvy) > 1) {
       const kx = e.kvx * dt, ky = e.kvy * dt;
@@ -60142,15 +60765,20 @@ function update(dt) {
       burst(e.x, e.y - 6, C.pur2, 12, 80);
       e.x = campPos.x; e.y = campPos.y; e.aggro = false;
     }
-    if (e.stagger > 0 || e.sleep) {
-      // 受击僵直 / 睡着的：不移动不出手，但呼吸还是要有的
+    if (e.stagger > 0 || e.sleep || e.freezeT > 0 || e.stunT > 0 || e.launchT > 0) {
+      // 受击僵直 / 睡着 / 冻结 / 眩晕 / 被挑在空中：不移动不出手，但呼吸还是要有的
       e.mesh.material.map = monTex[e.type].frames[e.sleep ? 0 : 0];
-      e.mesh.position.set(e.x, e.y - e.h / 2, 0);
-      if (e.sleep) e.mesh.material.color.setRGB(0.62, 0.66, 0.78);
+      e.mesh.position.set(e.x, e.y - e.h / 2 - (e.launchZ || 0), 0);
+      // 颜色按"最先能看出区别的"给：冻结偏青、眩晕偏金，睡着压暗
+      if (e.freezeT > 0) e.mesh.material.color.setRGB(0.55, 0.85, 1);
+      else if (e.stunT > 0) e.mesh.material.color.setRGB(1, 0.92, 0.45);
+      else if (e.sleep) e.mesh.material.color.setRGB(0.62, 0.66, 0.78);
       else e.mesh.material.color.setRGB(1, 1, 1);
       continue;
     }
-    let vx = 0, vy = 0, speed = m.speed * (e.aggro ? 1 : 0.45);
+    let vx = 0, vy = 0;
+    // 减速：只改速度，不改"要不要追" —— 减速的怪会继续追，只是追不上
+    let speed = m.speed * (e.aggro ? 1 : 0.45) * (1 - (e.slowPct || 0));
 
     // 首领招式：施法中不走位，但血条、贴图、影子照常更新。
     // 洞里也要能放招 —— 无面剑客是第三层真正的洞主，只会平砍就白瞎了。
@@ -60369,7 +60997,10 @@ function update(dt) {
           p.hitSet.add(e);
           const ang = Math.atan2(p.vy, p.vx);
           const crit = p.crit === undefined ? Math.random() * 100 < stats().crit : p.crit;
-          hitEnemy(e, { dmg: p.dmg, crit }, ang, 8);
+          const dealt = hitEnemy(e, { dmg: p.dmg, crit, pierceDef: (p.art && p.art.pierceDef) || 0 }, ang, 8);
+          // 弹体挂的状态（毒镖）在命中那一刻才生效 —— 不能一出手就撒毒，
+          // 那样打空也中毒，读不出"这一镖中了"。
+          if (p.art) afterArtHit(e, p.art, dealt, ang);
           if (--p.pierce <= 0) { p.t = 0; break; }
         }
       }
@@ -60390,7 +61021,10 @@ function update(dt) {
       burst(b.x, b.y, C.gold3, 16, 120);
       for (const e of enemies) {
         if (e.dead) continue;
-        if (Math.hypot(e.x - b.x, e.y - b.h / 2 - b.y) < b.r + e.h * 0.3) {
+        // 这里原来写的是 e.y - b.h / 2 —— bolt 对象根本没有 h 字段，
+        // 于是 e.y - undefined/2 = NaN，NaN < r 恒为 false，天雷诀一发都打不中人。
+        // 这个 bug 从 S1 就存在，直到 P5 给天雷引写自检才被抓出来。
+        if (Math.hypot(e.x - b.x, e.y - e.h / 2 - b.y) < b.r + e.h * 0.3) {
           hitEnemy(e, { dmg: b.dmg, crit: Math.random() * 100 < stats().crit }, Math.PI / 2, 10);
         }
       }
@@ -60588,6 +61222,55 @@ function drawWeaponHeld(camX, camY) {
     const hx2 = px - hox * handK * 0.85 + Math.cos(dualAng) * 3;
     const hy2 = py + hoy + Math.sin(dualAng) * 3;
     drawWeaponAt(octx, cv, hx2, hy2, dualAng, alpha * 0.95, scDual * 0.9);
+  }
+}
+
+// 招式栏：独立一排，画在主技能栏上方。
+// 不塞进主栏的原因 —— 主栏是"人人都有的动作"（普攻/气/舞/雷/闪/丹），
+// 招式是"跟着兵器走的"，混在一排会让玩家以为换个兵器那几个键也会跟着变。
+function drawArtBar() {
+  if (touch.enabled) { artRects = []; return; }
+  const size = 20, gap = 3;
+  const x0 = Math.round(LW / 2 - (ART_SLOTS * (size + gap) - gap) / 2);
+  const y0 = LH - 44 - size - 6;
+  artRects = [];
+  for (let i = 0; i < ART_SLOTS; i++) {
+    const x = x0 + i * (size + gap), y = y0;
+    const id = player.loadout[i];
+    const a = id ? artById(id) : null;
+    const ready = a && a.fam === weaponFam() && artUnlocked(profKills(a.fam), a);
+    artRects.push({ i, x, y, w: size, h: size });
+    octx.fillStyle = C.black; octx.fillRect(x, y, size, size);
+    octx.fillStyle = a ? (ready ? C.ink2 : C.ink1) : 'rgba(20,24,34,0.55)';
+    octx.fillRect(x + 1, y + 1, size - 2, size - 2);
+    octx.strokeStyle = a ? (ready ? C.gold1 : C.ink3) : 'rgba(120,110,90,0.5)';
+    octx.lineWidth = 1;
+    octx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+    if (a) {
+      octx.globalAlpha = ready ? 1 : 0.35;
+      octx.font = 'bold 11px monospace';
+      octx.textBaseline = 'middle'; octx.textAlign = 'center';
+      octx.fillStyle = a.slot === 'special' ? C.gold3 : C.paper3;
+      octx.fillText(a.name[0], x + size / 2, y + size / 2 + 1);
+      octx.textAlign = 'left'; octx.textBaseline = 'top';
+      octx.globalAlpha = 1;
+      const cd = Math.max(0, artCdOf(id));
+      if (cd > 0) {
+        const max = Math.max(0.01, artMaxOf(a));
+        octx.globalAlpha = 0.72; octx.fillStyle = C.ink1;
+        octx.fillRect(x + 1, y + 1, size - 2, Math.round((size - 2) * Math.min(1, cd / max)));
+        octx.globalAlpha = 1;
+        if (cd >= 0.15) {
+          octx.font = 'bold 8px monospace'; octx.fillStyle = C.paper3;
+          octx.textAlign = 'center';
+          octx.fillText(cd.toFixed(0), x + size / 2, y + size / 2 - 3);
+          octx.textAlign = 'left';
+        }
+      }
+    }
+    // 键位画在格子上方 —— 下方是主技能栏，字母会被压掉
+    octx.font = 'bold 8px monospace'; octx.fillStyle = a ? C.gold3 : C.ink3;
+    octx.fillText(ART_KEYS[i], x + (size - octx.measureText(ART_KEYS[i]).width) / 2, y - 9);
   }
 }
 
@@ -60957,6 +61640,7 @@ function drawOverlay(camX, camY) {
   octx.fillRect(0, LH - barH, LW, barH);
   octx.fillStyle = C.gold1;
   octx.fillRect(0, LH - barH, LW, 1);
+  drawArtBar();
   drawSkillBar();
 
   const nearForge = nearTemple();
@@ -61223,7 +61907,7 @@ function drawTouchUI() {
     octx.globalAlpha = 1;
     octx.fillStyle = ready ? C.paper3 : C.ink3;
     octx.font = 'bold ' + b.size + 'px monospace';
-    octx.fillText(b.label, b.x, b.y + 1);
+    octx.fillText(b.labelFn ? b.labelFn() : b.label, b.x, b.y + 1);
   }
   octx.restore();
 }
@@ -61456,7 +62140,7 @@ window.__game = {
   debugArc(a0, a1, R) {
     drawArcFx(octx, 240, 135, a0 === undefined ? -2 : a0, a1 === undefined ? 1 : a1, R || 40, [C.red3, C.red2], 1, 1.5);
   },
-  MAPW, MAPH, SPAWN, camps, dens, WEAPONS, MONSTERS, NODES, SLOTS,
+  MAPW, MAPH, SPAWN, camps, dens, WEAPONS, WEAPON_IDS, MONSTERS, NODES, SLOTS,
   get solid() { return solid; }, REGION,
   get objects() { return objects; },
   get hazards() { return hazards; }, addHazard, clearHazards, UNIQUES, makeUnique,
@@ -61466,6 +62150,33 @@ window.__game = {
   refreshSeal, tripleState, relicName, renderQuests, toggleQuests,
   get sealOn() { return sealOn; },
   get talkers() { return ALL_TALKERS; },
+  // 招式 / 专精
+  ARTS, ART_IDS, ART_SLOTS, ART_KEYS, PROF_MAX,
+  artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief,
+  castArt, execArt, updateArts, clearArts, autoLoadout, addProf, applyStatus, afterArtHit,
+  renderArts, showArtPage, artMaxOf, artCdOf,
+  get artCds() { return artCds; },
+  get artPageOn() { return artPageOn; },
+  profKills,
+  addStatusTo(e, st, dmg) { applyStatus(e, st, dmg); },
+  // 测试用：清场 / 放木桩 / 直接换兵器
+  clearEnemies() {
+    for (const e of enemies) { scene.remove(e.mesh); if (e.ring) scene.remove(e.ring); if (e.shadow) scene.remove(e.shadow); }
+    enemies.length = 0;
+  },
+  spawnDummy(x, y, hp) {
+    const e = spawnEnemy('zhiren', x, y, null);
+    if (!e) return null;
+    e.maxHp = e.hp = hp || 99999;
+    e.cd = 9999; e.aggro = false; e.wakeT = 9999; e.def = 0; e.def0 = 0;
+    return e;
+  },
+  equipFam(fam, r) {
+    const it = makeGear('weapon', r === undefined ? 3 : r, Math.max(1, player.level), Math.random, fam);
+    player.equip.weapon = it;
+    invalidateStats(); autoLoadout(); renderArts();
+    return it;
+  },
   spawnEnemy, save, load, startGame, attack, castQi, castWu, castThunder, dash, windStep,
   salvageBulk, equipItem, unequip, usePotion, renderInv, renderForge, forgeOpen, forgeClose,
   renderSkills, learnNode, toggleSkills,

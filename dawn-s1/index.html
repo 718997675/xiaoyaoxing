@@ -171,6 +171,58 @@
   #skills .nHint{font:9px SimSun;color:#8A8268}
   #skills .node.maxed .nHint{color:#2F6E6A}
 
+  /* 道行 / 招式两页：用页签而不是两个面板 —— 同一件事（"我这套东西怎么配"）
+     分成两个入口，玩家会忘记另一个的存在 */
+  #skills .tabs{display:flex;gap:6px;margin:0 0 8px;justify-content:center}
+  #skills .tabs button{
+    font:bold 12px SimSun;letter-spacing:3px;padding:3px 18px;cursor:pointer;
+    background:#DCD2B8;color:#6B6248;border:2px solid #8A6520;box-shadow:2px 2px 0 #000;
+  }
+  #skills .tabs button.on{background:#2F6E6A;color:#F2E9CE;border-color:#1D4A46}
+  #skills .tabs button:active{transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
+
+  /* ---------- 招式 ---------- */
+  #artPage{text-align:left}
+  #artPage .profRow{display:flex;align-items:center;gap:6px;font:11px SimSun;color:#4A5568;margin:2px 0}
+  #artPage .profRow b{color:#12161F;letter-spacing:1px;min-width:34px}
+  /* 槽底压暗而不是用浅褐：0 级的空条和满条如果都接近纸色，玩家会以为自己已经练满了 */
+  #artPage .profRow .pb{flex:1;height:7px;background:#5A5344;border:1px solid #3A352A;position:relative}
+  #artPage .profRow .pb i{position:absolute;left:0;top:0;bottom:0;background:#D9A441}
+  #artPage .profRow.cur b{color:#C8453B}
+  #artPage .profRow.cur .pb i{background:#C8453B}
+  #artPage .profRow span{font:10px monospace;color:#8A6520;min-width:52px;text-align:right}
+  /* 装配槽：六个方块，跟 HUD 上那一排一一对应，数字键就是格子序号 */
+  #artLoadout{display:flex;gap:4px;justify-content:center;margin:6px 0 10px}
+  #artLoadout .as{
+    width:56px;height:44px;background:#E8DFC8;border:2px solid #8A6520;position:relative;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;
+  }
+  #artLoadout .as.empty{background:#DCD2B8;border-style:dashed;color:#A99F84}
+  #artLoadout .as .k{position:absolute;top:1px;left:3px;font:9px monospace;color:#8A6520}
+  #artLoadout .as .n{font:bold 11px SimSun;color:#12161F;letter-spacing:1px}
+  #artLoadout .as .s{font:9px SimSun;color:#8A8268}
+  #artLoadout .as:hover{border-color:#C8453B}
+  #artPage .artCard{
+    background:#E8DFC8;border:1px solid #8A6520;padding:5px 7px 6px;margin-bottom:5px;
+    display:flex;gap:8px;align-items:flex-start;
+  }
+  #artPage .artCard.locked{opacity:.55}
+  #artPage .artCard .l{flex:1;min-width:0}
+  #artPage .artCard .t{font:bold 12px SimSun;letter-spacing:1px;color:#12161F}
+  #artPage .artCard .t em{font:9px SimSun;font-style:normal;color:#F2E9CE;background:#8A6520;padding:0 4px;margin-left:5px;letter-spacing:0}
+  #artPage .artCard .t em.sp{background:#C8453B}
+  #artPage .artCard .d{font:10px/1.4 SimSun;color:#4A5568;margin:2px 0}
+  #artPage .artCard .m{font:9px monospace;color:#8A6520}
+  #artPage .artCard button{
+    /* .panel button 是 width:100% 的整行按钮，这里必须显式改回来 ——
+       否则按钮会占满整张卡片，把左边的名字与描述挤成一列单字。 */
+    display:inline-block;width:auto;flex:0 0 auto;margin:0;
+    font:bold 11px SimSun;padding:4px 10px;cursor:pointer;white-space:nowrap;
+    background:#2F6E6A;color:#F2E9CE;border:2px solid #1D4A46;box-shadow:2px 2px 0 #000;
+  }
+  #artPage .artCard button:disabled{background:#B6AB8F;color:#6B6248;border-color:#8A8268;cursor:not-allowed}
+  #artPage .artCard button:active:not(:disabled){transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
+
   /* ---------- 任务 ---------- */
   #quest{z-index:13;width:520px;max-height:80vh;overflow:auto}
   #quest h1{letter-spacing:10px}
@@ -263,9 +315,20 @@
   </div>
 
   <div id="skills" class="panel hidden">
-    <h1>道行</h1>
-    <div class="sp">余下参悟点 <b id="spLeft">0</b> · 每次境界提升得 1 点</div>
-    <div class="cols" id="skillTree"></div>
+    <h1 id="skillTitle">道行</h1>
+    <div class="tabs">
+      <button data-page="dao" class="on">道行</button>
+      <button data-page="art">招式</button>
+    </div>
+    <div id="daoPage">
+      <div class="sp">余下参悟点 <b id="spLeft">0</b> · 每次境界提升得 1 点</div>
+      <div class="cols" id="skillTree"></div>
+    </div>
+    <div id="artPage" class="hidden">
+      <div class="sp" id="artSub">持兵器杀敌可长专精</div>
+      <div id="artLoadout"></div>
+      <div id="artBody"></div>
+    </div>
     <button id="btnSkillClose">收功（T / Esc）</button>
   </div>
 

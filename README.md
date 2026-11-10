@@ -132,6 +132,9 @@ node tools/shot.js                # CDP 截图（SHOT_W/SHOT_H/MOBILE/DPR/WAIT �
   - [x] P4 NPC 与任务：quests.js 10 条（主线 3 支线 7）、任务面板 + HUD 追踪条、三物封碑门禁、4 个新 NPC
 - [ ] **技能与剧情**：八兵器 × 八技能（64）+ 心法（22）+ 剧情三幕
       → 设计见 [`dawn-s1/SKILLS-STORY-PLAN.md`](dawn-s1/SKILLS-STORY-PLAN.md)
+  - [x] P5 招式系统：arts.js 16 招（八兵器 × 输出/特色）、六种效果原语、兵器专精 0→10、八种状态、招式页 + HUD 招式栏
+  - [ ] P5.5 心法 22 条 + 一主二辅
+  - [ ] P6 补齐剩余 48 招 + 装配 UI
 - [ ] 洞内专属词缀（地宫掉落带标记，可交易 / 献祭）
 - [ ] 每层一个房间事件（陷阱宝箱 / 行脚商人 / 祭坛）
 - [ ] 第二章
