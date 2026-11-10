@@ -149,8 +149,13 @@
   #talk button{display:inline-block;width:auto;margin:0;padding:3px 14px;font-size:11px;letter-spacing:2px}
 
   /* ---------- 道行 ---------- */
+  /* 招式页要左右两栏（剑匣 + 招式库），660px 装不下 —— 那样右栏只剩 500px，
+     招式卡里的描述会折成三行。道行页不需要这么宽，所以宽度按当前页切。 */
   #skills{z-index:13;width:660px;max-height:80vh;overflow:auto}
-  #skills h1{letter-spacing:10px}
+  #skills.wide{width:880px}
+  /* 面板标题和页签写的是同一件事（"道行 / 招式"），招式页又已经有朱红印章，
+     所以整个 h1 去掉 —— 省下来的高度给招式库 */
+  #skills h1{display:none}
   #skills .sp{font-size:12px;color:#8A6520;margin-bottom:6px}
   #skills .sp b{color:#C8453B;font-size:15px}
   #skills .cols{display:flex;gap:10px;align-items:flex-start;text-align:left}
@@ -183,8 +188,157 @@
   #skills .tabs button.on,#inv .tabs button.on{background:#2F6E6A;color:#F2E9CE;border-color:#1D4A46}
   #skills .tabs button:active,#inv .tabs button:active{transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
 
-  /* ---------- 招式 ---------- */
+  /* ---------- 招式 · 剑匣 ---------- */
+  /* 布局借自主流 ARPG 的"装备栏 + 库"：左窄右宽。
+     左边是"我现在带什么"，右边是"我还能带什么" —— 同屏对照，
+     不用在两个页签之间来回切，也不用先在脑子里记一遍顺序。
+
+     交互上刻意没有"先选格再选招"这个中间态：
+       · 拖招式卡到某一格 = 装到那一格（格里有招就交换，不会把它挤没）
+       · 点招式卡        = 装进第一个空格 / 已装则卸下
+       · 点格子          = 直接卸下
+     三个动作都是一步到位，不需要先"选中"任何东西。 */
   #artPage{text-align:left}
+  #artPage .artHead{
+    display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+    border-bottom:1px solid #8A6520;padding-bottom:5px;margin-bottom:8px;
+  }
+  /* 标题做成朱红方印：中国风里最省事的"这是个正事"的信号，
+     比再加一层边框有效，而且不占地方 */
+  #artPage .artHead .seal{
+    font:bold 13px SimSun;letter-spacing:4px;color:#F2E9CE;background:#8C2F26;
+    padding:3px 9px 4px;box-shadow:2px 2px 0 rgba(0,0,0,.45);flex:0 0 auto;
+  }
+  #artPage .artHead .cur{font:11px SimSun;color:#4A5568;flex:1;min-width:0}
+  #artPage .artHead .cur b{color:#12161F;letter-spacing:1px}
+  #artPage .artHead .cur em{font-style:normal;color:#C8453B;font-weight:bold}
+  #artPage .artHead .hint{font:9px SimSun;color:#6B6248;flex:0 0 100%}
+
+  #artPage .artWrap{display:flex;gap:11px;align-items:stretch}
+
+  /* 剑匣：六格竖排。深墨底 + 金边，装上招的格子透出暖光 ——
+     玩家一眼能数出"我还空着几格"，这比写一行"已装 3/6"更直接 */
+  #artQuiver{
+    flex:0 0 150px;display:flex;flex-direction:column;gap:5px;
+    background:#1B2028;border:2px solid #8A6520;padding:7px;
+    box-shadow:inset 0 0 0 1px #3A352A,2px 2px 0 rgba(0,0,0,.45);
+  }
+  #artQuiver .qh{
+    font:bold 10px SimSun;letter-spacing:7px;color:#D9A441;text-align:center;
+    padding-bottom:5px;margin-bottom:1px;border-bottom:1px solid #3A352A;flex:0 0 auto;
+  }
+  /* 底部脚注用 margin-top:auto 顶到底 —— 剑匣被拉齐到右栏高度后，
+     余下的空位需要一个"收口"，否则看着像格子没画完 */
+  #artQuiver .qf{
+    margin-top:auto;padding-top:5px;border-top:1px solid #3A352A;
+    font:9px SimSun;color:#8A6520;text-align:center;letter-spacing:2px;flex:0 0 auto;
+  }
+  #artQuiver .artSlot{
+    position:relative;height:50px;display:flex;align-items:center;gap:6px;padding:0 6px;
+    background:#222831;border:1px dashed #4A4436;cursor:pointer;
+    transition:border-color .12s,background .12s,box-shadow .12s;
+  }
+  #artQuiver .artSlot .ord{
+    font:bold 14px SimSun;color:#5A5344;width:17px;text-align:center;flex:0 0 auto;
+  }
+  #artQuiver .artSlot .txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+  #artQuiver .artSlot .nm{
+    display:block;font:13px SimSun;color:#5A5344;letter-spacing:1px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3;
+  }
+  #artQuiver .artSlot .fn{display:block;font:9px SimSun;color:#3A352A;letter-spacing:1px}
+  #artQuiver .artSlot.on{
+    background:#2A2118;border-style:solid;border-color:#B8892B;
+    box-shadow:inset 0 0 12px rgba(217,164,65,.12);
+  }
+  #artQuiver .artSlot.on .ord{color:#D9A441}
+  #artQuiver .artSlot.on .nm{color:#F3E9CE;font-weight:bold}
+  #artQuiver .artSlot.on .fn{color:#8A8268}
+  /* 装上招的格子左侧压一条功能位色 —— 和右边卡片同一条色，能对上号 */
+  #artQuiver .artSlot.on::before{
+    content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--gc,#8A6520);
+  }
+  #artQuiver .artSlot:hover{border-color:#8A6520}
+  #artQuiver .artSlot.on:hover{border-color:#C8453B;background:#332619}
+  /* 拖拽悬停：朱红描边 + 外发光，是"松手就落在这里"的唯一提示 */
+  #artQuiver .artSlot.over{
+    border-color:#C8453B;border-style:solid;background:#3A241C;
+    box-shadow:0 0 0 2px rgba(200,69,59,.55),inset 0 0 14px rgba(200,69,59,.2);
+  }
+
+  /* 招式库：右栏，独立滚动。面板本身不再滚动 ——
+     否则拖到一半整个面板跟着动，手感全毁 */
+  #artLib{
+    flex:1;min-width:0;max-height:min(52vh,470px);overflow:auto;
+    padding-right:4px;padding-bottom:8px;
+  }
+  #artLib::-webkit-scrollbar{width:6px}
+  #artLib::-webkit-scrollbar-thumb{background:#B6AB8F;border:1px solid #8A6520}
+  #artLib::-webkit-scrollbar-track{background:#DCD2B8}
+
+  /* 功能位小标题：色块 + 虚线拉通。色块就是那类招的"印" */
+  #artPage .artGrp{display:flex;align-items:center;gap:7px;margin:9px 0 5px}
+  #artPage .artGrp:first-child{margin-top:0}
+  #artPage .artGrp b{
+    font:bold 11px SimSun;letter-spacing:3px;color:#F2E9CE;background:var(--gc,#8A6520);
+    padding:1px 7px 2px;box-shadow:1px 1px 0 rgba(0,0,0,.4);flex:0 0 auto;
+  }
+  #artPage .artGrp i{
+    flex:1;height:1px;
+    background:repeating-linear-gradient(90deg,#8A6520 0 3px,transparent 3px 7px);
+  }
+
+  /* 招式卡排两列：一列的时候每张卡右侧空出 300px 白，而一屏又只能看到四五招。
+     两列之后密度翻倍，而且"同类招式并排"本身就像一本招式谱。 */
+  #artPage .artGrid{display:grid;grid-template-columns:1fr 1fr;gap:4px 7px;margin-bottom:2px}
+  /* 只有一个招式的分组让卡片占满整行 —— 否则右半行空着，像少了一张卡 */
+  #artPage .artGrid.single{grid-template-columns:1fr}
+  #artPage .artCard{
+    position:relative;display:flex;gap:7px;align-items:flex-start;
+    background:#EFE7D2;border:1px solid #8A6520;border-left:4px solid var(--gc,#8A6520);
+    padding:5px 6px 6px;cursor:grab;
+    transition:background .12s,box-shadow .12s;
+  }
+  #artPage .artCard:hover{background:#F7EFD8;box-shadow:1px 1px 0 rgba(0,0,0,.25)}
+  #artPage .artCard:active{cursor:grabbing}
+  #artPage .artCard.locked{
+    opacity:.5;cursor:not-allowed;filter:grayscale(.55);
+  }
+  #artPage .artCard.locked:hover{background:#EFE7D2;box-shadow:none}
+  /* 已上阵的卡：底色转青，左侧色条换成墨绿 —— 扫一眼就知道哪些已经在匣里 */
+  #artPage .artCard.armed{background:#E4EBD0;border-color:#2F6E6A}
+  #artPage .artCard.dragging{opacity:.35}
+  #artPage .artCard .l{flex:1;min-width:0}
+  #artPage .artCard .t{font:bold 12px SimSun;letter-spacing:1px;color:#12161F}
+  #artPage .artCard .d{font:10px/1.45 SimSun;color:#4A5568;margin:2px 0 1px}
+  #artPage .artCard .m{font:9px monospace;color:#8A6520}
+  #artPage .artCard.locked .m{color:#A8622C}
+  /* 右侧状态：已装显示所在的汉字格号（朱红印章底），未装显示"＋"。
+     做成小方块而不是一个裸字 —— 卡片右边本来就空，裸字压不住，像漏了个标点 */
+  #artPage .artCard .st{
+    flex:0 0 auto;align-self:center;width:22px;height:22px;line-height:21px;
+    text-align:center;font:bold 12px SimSun;color:#F2E9CE;
+    background:#A99F84;box-shadow:1px 1px 0 rgba(0,0,0,.35);
+  }
+  #artPage .artCard.armed .st{background:#2F6E6A}
+  #artPage .artCard.locked .st{
+    background:transparent;box-shadow:none;color:#A8622C;font:10px SimSun;
+  }
+
+  /* 拖拽幽灵：跟着指针走的一张小纸条，微微倾斜 ——
+     倾斜 2 度是"这张纸被捏在手里"的全部成本，但手感差很多 */
+  #artGhost{
+    position:fixed;z-index:60;pointer-events:none;opacity:.9;
+    background:#EFE7D2;border:2px solid #C8453B;border-left-width:5px;
+    padding:4px 11px;font:bold 12px SimSun;letter-spacing:1px;color:#12161F;
+    box-shadow:3px 3px 0 rgba(0,0,0,.45);transform:rotate(-2deg);
+  }
+
+  /* 专精条（放在招式库最下面，不再单独占一屏） */
+  #artPage .profTitle{
+    font:bold 11px SimSun;letter-spacing:3px;color:#8A6520;
+    margin:12px 0 4px;border-top:1px solid #B6AB8F;padding-top:7px;
+  }
   #artPage .profRow{display:flex;align-items:center;gap:6px;font:11px SimSun;color:#4A5568;margin:2px 0}
   #artPage .profRow b{color:#12161F;letter-spacing:1px;min-width:34px}
   /* 槽底压暗而不是用浅褐：0 级的空条和满条如果都接近纸色，玩家会以为自己已经练满了 */
@@ -193,41 +347,7 @@
   #artPage .profRow.cur b{color:#C8453B}
   #artPage .profRow.cur .pb i{background:#C8453B}
   #artPage .profRow span{font:10px monospace;color:#8A6520;min-width:52px;text-align:right}
-  /* 装配槽：六个方块，跟 HUD 上那一排一一对应，数字键就是格子序号 */
-  #artLoadout{display:flex;gap:4px;justify-content:center;margin:6px 0 10px}
-  #artLoadout .as{
-    width:56px;height:44px;background:#E8DFC8;border:2px solid #8A6520;position:relative;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;
-  }
-  #artLoadout .as.empty{background:#DCD2B8;border-style:dashed;color:#A99F84}
-  #artLoadout .as .k{position:absolute;top:1px;left:3px;font:9px monospace;color:#8A6520}
-  #artLoadout .as .n{font:bold 11px SimSun;color:#12161F;letter-spacing:1px}
-  #artLoadout .as .s{font:9px SimSun;color:#8A8268}
-  #artLoadout .as:hover{border-color:#C8453B}
-  /* 选中的目标格：朱红描边 + 微微抬起。八招只能上阵六招，
-     不标出"装哪一格"的话，玩家点招式就只能看着第 0 格被顶掉 */
-  #artLoadout .as.pick{border-color:#C8453B;background:#F3E3C0;transform:translateY(-1px)}
-  #artLoadout .as.pick .n{color:#8C2F26}
-  #artPage .artCard{
-    background:#E8DFC8;border:1px solid #8A6520;padding:5px 7px 6px;margin-bottom:5px;
-    display:flex;gap:8px;align-items:flex-start;
-  }
-  #artPage .artCard.locked{opacity:.55}
-  #artPage .artCard .l{flex:1;min-width:0}
-  #artPage .artCard .t{font:bold 12px SimSun;letter-spacing:1px;color:#12161F}
-  #artPage .artCard .t em{font:9px SimSun;font-style:normal;color:#F2E9CE;background:#8A6520;padding:0 4px;margin-left:5px;letter-spacing:0}
-  #artPage .artCard .t em.sp{background:#C8453B}
-  #artPage .artCard .d{font:10px/1.4 SimSun;color:#4A5568;margin:2px 0}
-  #artPage .artCard .m{font:9px monospace;color:#8A6520}
-  #artPage .artCard button{
-    /* .panel button 是 width:100% 的整行按钮，这里必须显式改回来 ——
-       否则按钮会占满整张卡片，把左边的名字与描述挤成一列单字。 */
-    display:inline-block;width:auto;flex:0 0 auto;margin:0;
-    font:bold 11px SimSun;padding:4px 10px;cursor:pointer;white-space:nowrap;
-    background:#2F6E6A;color:#F2E9CE;border:2px solid #1D4A46;box-shadow:2px 2px 0 #000;
-  }
-  #artPage .artCard button:disabled{background:#B6AB8F;color:#6B6248;border-color:#8A8268;cursor:not-allowed}
-  #artPage .artCard button:active:not(:disabled){transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
+  #artPage .foot{font:9px SimSun;color:#8A8268;margin-top:9px;letter-spacing:1px}
 
   /* ---------- 心法 ---------- */
   #mantraPage{text-align:left;max-height:62vh;overflow:auto}
@@ -426,9 +546,17 @@
       <div class="cols" id="skillTree"></div>
     </div>
     <div id="artPage" class="hidden">
-      <div class="sp" id="artSub">持兵器杀敌可长专精</div>
-      <div id="artLoadout"></div>
-      <div id="artBody"></div>
+      <!-- 招式页是"剑匣 + 招式库"两栏：左边是我带什么，右边是我还能带什么。
+           交互只有拖拽和单击，没有"先选中一格"这种中间态。 -->
+      <div class="artHead">
+        <div class="seal">招 式</div>
+        <div class="cur" id="artSub">持兵器杀敌可长专精</div>
+        <div class="hint">拖到左格上阵 · 点卡装上或卸下 · 点格卸下 · 格中有招时可拖去交换</div>
+      </div>
+      <div class="artWrap">
+        <div id="artQuiver"></div>
+        <div id="artLib"></div>
+      </div>
     </div>
     <button id="btnSkillClose">收功（T / Esc）</button>
   </div>

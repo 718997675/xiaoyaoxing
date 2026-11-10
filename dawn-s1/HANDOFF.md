@@ -36,7 +36,7 @@ node tools/run.js eval tools/map.js       # 大地图连通性与地貌，当前
 node tools/run.js eval tools/camps.js     # 营地生态（巡逻/吹哨/食物链/作息），当前 17 pass / 0 fail
 node tools/run.js eval tools/bosses.js    # 首领（招式表/巢穴/危险区/首杀专属），当前 23 pass / 0 fail
 node tools/run.js eval tools/quests.js    # 任务（10 条全通/三物门禁/存档），当前 29 pass / 0 fail
-node tools/run.js eval tools/arts.js      # 招式（64 招/十种原语/专精/装配/平衡/存档），当前 77 pass / 0 fail
+node tools/run.js eval tools/arts.js      # 招式（64 招/十种原语/专精/装配拖拽/平衡/存档），当前 89 pass / 0 fail
 node tools/run.js eval tools/mantras.js   # 心法（22 条/互斥/12 个机制/200 组 DPS 分布），当前 75 pass / 0 fail
 STORY=1 QS=x=1 node tools/run.js eval tools/story.js   # 剧情（20 节点/六种触发/三层对话/旧事页/存档），当前 62 pass / 0 fail
 node tools/run.js shot out.png 1440 900   # 截图
@@ -115,6 +115,7 @@ for(let i=0;i<25;i++)g.tick(0.016)" \
 | **P6 招式系统补齐：`arts.js` 16 → 64 招 + 十种效果原语 + 六槽装配 UI + 平衡口径统一** | ✅ 2026-11-10 |
 | **P7 剧情框架：`story.js` 10 节点 + 六种触发器 + 剧情覆盖层 + 旧事页 + 三层对话 + 三物线索** | ✅ 2026-11-10 |
 | **P8 第一幕 + 第二幕正文：`story.js` 10 → 20 节点 + 3 个地标 + 3 处旧物 + 5 条线索 + 3 个野外 NPC 三层** | ✅ 2026-11-10 |
+| **招式装配页重做：「剑匣 + 招式谱」两栏 · 拖拽装配 · 去掉了"先选格再选招"** | ✅ 2026-11-10 |
 | 双渠道发布（GitHub Pages + workbuddy） | ✅ |
 
 ### 未完成（按顺序）
@@ -378,6 +379,28 @@ dawn-s1/
   凭感觉写十个坐标有六个站不住。探法是 `expr` 扫一片区域收 `canStand` 为真的点，
   再按"离已有 POI 最远"排序挑（`tools/run.js expr` 一行就能跑）。
   竹桥那三个点更特殊 —— 桥面是 `tile===9`，扫一遍 `tiles` 里值为 9 的格子才是真桥。
+
+### 招式装配页重做（P9 踩的）
+
+- **`elementFromPoint` 在布局没落定时会返回 null。** 拖拽落点一开始只靠它，
+  自检里就变成了"有时能拖进去、有时不能"的随机 FAIL —— 面板刚从 `hidden` 恢复、
+  样式还没算完的那一帧，它什么也找不到。现在 `artSlotAt()` 先按元素命中，
+  再按矩形兜底扫一遍六个格子。**凡是用 `elementFromPoint` 的地方都要想一遍
+  "布局脏的时候它返回什么"。**
+- **`pointerdown` 里不能 `preventDefault()`。** 一 preventDefault 浏览器就不滚了，
+  招式库在手机上直接滚不动。触屏还要再叠一条：长按 150ms 才进入拖拽，
+  否则手指落在卡片上往下划，本意是滚列表，却被当成拖拽。鼠标没这个歧义，按下即可拖。
+- **自检里测拖拽必须派发真的 pointer 事件**，只验 `artPlace()` 等于没验 ——
+  断的往往就是事件那一层（阈值、capture、落点判定）。用真实
+  `getBoundingClientRect()` 取坐标，按 `pointerdown → move → move → up` 走一遍，
+  顺带断言"拖拽中高亮""结束后高亮清掉""幽灵被回收"。
+- **状态标记要按"格号"显示，不要按布尔。** 已装的招式在右栏显示"壹/贰/叁"，
+  玩家能立刻对上左栏；只显示一个"已装"的话，想知道它在第几格还得回头数。
+- **两列网格里，只有一个条目的分组要占满整行**（`.artGrid.single`），
+  否则右半行空着，像少画了一张卡。
+- **面板标题和页签写同一件事就该删掉一个。** `#skills` 的 `h1` 原来写着"道行 / 招式"，
+  页签也写着"道行 / 招式"，招式页里还有一枚朱红印章 —— 三层重复。
+  现在 `h1` 整个去掉，省下的高度给了招式库。
 
 ---
 

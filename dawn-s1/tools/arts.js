@@ -145,6 +145,8 @@
   }
 
   // ---------- 4.1 装配交互：八招选六格 ----------
+  // P9 重做了装配页（剑匣 + 招式库 + 拖拽），"先选中一格"这个中间态没有了。
+  // 三个动作各验一条：拖到指定格 / 拖到已占格（互换）/ 点格子（卸下）。
   {
     g.startGame(false);
     g.player.prof = { sword: 999 };
@@ -153,23 +155,107 @@
     // 满槽时点一招没装上的：不能悄悄顶掉第 0 格
     const before = g.player.loadout.slice();
     const put = g.artPlace('sword_7');
-    T('满槽且未选格时装不上', put === false, 'loadout=' + g.player.loadout.join(','));
+    T('满槽且未指定格时装不上', put === false, 'loadout=' + g.player.loadout.join(','));
     T('满槽时不该被悄悄顶掉第 0 格', JSON.stringify(g.player.loadout) === JSON.stringify(before), 'OK');
-    // 选中一格再装：装进选中的那一格
-    g.pickArtSlot(3);
-    T('点格子能选中目标格', g.artPick === 3, g.artPick);
-    const ok = g.artPlace('sword_7');
-    T('选中后能装进指定格', ok === true && g.player.loadout[3] === 'sword_7',
+
+    // 拖到指定格：直接落进那一格
+    const ok = g.artPlace('sword_7', 3);
+    T('拖到第 4 格就装进第 4 格', ok === true && g.player.loadout[3] === 'sword_7',
       g.player.loadout.map(x => x || '-').join(','));
-    T('装完原来的格被换掉', g.player.loadout[3] === 'sword_7', 'slot3=' + g.player.loadout[3]);
-    // 卸下
+    // 拖到已占的格：两格互换，原来那招不能被挤没
+    const a0 = g.player.loadout[0];
+    g.artPlace('sword_7', 0);
+    T('拖到已占格是互换不是顶掉',
+      g.player.loadout[0] === 'sword_7' && g.player.loadout[3] === a0,
+      g.player.loadout.map(x => x || '-').join(','));
+    // 点格子 = 直接卸下（不需要先选中）
+    g.artSlotClick(0);
+    T('点格子直接卸下', g.player.loadout[0] === null, g.player.loadout.map(x => x || '-').join(','));
+    // 点招式卡 = 装进第一个空格
     g.artPlace('sword_7');
-    T('再点一次能卸下', g.player.loadout[3] === null, g.player.loadout.map(x => x || '-').join(','));
-    // 手动排过之后，autoLoadout 不再偷偷补位
-    g.player.loadout[0] = null;
-    g.autoLoadout();
-    T('手动卸下的格子不会被自动补回', g.player.loadout[0] === null,
+    T('点招式卡装进第一个空格', g.player.loadout[0] === 'sword_7',
       g.player.loadout.map(x => x || '-').join(','));
+    // 再点一次 = 卸下
+    g.artPlace('sword_7');
+    T('再点一次能卸下', g.player.loadout[0] === null, g.player.loadout.map(x => x || '-').join(','));
+    // 手动排过之后，autoLoadout 不再偷偷补位
+    g.player.loadout[1] = null;
+    g.autoLoadout();
+    T('手动卸下的格子不会被自动补回', g.player.loadout[1] === null,
+      g.player.loadout.map(x => x || '-').join(','));
+  }
+
+  // ---------- 4.2 装配页 DOM：剑匣六格 + 招式按功能位分组 ----------
+  // 这几条是防"渲染挂了但逻辑还对"：renderArts 抛错时装配逻辑照样能跑，
+  // 玩家看到的却是一个空面板。
+  {
+    const box = document.getElementById('skills');
+    box.classList.remove('hidden');
+    g.showArtPage(true);
+    const slots = document.querySelectorAll('#artQuiver .artSlot');
+    T('剑匣渲染出六格', slots.length === 6, slots.length);
+    T('招式页切宽版', box.classList.contains('wide'), box.className);
+    const cards = document.querySelectorAll('#artLib .artCard');
+    T('招式卡都渲染出来', cards.length >= 8, cards.length);
+    const grps = document.querySelectorAll('#artLib .artGrp');
+    T('招式卡按功能位分组', grps.length >= 2, grps.length + ' 组');
+    // 已上阵的卡要有 armed 标记，否则"我带了哪几招"在右栏看不出来
+    const armed = document.querySelectorAll('#artLib .artCard.armed');
+    T('已上阵的卡有 armed 标记', armed.length === g.player.loadout.filter(Boolean).length,
+      armed.length + '/' + g.player.loadout.filter(Boolean).length);
+    // 剑匣格子上要带功能位色（--gc），否则左栏认不出是哪一类
+    const tinted = document.querySelectorAll('#artQuiver .artSlot.on[style*="--gc"]');
+    T('剑匣格子带功能位色', tinted.length === g.player.loadout.filter(Boolean).length,
+      tinted.length + ' 格');
+    g.showArtPage(false);
+    box.classList.add('hidden');
+  }
+
+  // ---------- 4.3 拖拽真的能装上 ----------
+  // 拖拽是手写 pointer 事件，只验 artPlace() 等于没验 —— 断的往往是事件那一层。
+  // 这里按真实链路派发 pointerdown → pointermove → pointerup，
+  // 坐标取真实 getBoundingClientRect，落点靠 elementFromPoint 认。
+  {
+    const box = document.getElementById('skills');
+    box.classList.remove('hidden');
+    g.player.prof = { sword: 999 };
+    g.equipFam('sword');
+    g.setLoadout(['sword_1']);
+    g.showArtPage(true);
+    // 面板刚从 hidden 恢复时量坐标可能是 0（样式还没落定），
+    // 那样拖拽会落在 (0,0)、elementFromPoint 什么也找不到 —— 表现为随机 FAIL。
+    // 读一次 offsetHeight 强制同步重排。
+    void box.offsetHeight;
+
+    const card = document.querySelector('#artLib .artCard[data-art="sword_5"]');
+    const slot = document.querySelector('#artQuiver .artSlot[data-slot="3"]');
+    T('拖拽前找得到卡片与目标格', !!card && !!slot, !!card + '/' + !!slot);
+    if (card && slot) {
+      const cr = card.getBoundingClientRect();
+      const sr = slot.getBoundingClientRect();
+      const base = {
+        bubbles: true, cancelable: true, pointerId: 1, pointerType: 'mouse',
+        isPrimary: true, button: 0,
+      };
+      const at = (x, y, extra) => new PointerEvent('pointermove', Object.assign({}, base, { clientX: x, clientY: y }, extra));
+      card.dispatchEvent(new PointerEvent('pointerdown', Object.assign({}, base, {
+        clientX: cr.left + 12, clientY: cr.top + 12, buttons: 1,
+      })));
+      // 先走一小步越过 7px 阈值，再走到格子上 —— 不越过阈值会被当成"点击"
+      card.dispatchEvent(at(cr.left + 12, cr.top + 26, { buttons: 1 }));
+      card.dispatchEvent(at(sr.left + sr.width / 2, sr.top + sr.height / 2, { buttons: 1 }));
+      T('拖拽中目标格高亮', slot.classList.contains('over'), slot.className);
+      card.dispatchEvent(new PointerEvent('pointerup', Object.assign({}, base, {
+        clientX: sr.left + sr.width / 2, clientY: sr.top + sr.height / 2, buttons: 0,
+      })));
+      T('拖到第 4 格后招式真的进了第 4 格', g.player.loadout[3] === 'sword_5',
+        g.player.loadout.map(x => x || '-').join(','));
+      T('拖拽结束后高亮被清掉',
+        !document.querySelector('#artQuiver .artSlot.over'), 'ok');
+      T('拖拽幽灵被回收', !document.getElementById('artGhost'), 'ok');
+    }
+    g.showArtPage(false);
+    box.classList.add('hidden');
   }
 
   // ---------- 4.5 专精从击杀里长出来 ----------

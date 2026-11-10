@@ -4668,6 +4668,9 @@ function showArtPage(show) {
   if (daoPageEl) daoPageEl.classList.toggle('hidden', artPageOn);
   if (artPageEl) artPageEl.classList.toggle('hidden', !artPageOn);
   if (skillTitleEl) skillTitleEl.textContent = artPageOn ? '招式' : '道行';
+  // 招式页是两栏（剑匣 + 招式库），道行页是三列树 —— 宽度得跟着切
+  const box = document.getElementById('skills');
+  if (box) box.classList.toggle('wide', artPageOn);
   document.querySelectorAll('#skills .tabs button').forEach(b => {
     b.classList.toggle('on', (b.dataset.page === 'art') === artPageOn);
   });
@@ -4677,41 +4680,152 @@ document.querySelectorAll('#skills .tabs button').forEach(b => {
   b.onclick = () => showArtPage(b.dataset.page === 'art');
 });
 
-// 装配交互：八招只能上阵六招，所以"装哪一格"必须由玩家说了算。
-// 模型：先点上方格子选中它（artPick），再点下方招式装进去；
-// 没选格子就点招式 → 装进第一个空格；六格全满 → 提示先选格子。
-// 早期版本是"槽满就顶掉第 0 格"，玩家排好的顺序会被无声打乱。
-let artPick = -1;
-function pickArtSlot(i) {
-  artPick = (artPick === i) ? -1 : i;
-  renderArts();
-}
-function artPlace(id) {
+// 装配交互：八招只能上阵六招。
+// 三个动作都是一步到位，**没有"先选中一格"这种中间态** ——
+// 那个中间态是旧版的痛点：点招式之前必须先去上面点一格，忘了点就只装进第 0 格，
+// 装完还得回头看自己刚才点的是哪一格。
+//   拖招式卡到某一格 = 装到那格（格里有招就互换，不会把它挤没）
+//   点招式卡        = 装进第一个空格 / 已装则卸下
+//   点格子          = 直接卸下
+// 早期版本是"槽满就顶掉第 0 格"，玩家排好的顺序会被无声打乱 —— 所以有 loadoutManual。
+const ART_ORD = ['壹', '贰', '叁', '肆', '伍', '陆'];
+// 功能位配色。招式卡左侧色条、剑匣格子的左边线、分组标题共用同一条颜色 ——
+// 玩家不看字也能认出"这条是清场 / 那条是位移"。
+const ART_FN_COLOR = {
+  dmg: '#C8453B', aoe: '#A8622C', move: '#2F6E6A',
+  ctrl: '#3A5A8C', buff: '#B8892B', special: '#6B4A6E',
+};
+const ART_FN_ORDER = ['dmg', 'aoe', 'move', 'ctrl', 'buff', 'special'];
+function artFnColor(a) { return ART_FN_COLOR[a && a.slot] || '#8A6520'; }
+
+// slot 省略 = 自己找位置（第一个空格）；给了 slot = 拖拽落点
+function artPlace(id, slot) {
   const a = artById(id);
   if (!a) return false;
   player.loadoutManual = true;   // 玩家动过装配，之后不再自动补位
   const cur = player.loadout.indexOf(id);
+  let tgt = (slot === undefined || slot === null || slot < 0) ? -1 : slot;
+
   if (cur >= 0) {
-    if (artPick >= 0 && artPick !== cur) {
-      // 换位：把这一招挪到选中的格子上，原格子空出来
-      player.loadout[artPick] = id;
-      player.loadout[cur] = null;
+    // 已上阵：拖到别的格 = 换位（两格互换，谁也不会消失）；不带格 = 卸下
+    if (tgt >= 0 && tgt !== cur) {
+      const other = player.loadout[tgt];
+      player.loadout[tgt] = id;
+      player.loadout[cur] = other || null;
     } else {
       player.loadout[cur] = null;
     }
-    artPick = -1;
     renderArts();
     return true;
   }
-  const tgt = artPick >= 0 ? artPick : player.loadout.indexOf(null);
+  if (tgt < 0) tgt = player.loadout.indexOf(null);
   if (tgt < 0) {
-    msg('招式槽已满 · 先点上方一格，再点招式装入', C.paper1);
+    msg('六格已满 · 把招式拖到想替换的那一格上', C.paper1);
     return false;
   }
   player.loadout[tgt] = id;
-  artPick = -1;
   renderArts();
   return true;
+}
+
+// 点格子 = 卸下。没有"选中"状态要清，所以这里不需要第二次点击
+function artSlotClick(i) {
+  if (!player.loadout[i]) return false;
+  player.loadoutManual = true;
+  player.loadout[i] = null;
+  renderArts();
+  return true;
+}
+
+// 拖拽用 pointer 事件自己实现，不引库：
+//   · 桌面与触屏同一套代码（pointerType 只用来挡右键）
+//   · 移动超过 7px 才算拖，否则算点 —— 这样"点一下装上"和"拖过去"能共存
+//   · 用 elementFromPoint 找落点，而不是给每个格子绑 enter/leave：
+//     格子只有六个，一次遍历比维护六个悬停状态便宜得多，也不会漏清高亮
+let artDrag = null;
+function artSlotAt(x, y) {
+  // 先按元素命中：指针在格子里时这是最准的（格子内部的子元素也能就近取到父格）
+  const el = document.elementFromPoint(x, y);
+  const hit = el && el.closest ? el.closest('#artQuiver .artSlot') : null;
+  if (hit) return hit;
+  // 兜底按矩形自己算一次。两个真实场景需要它：
+  //   ① 指针正好压在格子边框上，elementFromPoint 可能返回相邻的兄弟格
+  //   ② 面板刚显示、布局还没落定，elementFromPoint 会返回 null
+  // 格子只有六个，遍历一遍比调试"为什么这次拖不进去"便宜得多。
+  for (const s of document.querySelectorAll('#artQuiver .artSlot')) {
+    const r = s.getBoundingClientRect();
+    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return s;
+  }
+  return null;
+}
+function artDragEnd(cancel) {
+  if (!artDrag) return;
+  const d = artDrag;
+  artDrag = null;
+  if (d.timer) clearTimeout(d.timer);
+  if (d.ghost) d.ghost.remove();
+  if (d.card) d.card.classList.remove('dragging');
+  document.querySelectorAll('#artQuiver .artSlot').forEach(s => s.classList.remove('over'));
+  if (cancel) return;
+  if (!d.moved) { artPlace(d.id); return; }     // 没移动 = 一次点击
+  if (d.hit) artPlace(d.id, +d.hit.dataset.slot);
+}
+function artBindDrag(card, id) {
+  card.addEventListener('pointerdown', ev => {
+    if (card.classList.contains('locked')) return;
+    if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+    artDrag = {
+      id, card, pid: ev.pointerId,
+      x0: ev.clientX, y0: ev.clientY, moved: false, ghost: null, hit: null,
+      // 触屏要长按 150ms 才进入拖拽：手指落在卡片上往下划，本意是滚招式库，
+      // 一按下就抢走手势的话，列表在手机上根本滚不动。
+      // 鼠标没有这个歧义，按下即可拖。
+      armed: ev.pointerType !== 'touch',
+      timer: null,
+    };
+    if (!artDrag.armed) {
+      artDrag.timer = setTimeout(() => {
+        if (!artDrag || artDrag.id !== id) return;
+        artDrag.armed = true;
+        try { card.setPointerCapture(artDrag.pid); } catch (e) { }
+      }, 150);
+    } else {
+      try { card.setPointerCapture(ev.pointerId); } catch (e) { }
+    }
+    // 这里**不能** preventDefault：一 preventDefault 浏览器就不滚了
+  });
+  card.addEventListener('pointermove', ev => {
+    if (!artDrag || artDrag.pid !== ev.pointerId || artDrag.id !== id) return;
+    if (!artDrag.armed) return;   // 触屏还在等长按，先让列表滚
+    if (!artDrag.moved) {
+      if (Math.hypot(ev.clientX - artDrag.x0, ev.clientY - artDrag.y0) < 7) return;
+      artDrag.moved = true;
+      const a = artById(id);
+      const gh = document.createElement('div');
+      gh.id = 'artGhost';
+      gh.textContent = a ? a.name : id;
+      gh.style.borderLeftColor = artFnColor(a);
+      document.body.appendChild(gh);
+      artDrag.ghost = gh;
+      card.classList.add('dragging');
+    }
+    ev.preventDefault();
+    artDrag.ghost.style.left = (ev.clientX + 12) + 'px';
+    artDrag.ghost.style.top = (ev.clientY - 16) + 'px';
+    const hit = artSlotAt(ev.clientX, ev.clientY);
+    artDrag.hit = hit;
+    document.querySelectorAll('#artQuiver .artSlot').forEach(s => s.classList.toggle('over', s === hit));
+  });
+  card.addEventListener('pointerup', ev => {
+    if (!artDrag || artDrag.pid !== ev.pointerId || artDrag.id !== id) return;
+    // 松手位置可能和最后一次 move 不同，这里要重算一次落点
+    if (artDrag.moved) artDrag.hit = artSlotAt(ev.clientX, ev.clientY);
+    artDragEnd(false);
+  });
+  card.addEventListener('pointercancel', () => {
+    if (!artDrag || artDrag.id !== id) return;
+    artDragEnd(true);
+  });
 }
 
 function renderArts() {
@@ -4720,53 +4834,64 @@ function renderArts() {
   const fam = weaponFam(), W = WEAPONS[fam];
   const k = profKills(fam), lv = profLevel(k), left = profLeft(k);
   sub.innerHTML = '当前持 <b>' + W.name + '</b> · 专精 <b>' + lv + '/' + PROF_MAX + '</b>'
-    + (left ? ' · 再斩 ' + left + ' 名可至 ' + (lv + 1) + ' 级' : ' · 已至圆满')
-    + '<br><span style="font-size:10px;color:#8A8268">专精只长手上这件兵器；招式也只能用对应兵器放</span>'
-    + (artPick >= 0
-      ? '<br><span style="font-size:10px;color:#C8453B">已选第 ' + (artPick + 1) + ' 格 · 点下方招式装入（再点该格取消）</span>'
-      : '');
+    + (left ? ' · 再斩 <em>' + left + '</em> 名可至 ' + (lv + 1) + ' 级' : ' · 已至圆满');
 
-  const lo = document.getElementById('artLoadout');
-  if (lo) {
-    lo.innerHTML = player.loadout.map((id, i) => {
+  // 剑匣：六格竖排。装上招的格子透出暖光 + 左侧功能位色条，
+  // 空位是虚线「虚位」—— 数一眼就知道还差几格，比写"已装 3/6"直接
+  const qv = document.getElementById('artQuiver');
+  if (qv) {
+    const used = player.loadout.filter(Boolean).length;
+    qv.innerHTML = '<div class="qh">剑匣</div>' + player.loadout.map((id, i) => {
       const a = id ? artById(id) : null;
-      return '<div class="as' + (a ? '' : ' empty') + (artPick === i ? ' pick' : '') + '" data-slot="' + i + '" title="' +
-        (a ? '点一下选中这一格，再点招式就能替换' : '空位 · 点一下选中') + '">' +
-        '<span class="k">' + ART_KEYS[i] + '</span>' +
-        '<span class="n">' + (a ? a.name : '空') + '</span>' +
-        '<span class="s">' + (a ? (ART_SLOT_LABEL[a.slot] || '') : '未装配') + '</span>' +
-        '</div>';
-    }).join('');
-    lo.querySelectorAll('.as').forEach(el => {
-      el.onclick = () => pickArtSlot(+el.dataset.slot);
+      return '<div class="artSlot' + (a ? ' on' : '') + '" data-slot="' + i + '"'
+        + (a ? ' style="--gc:' + artFnColor(a) + '"' : '')
+        + ' title="' + (a ? a.name + ' · 点一下卸下' : '空位 · 把招式拖到这里') + '">'
+        + '<span class="ord">' + ART_ORD[i] + '</span>'
+        + '<span class="txt"><span class="nm">' + (a ? a.name : '虚位') + '</span>'
+        + '<span class="fn">' + (a ? (ART_SLOT_LABEL[a.slot] || '') : '空') + '</span></span>'
+        + '</div>';
+    }).join('') + '<div class="qf">已装 ' + used + ' / ' + ART_SLOTS + '</div>';
+    qv.querySelectorAll('.artSlot').forEach(el => {
+      el.onclick = () => artSlotClick(+el.dataset.slot);
     });
   }
 
-  const body = document.getElementById('artBody');
-  if (!body) return;
-  const sec = (t, c) => '<div style="font:bold 11px SimSun;color:' + c + ';letter-spacing:2px;margin:10px 0 4px">' + t + '</div>';
-  let html = sec(W.name + ' 招式', '#2F6E6A');
-  for (const a of artsOfWeapon(fam)) {
-    const un = artUnlocked(k, a);
-    const at = player.loadout.indexOf(a.id);
-    html += '<div class="artCard' + (un ? '' : ' locked') + '">' +
-      '<div class="l"><div class="t">' + a.name +
-      '<em' + (a.slot === 'special' ? ' class="sp"' : '') + '>' + (ART_SLOT_LABEL[a.slot] || '') + '</em></div>' +
-      '<div class="d">' + a.desc + '</div>' +
-      '<div class="m">' + artBrief(a) + (un ? '' : ' · 需专精 ' + a.prof + ' 级') + '</div></div>' +
-      '<button data-art="' + a.id + '"' + (un ? '' : ' disabled') + '>' + (at >= 0 ? '卸下' : '装配') + '</button>' +
-      '</div>';
+  // 招式库：按功能位分组，不是一条平铺的长列表 ——
+  // "我缺一个位移"这种念头是按功能位想的，不是按招式名想的
+  const lib = document.getElementById('artLib');
+  if (!lib) return;
+  let html = '';
+  for (const slot of ART_FN_ORDER) {
+    const list = artsOfWeapon(fam).filter(a => a.slot === slot);
+    if (!list.length) continue;
+    const gc = ART_FN_COLOR[slot] || '#8A6520';
+    html += '<div class="artGrp" style="--gc:' + gc + '"><b>'
+      + (ART_SLOT_LABEL[slot] || slot) + '</b><i></i></div>'
+      + '<div class="artGrid' + (list.length === 1 ? ' single' : '') + '">';
+    for (const a of list) {
+      const un = artUnlocked(k, a);
+      const at = player.loadout.indexOf(a.id);
+      html += '<div class="artCard' + (un ? '' : ' locked') + (at >= 0 ? ' armed' : '')
+        + '" data-art="' + a.id + '" style="--gc:' + gc + '">'
+        + '<div class="l"><div class="t">' + a.name + '</div>'
+        + '<div class="d">' + a.desc + '</div>'
+        + '<div class="m">' + artBrief(a) + (un ? '' : ' · 需专精 ' + a.prof + ' 级') + '</div></div>'
+        + '<div class="st">' + (at >= 0 ? ART_ORD[at] : (un ? '＋' : '锁')) + '</div>'
+        + '</div>';
+    }
+    html += '</div>';
   }
-  html += sec('各兵器专精', '#8A6520');
+  html += '<div class="profTitle">各兵器专精</div>';
   for (const f of WEAPON_IDS) {
     const kk = profKills(f), ll = profLevel(kk);
     html += '<div class="profRow' + (f === fam ? ' cur' : '') + '"><b>' + WEAPONS[f].name + '</b>' +
       '<div class="pb"><i style="width:' + Math.round(profFrac(kk) * 100) + '%"></i></div>' +
       '<span>' + ll + '/' + PROF_MAX + (ll >= PROF_MAX ? ' 满' : ' ·' + profLeft(kk)) + '</span></div>';
   }
-  body.innerHTML = html;
-  body.querySelectorAll('button[data-art]').forEach(b => {
-    b.onclick = () => { artPlace(b.dataset.art); };
+  html += '<div class="foot">专精只长手上这件兵器 · 招式也只能用对应兵器放</div>';
+  lib.innerHTML = html;
+  lib.querySelectorAll('.artCard[data-art]').forEach(card => {
+    artBindDrag(card, card.dataset.art);
   });
 }
 
@@ -7183,8 +7308,9 @@ window.__game = {
   renderArts, showArtPage, artMaxOf, artCdOf,
   get artCds() { return artCds; },
   get artPageOn() { return artPageOn; },
-  get artPick() { return artPick; },
-  pickArtSlot, artPlace,
+  // 装配不再有"选中的格子"这个状态，所以也不再导出 artPick。
+  // artSlotClick 是"点格子 = 卸下"，artPlace 的第二个参数是拖拽落点。
+  artSlotClick, artPlace,
   profKills,
   // 增益 / 地面区域：自检要能直接看状态，P6 的十种原语全靠它们
   artBuff, artBuffActive, dealDot,
