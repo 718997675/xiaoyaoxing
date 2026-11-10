@@ -70,10 +70,10 @@
       if (a.fx === 'zone' && !a.zone) bad.push(id + ':缺zone表');
       if (a.fx === 'dash' && !a.dash) bad.push(id + ':缺dash表');
     }
-    T('每招字段齐全且 fx 在十种原语内', bad.length === 0, bad.join(' / ') || 'OK');
+    T('每招字段齐全且 fx 在十四种原语内', bad.length === 0, bad.join(' / ') || 'OK');
 
     const fxs = new Set(ids.map(id => g.ARTS[id].fx));
-    T('覆盖 10 种效果原语', fxs.size === 10, [...fxs].join('/'));
+    T('覆盖 14 种效果原语', fxs.size === 14, [...fxs].join('/'));
     const slots = new Set(ids.map(id => g.ARTS[id].slot));
     T('六种功能位齐全', ['dmg', 'aoe', 'move', 'ctrl', 'buff', 'special'].every(s => slots.has(s)),
       [...slots].join('/'));
@@ -101,6 +101,65 @@
     }
     T('功能位分工一致（输出×2 清场×2 位移×1 控制×1 增益×1 特色×1）',
       badSlot.length === 0, badSlot.join(' ') || 'OK');
+  }
+
+  // ---------- 1.1 招式签名：形状 / 动作 / 色彩，同兵器内不许重复 ----------
+  // ARTS-DESIGN.md §1 的四条硬规矩里，能自动断言的三条都在这里。
+  // 这一节是"64 招千篇一律"那个问题的验收线：以后加招、改招，
+  // 只要和同兵器的另一招撞了签名，这里就直接红，不用等玩家来说"怎么都一样"。
+  // 第四条（声音）目前没有可查的表，靠 ARTS-DESIGN.md 逐条对。
+  {
+    const dup = [], badShape = [], badPose = [], noColor = [];
+    for (const f of FAMS) {
+      const seen = {};
+      for (const a of g.artsOfWeapon(f)) {
+        const sh = g.artShape(a), po = g.artPose(a);
+        const col = g.artColor(a, g.WEAPONS[f].trail);
+        if (g.ART_SHAPES.indexOf(sh) < 0) badShape.push(a.name + ':' + sh);
+        if (g.ART_POSES.indexOf(po) < 0) badPose.push(a.name + ':' + po);
+        if (!Array.isArray(col) || !col[0]) noColor.push(a.name);
+        const sig = sh + '|' + po + '|' + (Array.isArray(col) ? col[0] : col);
+        if (seen[sig]) dup.push(g.WEAPONS[f].name + ' ' + seen[sig] + '≈' + a.name + '(' + sig + ')');
+        else seen[sig] = a.name;
+      }
+    }
+    T('形状/动作都登记在 ART_SHAPES / ART_POSES 里',
+      badShape.length === 0 && badPose.length === 0,
+      badShape.concat(badPose).join(' ') || 'OK');
+    T('每招都拿得到刀光色', noColor.length === 0, noColor.join('/') || 'OK');
+    // 锤是 P10 的试点：八招八种形状、八种动作、八种颜色，一格都不许重
+    const dupHammer = dup.filter(s => s.indexOf('锤') === 0);
+    T('锤的八招签名互不相同', dupHammer.length === 0, dupHammer.join(' / ') || 'OK');
+    // 其余七件还没重做，这是"欠账数"。每做完一件就把 7 减一，最后必须到 0。
+    const dupFams = [...new Set(dup.map(s => s.split(' ')[0]))];
+    T('签名撞车的兵器只剩 7 件（每重做一件就把这个数减一）',
+      dupFams.length <= 7, dupFams.length + ' 件：' + (dupFams.join('/') || '无'));
+  }
+
+  // ---------- 1.2 八张连拍：武器角度必须各不相同 ----------
+  // ARTS-DESIGN.md §6 第 4 条。以前 64 招的 a0/a1 全是 0，连拍八张会是八张一样的图，
+  // 这一条就是拿来卡住那件事的 —— 用数字卡，不靠人眼。
+  // 取"施法后固定 0.15 息"而不是进度百分比：起手长的招那时才刚抬起来，
+  // 按百分比量的话「震地」和「开天辟地」会算出几乎同一个角度。
+  {
+    const rows = [];
+    for (const a of g.artsOfWeapon('hammer')) {
+      const sw = a.pose
+        ? { mode: a.pose.mode, a0: a.pose.a0 || 0, a1: a.pose.a1 || 0, dur: a.pose.dur || 0.22, ease: a.pose.ease }
+        : { mode: a.fx === 'proj' ? 'thrust' : 'swing', a0: 0, a1: 0, dur: 0.22 };
+      const p = Math.min(1, 0.15 / sw.dur);
+      rows.push({ n: a.name, ang: g.swingAng(sw, 0, p).ang });
+    }
+    let minGap = 9, pair = '';
+    for (let i = 0; i < rows.length; i++) {
+      for (let j = i + 1; j < rows.length; j++) {
+        const gap = Math.abs(rows[i].ang - rows[j].ang);
+        if (gap < minGap) { minGap = gap; pair = rows[i].n + '↔' + rows[j].n; }
+      }
+    }
+    T('锤的八招在 0.15 息时武器角度各不相同（最近一对也差 ≥ 7°）', minGap >= 0.12,
+      rows.map(r => r.n + (r.ang * 57.3).toFixed(0) + '°').join(' ')
+      + ' · 最近一对 ' + pair + ' 差 ' + (minGap * 57.3).toFixed(1) + '°');
   }
 
   // ---------- 2. 专精曲线 ----------
@@ -397,6 +456,87 @@
     const d1 = Math.hypot(far.x - g.player.x, far.y - g.player.y);
     T('缠棍把远处的怪拽近了', d1 < d0 - 20, d0.toFixed(0) + ' → ' + d1.toFixed(0));
     T('被拽的怪也吃了伤害', far.hp < far.maxHp, (far.maxHp - far.hp).toFixed(0));
+  }
+
+  // ---------- 6.1 四种新原语（P10 · 锤的试点带出来的） ----------
+  // 这四条验的不是"伤害有没有生效"，是**这一招的形状对不对**：
+  // 回旋锤的锤要离手再回来；震地要有波前；冲锋要会停；开天辟地要是一条线。
+  {
+    // 回旋锤：锤真的脱手、去程回程都打到人、最后回到手上
+    arena(14);
+    g.equipFam('hammer');
+    g.setLoadout(['hammer_2']);
+    g.setDir('down');
+    g.player.qi = 999;
+    const near = g.spawnDummy(g.player.x, g.player.y + 40, 99999);
+    const far = g.spawnDummy(g.player.x, g.player.y + 150, 99999);
+    g.castArt(0);
+    T('回旋锤：锤真的脱手了', g.boomerangs.length === 1, g.boomerangs.length);
+    T('回旋锤：脱手那会儿手上是空的', g.player.throwHide > 0, (g.player.throwHide || 0).toFixed(2));
+    const n0 = near.hp, f0 = far.hp;
+    step(40);
+    T('回旋锤：去程打到近处的人', near.hp < n0, (n0 - near.hp).toFixed(0));
+    T('回旋锤：去程也打到远处的人', far.hp < f0, (f0 - far.hp).toFixed(0));
+    step(80);
+    T('回旋锤：锤回到手上（通道清空）', g.boomerangs.length === 0, g.boomerangs.length);
+
+    // 震地：波前有速度 —— 近处先挨，远处晚半拍
+    arena(14);
+    g.equipFam('hammer');
+    g.setLoadout(['hammer_3']);
+    g.player.qi = 999;
+    const e1 = g.spawnDummy(g.player.x + 30, g.player.y, 99999);
+    const e2 = g.spawnDummy(g.player.x + 70, g.player.y, 99999);
+    g.castArt(0);
+    T('震地：场上出现了扩散中的波', g.waves.length === 1, g.waves.length);
+    const h1 = e1.hp, h2 = e2.hp;
+    step(14);
+    T('震地：近处先被扫到', e1.hp < h1, (h1 - e1.hp).toFixed(0));
+    T('震地：远处还没轮到（波前没到）', e2.hp === h2,
+      'r=' + (g.waves[0] ? g.waves[0].r.toFixed(0) : '已走完'));
+    step(60);
+    T('震地：波扩到远处，远处也挨了', e2.hp < h2, (h2 - e2.hp).toFixed(0));
+    T('震地：波走完就消失', g.waves.length === 0, g.waves.length);
+
+    // 冲锋锤：撞上第一个就停，不穿过去
+    arena(14);
+    g.equipFam('hammer');
+    g.setLoadout(['hammer_5']);
+    g.player.qi = 999;
+    // 营地圆心常压着篝火 / 石台，朝右 7px 就是实心 —— 冲锋会在第一步被地形卡住。
+    // 所以先挑一个"身前 20px 和 84px 都站得住"的方向，再照着这个方向摆木桩。
+    const DIRV = { right: [1, 0], left: [-1, 0], down: [0, 1], up: [0, -1] };
+    let cdir = 'right';
+    for (const d of ['right', 'left', 'down', 'up']) {
+      const [vx, vy] = DIRV[d];
+      if (g.canStand(g.player.x + vx * 20, g.player.y + vy * 20) &&
+          g.canStand(g.player.x + vx * 84, g.player.y + vy * 84)) { cdir = d; break; }
+    }
+    g.setDir(cdir);
+    const [cvx, cvy] = DIRV[cdir];
+    const cx = g.player.x, cy = g.player.y;
+    const c1 = g.spawnDummy(cx + cvx * 30, cy + cvy * 30, 99999);
+    const c2 = g.spawnDummy(cx + cvx * 70, cy + cvy * 70, 99999);
+    g.castArt(0);
+    const moved = Math.hypot(g.player.x - cx, g.player.y - cy);
+    T('冲锋锤：人确实冲出去了', moved > 10, cdir + ' ' + moved.toFixed(1) + 'px');
+    T('冲锋锤：撞上就停，没冲满 84', moved < 80, moved.toFixed(1) + 'px');
+    T('冲锋锤：第一个目标挨了打', c1.hp < c1.maxHp, (c1.maxHp - c1.hp).toFixed(0));
+    T('冲锋锤：后面那个没被穿过去', c2.hp === c2.maxHp, (c2.maxHp - c2.hp).toFixed(0));
+
+    // 开天辟地：一条线，不是一个圆
+    arena(14);
+    g.equipFam('hammer');
+    g.setLoadout(['hammer_8']);
+    g.setDir('down');
+    g.player.qi = 999;
+    const front = g.spawnDummy(g.player.x, g.player.y + 90, 99999);
+    const behind = g.spawnDummy(g.player.x, g.player.y - 90, 99999);
+    const side = g.spawnDummy(g.player.x + 120, g.player.y, 99999);
+    g.castArt(0);
+    T('开天辟地：正前方 90px 的人挨了', front.hp < front.maxHp, (front.maxHp - front.hp).toFixed(0));
+    T('开天辟地：身后的人没被圈到', behind.hp === behind.maxHp, (behind.maxHp - behind.hp).toFixed(0));
+    T('开天辟地：正侧面 120px 的人没被圈到', side.hp === side.maxHp, (side.maxHp - side.hp).toFixed(0));
   }
 
   // ---------- 7. 冷却与真气 ----------

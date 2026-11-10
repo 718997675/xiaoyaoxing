@@ -150,6 +150,17 @@ export const AUDIO = {
         tone(c, 'square', 1400, 900, 0.07, 0.11);
         hiss(c, 'bandpass', 3600, 1800, 0.09, 0.11, 2);
         break;
+      case 'quake':    // 落地：低频震动 + 一层土（震地 / 地裂 / 开天辟地）
+        tone(c, 'sine', 72, 30, 0.42, 0.22);
+        tone(c, 'sine', 116, 44, 0.26, 0.10);
+        hiss(c, 'lowpass', 880, 110, 0.40, 0.20, 1);
+        break;
+      case 'boomerang': {  // 回旋：去程升调、回程降调（多普勒）
+        const back = arg === 'back';
+        hiss(c, 'bandpass', back ? 2200 : 900, back ? 700 : 2600, 0.18, 0.10, 3);
+        tone(c, 'triangle', back ? 880 : 560, back ? 420 : 980, 0.16, 0.06);
+        break;
+      }
       case 'salvage':
         hiss(c, 'bandpass', 2400, 900, 0.12, 0.1, 1.5);
         break;

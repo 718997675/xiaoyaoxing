@@ -6,6 +6,8 @@
 //   两者是不同的轴，硬塞进同一个名字里，读代码的人会一直猜。
 //
 // 纯数据 + 纯函数，无 DOM / 无 three.js 依赖，可单测。
+// 唯一的外部依赖是 pixel.js 的 24 色调色板 —— 那也是一个纯常量表。
+import { C } from './pixel.js';
 //
 // P6 说明：八兵器 × 八招 = 64 招。装配槽只有 6 个，所以 8 招是"全部可学、
 // 挑 6 招上阵"，不是同时开 8 个。新增的 48 招按功能位铺满：
@@ -60,6 +62,24 @@ export function profFrac(kills) {
 //   buff   给自己挂一段限时增益；伤害与代价都写在 buff 对象里
 //   zone   在地面留一片持续区域，每 tick 结算伤害 / 状态；陷阱是 once 的 zone
 //   pull   把范围内最近的敌人拽到身前，顺手打一下
+//
+// P10 补的四种（ARTS-DESIGN.md §5.3）—— 都是"锤的一招需要，但别的兵器也会要"：
+//   boomerang 抛出去、飞回来，去回各判一次（回旋锤；将来飞刀 / 回旋镖）
+//   shockwave 环形但**有扩散速度**，波前到达才结算（震地；将来棍的落地技）
+//   charge    直线位移，**撞到第一个就停**（冲锋锤；将来枪的突刺）
+//   cleave    正前方长条，沿路径全中（开天辟地；将来枪的贯甲、剑的一闪）
+//
+// 表现层字段（P10 新增，不写就退回旧行为）：
+//   pose    { mode, a0, a1, dur, ease } —— 这一招的**身体与武器怎么动**
+//           mode: swing / thrust / ring / cast（既有四种）
+//                 overhead / overheadBig / slam / slamLow / sideSwing / throw / plant / charge
+//           ease: 'out'（默认，快起慢收）/ 'in'（慢蓄猛落）/ 'both'
+//   shape   这一招的**刀光几何**：point / overheadArc / shockwave / crack / cleave /
+//           boomerang / sideArc / chargeLine / plant；不写则按 arc 推回旧的三形
+//   color   这一招自己的刀光色 [亮, 暗]；不写则用兵器家族色
+//
+// 这三条是"招式不能千篇一律"的机制保证：形状 / 动作 / 色彩 / 声音各一个签名，
+// 同兵器内不许重复，tools/arts.js 会自动断言。
 //
 // 修饰字段：
 //   pierceDef / status / launch / centerBonus / centerR / lifeOnHit / reflect / kb / hits
@@ -339,57 +359,85 @@ export const ARTS = {
     desc: '三次短距闪烁，每次穿过敌手都留下一刀。',
   },
 
-  // ---------- 锤 · 破防 / 震地 ----------
+  // ---------- 锤 · 重量与时机 ----------
+  // 性格：一个动作，一个结果，中间没有第二下。
+  // 没有连段、没有多段命中、没有持续旋转 —— 对手感受到的是"被砸中一次就完了"。
+  // 起手要长（看得见），收招要空（打得掉），落点要实（砸下去就有东西碎）。
+  // 八招八种形状 / 八种动作 / 八种颜色，见 ARTS-DESIGN.md §4。
   hammer_1: {
     id: 'hammer_1', fam: 'hammer', slot: 'dmg', name: '碎骨锤', prof: 1,
     cd: 6, cost: 7.2, fx: 'melee',
-    reach: 36, arc: 1.4, mul: 8.4, kb: 16,
+    // 一个点：极窄扇 + 短 reach。打中的往往只有一个人。
+    reach: 34, arc: 0.55, mul: 8.4, kb: 16,
     status: { kind: 'break', dur: 4, pct: 0 },
+    pose: { mode: 'overhead', a0: -1.90, a1: 0.45, dur: 0.34, ease: 'in' },
+    shape: 'point', color: [C.paper3, C.paper2],
     desc: '一锤碎骨，四息内对方防御减四成。',
   },
   hammer_2: {
     id: 'hammer_2', fam: 'hammer', slot: 'dmg', name: '回旋锤', prof: 2,
-    cd: 5, cost: 6, fx: 'melee',
-    reach: 40, arc: 6.28, mul: 8.0, kb: 14,
-    desc: '抡锤绕身一圈，四面都不留空。',
+    cd: 5, cost: 6, fx: 'boomerang',
+    // 锤脱手飞出去，转一圈，回到手上。飞出去那半秒人是空的。
+    dist: 200, flight: 0.66, bulge: 16, mul: 8.0, kb: 14,
+    pose: { mode: 'throw', a0: -1.20, a1: 0.90, dur: 0.22, ease: 'out' },
+    shape: 'boomerang', color: [C.gold3, C.gold2],
+    desc: '锤脱手而出，走一圈再回手里，去回各伤一次。',
   },
   hammer_3: {
     id: 'hammer_3', fam: 'hammer', slot: 'aoe', name: '震地', prof: 3,
-    cd: 8, cost: 9.6, fx: 'melee',
-    reach: 80, arc: 6.28, mul: 9.6, kb: 18,
-    desc: '锤落地面，八步内一并震起。',
+    cd: 8, cost: 9.6, fx: 'shockwave',
+    // 一圈冲击波从脚下往外扩 —— 远处的人晚半拍才飞。
+    radius: 84, speed: 240, mul: 9.6, kb: 18, dur: 0.6,
+    pose: { mode: 'slam', a0: -2.60, a1: 1.00, dur: 0.42, ease: 'in' },
+    shape: 'shockwave', color: [C.gold2, C.gold1],
+    desc: '锤落地面，一圈震波往外推开，八步内一并震起。',
   },
   hammer_4: {
     id: 'hammer_4', fam: 'hammer', slot: 'aoe', name: '地裂', prof: 5,
     cd: 12, cost: 14.4, fx: 'zone', mul: 1.65,
-    zone: { dur: 4, tick: 0.5, radius: 34, shape: 'line', count: 4 },
+    // 四段向前的线，但**依次**裂开（stagger）—— 一起亮出来就只是一块红斑
+    zone: { dur: 4, tick: 0.5, radius: 34, shape: 'line', count: 4, stagger: 0.08 },
     status: { kind: 'burn', dur: 2, pct: 0.06 },
+    pose: { mode: 'slamLow', a0: -1.50, a1: 0.80, dur: 0.30, ease: 'in', hold: 0.40 },
+    shape: 'crack', color: [C.red2, C.red1],
     desc: '一道裂地向前铺开，四息内踩着就伤。',
   },
   hammer_5: {
     id: 'hammer_5', fam: 'hammer', slot: 'move', name: '冲锋锤', prof: 6,
-    cd: 9, cost: 10.8, fx: 'dash', mul: 4.05, radius: 30, kb: 16,
-    dash: { dir: 'face', dist: 80, iframe: 0.22 },
-    desc: '低头撞出去八步，撞上就飞。',
+    cd: 9, cost: 10.8, fx: 'charge', mul: 4.05, kb: 16,
+    // 直线冲 84px，撞到第一个就停 —— "会停"才是冲锋有重量的原因
+    dist: 84, iframe: 0.18,
+    pose: { mode: 'charge', a0: 0, a1: 0, dur: 0.26, ease: 'out' },
+    shape: 'chargeLine', color: [C.paper2, C.paper1],
+    desc: '低头撞出去八步，撞上第一个就停。',
   },
   hammer_6: {
     id: 'hammer_6', fam: 'hammer', slot: 'ctrl', name: '眩晕击', prof: 8,
     cd: 16, cost: 19.2, fx: 'melee',
-    reach: 36, arc: 1.4, mul: 7.2, kb: 12,
+    // 横抡：从侧后抡到正前，砸在太阳穴上。只打一个人。
+    reach: 36, arc: 1.0, mul: 7.2, kb: 12, nearestOnly: true,
     status: { kind: 'stun', dur: 2 },
+    pose: { mode: 'sideSwing', a0: -2.20, a1: 0.25, dur: 0.30, ease: 'in' },
+    shape: 'sideArc', color: [C.pur3, C.pur2],
     desc: '一记闷锤，两息不知东西。',
   },
   hammer_7: {
     id: 'hammer_7', fam: 'hammer', slot: 'buff', name: '铁壁', prof: 10,
     cd: 20, cost: 24, fx: 'buff', power: 10,
     buff: { dur: 8, shieldPct: 20, hurtReflect: 30 },
-    desc: '八息罡气护体，近身来打的都要还三成。',
+    // 锤往地上一插，人半蹲在锤后面八息 —— 增益类招式的样板表现
+    pose: { mode: 'plant', a0: -0.90, a1: 0.10, dur: 0.28, ease: 'in', hold: 8 },
+    shape: 'plant', color: [C.jade3, C.jade2],
+    desc: '锤插地上，八息罡气护体，近身来打的都要还三成。',
   },
   hammer_8: {
     id: 'hammer_8', fam: 'hammer', slot: 'special', name: '开天辟地', prof: 4,
-    cd: 32, cost: 38.4, fx: 'melee',
-    reach: 130, arc: 6.28, mul: 22.8, kb: 24, centerBonus: 2, centerR: 46,
-    desc: '砸地开山，中心一记双倍。',
+    cd: 32, cost: 38.4, fx: 'cleave',
+    // 一条线，不是一个圆。举锤蓄力半息，然后一记纵向巨劈。
+    len: 132, width: 58, mul: 22.8, kb: 24, centerBonus: 1.5, centerR: 46,
+    pose: { mode: 'overheadBig', a0: -2.70, a1: 1.20, dur: 0.62, ease: 'in' },
+    shape: 'cleave', color: [C.white, C.gold3],
+    desc: '举锤过顶，一记纵向巨劈，前方一条直线尽数裂开。',
   },
 
   // ---------- 法杖 · 元素 / 控制 ----------
@@ -504,7 +552,36 @@ export const ARTS = {
 
 // 十种效果原语。自检拿它验"每一招都落在分派器认得的类型里"，
 // game.js 的 execArt 分支也照这个清单对齐 —— 加原语时两处一起改。
-export const ART_FX = ['melee', 'proj', 'spin', 'orbit', 'blink', 'bolt', 'dash', 'buff', 'zone', 'pull'];
+export const ART_FX = ['melee', 'proj', 'spin', 'orbit', 'blink', 'bolt', 'dash', 'buff', 'zone', 'pull',
+  'boomerang', 'shockwave', 'charge', 'cleave'];
+
+// ============ 签名推导（运行时与自检共用一把尺子） ============
+// 这三条是 ARTS-DESIGN.md §1 的四条硬规矩里，能自动断言的那三条。
+// 关键：推导只写一份。运行时按它画，自检按它查重 —— 两边各写一份，
+// 迟早在"某招到底算 ring 还是 arc"上漂开（artPower 当初就是这么吃过亏的）。
+export const ART_SHAPES = ['point', 'overheadArc', 'shockwave', 'crack', 'cleave',
+  'boomerang', 'sideArc', 'chargeLine', 'plant', 'arc', 'ring', 'thrust'];
+export const ART_POSES = ['swing', 'thrust', 'ring', 'cast',
+  'overhead', 'overheadBig', 'slam', 'slamLow', 'sideSwing', 'throw', 'plant', 'charge'];
+
+// 形状签名：招式自带的 shape；没写的按 arc 推回 P6 的三形
+export function artShape(a) {
+  if (a.shape) return a.shape;
+  const arc = a.arc || 1.6;
+  if (arc >= Math.PI * 1.9) return 'ring';
+  if (a.arc && a.arc < 1.8) return 'thrust';
+  return 'arc';
+}
+// 动作签名：招式自带的 pose.mode；没写的按原语退回旧行为
+export function artPose(a) {
+  if (a.pose && a.pose.mode) return a.pose.mode;
+  return a.fx === 'proj' ? 'thrust' : 'swing';
+}
+// 色彩签名：招式自带色，否则兵器家族色（trail 由调用方给）
+export function artColor(a, trail) {
+  return a.color || trail;
+}
+
 export const ART_IDS = Object.keys(ARTS);
 export const ART_SLOTS = 6;
 export const ART_KEYS = ['1', '2', '3', '4', '5', '6'];

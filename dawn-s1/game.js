@@ -24,6 +24,7 @@ import {
 import {
   ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_SLOT_LABEL, ART_FX, PROF_MAX, PROF_WEIGHT,
   artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower,
+  artShape, artPose, artColor, ART_SHAPES, ART_POSES,
 } from './arts.js';
 import {
   MAIN, SUB, MANTRAS, MAIN_IDS, SUB_IDS, MANTRA_IDS, MANTRA_MAX_LV, SUB_SLOTS,
@@ -1306,6 +1307,12 @@ let particles = [], sparks = [], ghosts = [], slashGhosts = [], bolts = [];
 // 招式留下的地面区域（火雨 / 地裂 / 定军 / 千刃 / 铁蒺藜）。
 // 跟首领的 hazards 分开：hazards 是敌人放的，zones 是玩家放的，结算与配色都不同。
 let zones = [];
+// 抛出去还没回来的兵器（回旋锤）。它不是 projectiles —— 弹体是一去不回，
+// 这个是**要回手**的，轨迹、判定次数、结束条件都不一样。
+let boomerangs = [];
+// 有扩散速度的冲击波（震地）。也不是 zones：zones 是按 tick 结算一片，
+// waves 是一个波前在移动，按"距离到达"结算一次。
+let waves = [];
 // 侧身位移左右交替：连放两次「游龙步」不会每次都往同一边倒
 let dashSide = 1;
 let state = 'menu', shakeX = 0, shakeY = 0, time = 0, saveT = 0, cleared = false;
@@ -2764,19 +2771,128 @@ function orbTexture() {
 // 它已经在 drawOverlay 里按世界坐标画、并且自己淡出，直接 push 就完事。
 // 千万别在这里直接调 drawRingFx(octx, ...) —— update 阶段画的东西会被
 // drawOverlay 开头的 clearRect 擦掉，而且 ctx 也不对。
+//
+// P10：从 3 形扩到 11 形，并按招式自己的 color 上色。
+// 形状由 artShape() 决定 —— 那个函数放在 arts.js 里，自检查重用的是同一份推导。
+// ghost 上能带的东西：
+//   ring / thrust / a0+a1+R  三种旧形
+//   dot   一个爆点（半径 dot）
+//   line  { ang, len, w } 一道有方向的刃光
+//   grow  [r0, r1] 环从 r0 长到 r1（冲击波）
+//   delay 秒数：先等这么久再开始淡出（依次裂开用）
 function artSwingFx(a, base, reach, arc) {
   const W = WEAPONS[a.fam];
+  const col = artColor(a, W.trail);
   const x = player.x, y = player.y - 8;
-  if (arc >= Math.PI * 1.9) {
-    slashGhosts.push({ x, y, ring: true, R: reach * 0.9, colors: W.trail, t: 0.34, max: 0.34 });
+  const shape = artShape(a);
+  const push = (g) => { slashGhosts.push(Object.assign({ x, y, colors: col }, g)); };
+
+  if (shape === 'point') {
+    // 落点：一个爆点 + 四道放射碎屑。打的是一个点，不是一片。
+    const px = x + Math.cos(base) * reach * 0.95;
+    const py = y + Math.sin(base) * reach * 0.95;
+    slashGhosts.push({ x: px, y: py, dot: 7, colors: col, t: 0.20, max: 0.20 });
+    slashGhosts.push({ x: px, y: py, ring: true, R: reach * 0.45, colors: col, t: 0.22, max: 0.22 });
+    for (let i = 0; i < 4; i++) {
+      slashGhosts.push({
+        x: px, y: py, line: { ang: base + (i - 1.5) * 0.44, len: 11 + (i % 2) * 5, w: 1.3 },
+        colors: col, t: 0.18, max: 0.18,
+      });
+    }
+    // 过顶下砸的"举起"那一拍：头顶到落点的一道纵向刃光
+    slashGhosts.push({ x, y: y - 30, line: { ang: Math.PI / 2, len: 30, w: 2.0 }, colors: col, t: 0.22, max: 0.22 });
+    for (let i = 0; i < 6; i++) burst(px, py, col[0], 2, 70);
+
+  } else if (shape === 'overheadArc') {
+    // 从头顶劈到身前：一条纵向刃光 + 一道横向余韵
+    slashGhosts.push({ x, y: y - 30, line: { ang: Math.PI / 2, len: 30, w: 2.2 }, colors: col, t: 0.26, max: 0.26 });
+    push({ thrust: base, len: reach * 0.95, t: 0.24, max: 0.24 });
+
+  } else if (shape === 'shockwave') {
+    // 扩散环本体由 waves 那条通道按真实半径画，这里只给中心裂纹与放射尘
+    const R = a.radius || 84;
+    push({ dot: 9, t: 0.24, max: 0.24 });
+    for (let i = 0; i < 10; i++) {
+      const ang = i / 10 * Math.PI * 2 + 0.31;
+      push({ line: { ang, len: 14 + (i % 3) * 7, w: 1.2 }, t: 0.26, max: 0.26 });
+    }
+    for (let i = 0; i < 8; i++) burst(x, y, col[1], 2, R * 0.9);
+
+  } else if (shape === 'crack') {
+    // 地面多段线：一段一段亮起来，越远越淡
+    const z = a.zone || {};
+    const n = z.count || 4;
+    const step = (z.radius || 30) * 0.8;
+    for (let i = 0; i < n; i++) {
+      const px = x + Math.cos(base) * step * (i + 1);
+      const py = y + Math.sin(base) * step * (i + 1);
+      const d = i * (z.stagger || 0);
+      const life = 0.30 - i * 0.03;
+      slashGhosts.push({ x: px, y: py, dot: 4, colors: col, t: life, max: life, delay: d });
+      slashGhosts.push({
+        x: px, y: py, line: { ang: base + (i % 2 ? 0.55 : -0.55), len: step * 0.8, w: 1.6 },
+        colors: col, t: life, max: life, delay: d,
+      });
+    }
+
+  } else if (shape === 'cleave') {
+    // 长条：一条纵向巨刃光 + 沿路的地面长缝
+    const len = a.len || 132, wid = a.width || 58;
+    push({ line: { ang: base, len, w: wid / 11 }, t: 0.34, max: 0.34 });
+    push({ thrust: base, len: len * 0.98, t: 0.30, max: 0.30 });
+    for (let i = 1; i <= 4; i++) {
+      push({
+        x: x + Math.cos(base) * len * i / 4, y: y + Math.sin(base) * len * i / 4,
+        line: { ang: base + Math.PI / 2, len: wid * 0.45, w: 1.5 }, t: 0.30, max: 0.30,
+      });
+    }
+
+  } else if (shape === 'boomerang') {
+    // 轨迹：一条外凸的弧线（锤本体在 boomerangs 里转着飞）
+    const dist = a.dist || 200;
+    for (let i = 1; i <= 5; i++) {
+      const k = i / 5;
+      push({
+        x: x + Math.cos(base) * dist * k, y: y + Math.sin(base) * dist * k,
+        dot: 3 - k, t: 0.24 - k * 0.03, max: 0.24 - k * 0.03,
+      });
+    }
+
+  } else if (shape === 'sideArc') {
+    // 水平粗弧 + 侧向尘：从身体的另一侧抡过来
+    push({ a0: base - 1.55, a1: base + 0.30, R: reach * 1.02, t: 0.28, max: 0.28 });
+    for (let i = 0; i < 5; i++) {
+      push({ line: { ang: base - 1.45 + i * 0.38, len: reach * 0.8, w: 1.1 }, t: 0.20, max: 0.20 });
+    }
+
+  } else if (shape === 'chargeLine') {
+    // 地面尘线：一条细长的擦痕 + 几粒扬尘。
+    // 不用 thrust 锥 —— 锥形气浪读作"枪尖捅出去"，而冲锋是"人撞过去"。
+    const dist = a.dist || (a.dash && a.dash.dist) || 84;
+    push({ line: { ang: base, len: dist, w: 1.1 }, t: 0.30, max: 0.30 });
+    for (let i = 1; i <= 5; i++) {
+      push({
+        x: x + Math.cos(base) * dist * i / 5, y: y + Math.sin(base) * dist * i / 5,
+        dot: 3, t: 0.26, max: 0.26,
+      });
+    }
+
+  } else if (shape === 'plant') {
+    // 插地：脚下一小圈尘
+    push({ ring: true, R: 16, t: 0.30, max: 0.30 });
+
+  } else if (shape === 'ring') {
+    push({ ring: true, R: reach * 0.9, t: 0.34, max: 0.34 });
     for (let i = 0; i < 14; i++) {
       const ang = i / 14 * Math.PI * 2;
-      burst(x + Math.cos(ang) * 18, y + Math.sin(ang) * 18, W.trail[1], 2, 90);
+      burst(x + Math.cos(ang) * 18, y + Math.sin(ang) * 18, col[1], 2, 90);
     }
-  } else if (a.arc && a.arc < 1.8) {
-    slashGhosts.push({ x, y, thrust: base, len: reach * 1.05, colors: W.trail, t: 0.24, max: 0.24 });
+
+  } else if (shape === 'thrust') {
+    push({ thrust: base, len: reach * 1.05, t: 0.24, max: 0.24 });
+
   } else {
-    slashGhosts.push({ x, y, a0: base - arc / 2, a1: base + arc / 2, R: reach * 0.85, colors: W.trail, t: 0.26, max: 0.26 });
+    push({ a0: base - arc / 2, a1: base + arc / 2, R: reach * 0.85, t: 0.26, max: 0.26 });
   }
 }
 
@@ -2813,14 +2929,21 @@ function execArt(a) {
   const aim = base + (a.back ? Math.PI : 0);
   const [fx, fy] = DIRV[player.dir];
   player.lastHitFam = fam;
-  player.swing = {
-    fam, base: aim, cast: true,
-    sw: { mode: a.fx === 'proj' ? 'thrust' : 'swing', a0: 0, a1: 0, dur: 0.22 },
-    t: 0.22, dur: 0.22,
-  };
+  // 动作：招式自带 pose 就用它；没写的 56 招退回旧行为（武器定在朝向，一下都不动）。
+  // 以前这里是写死的 a0:0 / a1:0 —— 64 招全是"人站着、武器不动"，
+  // 比普攻（每兵器三段、各有 a0/a1/lunge）还单调。这是"用哪个招式都一样"的第一层原因。
+  const ps = a.pose || null;
+  const psw = ps
+    ? { mode: ps.mode || 'swing', a0: ps.a0 || 0, a1: ps.a1 || 0, dur: ps.dur || 0.22, ease: ps.ease }
+    : { mode: a.fx === 'proj' ? 'thrust' : 'swing', a0: 0, a1: 0, dur: 0.22 };
+  player.swing = { fam, base: aim, cast: true, sw: psw, t: psw.dur, dur: psw.dur };
+  // 收招后的保持（地裂：落地后前倾 0.4 息不动）—— 收招空档也是重量的一部分
+  player.holdT = (ps && ps.mode !== 'plant' && ps.hold) ? ps.hold : 0;
   AUDIO.play(a.fx === 'bolt' ? 'thunder' : a.fx === 'proj' ? 'qi' :
     a.fx === 'buff' ? 'levelup' :
-    a.fx === 'dash' || a.fx === 'pull' ? 'dash' : 'slash', fam);
+    a.fx === 'dash' || a.fx === 'pull' || a.fx === 'charge' ? 'dash' :
+    a.fx === 'boomerang' ? 'boomerang' :
+    a.fx === 'cleave' ? 'windup' : 'slash', fam);
 
   if (a.fx === 'melee') {
     const reach = (a.reach || 40) * (1 + artBuff('reachPct') / 100);
@@ -2838,6 +2961,11 @@ function execArt(a) {
       // 半径给到 130 的环身技（开天辟地）不做角度筛；小范围扇面才筛
       if (arc < Math.PI * 1.9 && diff > arc / 2 && d > 15) continue;
       cand.push({ e, d, ang: Math.atan2(dy, dx) });
+    }
+    // 眩晕击：只砸最近的那一个 —— 横抡打的是太阳穴，不是扫一片
+    if (a.nearestOnly && cand.length > 1) {
+      cand.sort((p, q) => p.d - q.d);
+      cand.length = 1;
     }
     const bb = a.backBonus || 1;   // 回身反打：反手一记格外狠
     const strike = (t, k) => {
@@ -2886,6 +3014,101 @@ function execArt(a) {
       });
     }
     burst(player.x + fx * 12, player.y - 8 + fy * 12, W.trail[0], 6, 55);
+
+  } else if (a.fx === 'boomerang') {
+    // 回旋锤：锤脱手飞出去，走一条外凸弧线，再回到手上。
+    // 这是锤唯一一招"武器离手" —— 它存在的意义是让玩家知道：锤也可以不砸，可以扔。
+    const dist = a.dist || 200;
+    const dur = a.flight || 0.66;
+    const col = artColor(a, W.trail);
+    artSwingFx(a, aim, dist, a.arc || 1.6);
+    const mesh = quad(tex(weaponIcon('hammer', 3, 0, col[0])), 15, 15);
+    boomerangs.push({
+      art: a, ox: player.x, oy: player.y - 8, ang: aim,
+      x: player.x, y: player.y - 8, dist, bulge: a.bulge || 26,
+      p: 0, dur, col, mesh, hitSet: new Set(),
+    });
+    // 飞出去那半秒，手上是空的（不然锤一边在手里一边在天上）
+    player.throwHide = dur + 0.08;
+    AUDIO.play('boomerang');
+
+  } else if (a.fx === 'shockwave') {
+    // 震地：环形，但**有扩散速度** —— 波前到达才结算，远处的人晚半拍才飞。
+    // 和「碎骨锤」的区别不是半径大小，是"一个点"对"一个正在扩大的环"。
+    const R = (a.radius || 84) * (1 + artBuff('reachPct') / 100);
+    artSwingFx(a, aim, R, 6.28);
+    waves.push({
+      art: a, x: player.x, y: player.y - 8, r: 6, max: R,
+      speed: a.speed || 240, col: artColor(a, W.trail), hitSet: new Set(),
+    });
+    shakeX += 8; shakeY += 8;
+    hitstop = Math.max(hitstop, 0.10);
+
+  } else if (a.fx === 'charge') {
+    // 冲锋锤：直线冲出去，**撞到第一个就停**。
+    // 现有的 dash 全都穿过所有敌人 —— "会停"这件事才是"冲锋"有重量的原因。
+    // 停的判据是"身体碰上"（12 + 目标体型），不是"进入伤害半径"：
+    // 按伤害半径算的话，离着 30px 就停住了，人还没碰到对方。
+    const dist = a.dist || 84;
+    const col = artColor(a, W.trail);
+    const ox = player.x, oy = player.y;
+    const steps = 16;
+    let hitOne = null, nx = ox, ny = oy;
+    for (let i = 1; i <= steps; i++) {
+      const sx = ox + Math.cos(aim) * dist * i / steps;
+      const sy = oy + Math.sin(aim) * dist * i / steps;
+      if (!canStand(sx, sy)) break;
+      nx = sx; ny = sy;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (Math.hypot(sx - e.x, sy - (e.y - e.h * 0.5)) > 12 + e.h * 0.35) continue;
+        hitOne = e; break;
+      }
+      if (hitOne) break;
+    }
+    artSwingFx(a, aim, dist, a.arc || 1.6);
+    afterimage(ox, oy - 8, playerTex[player.dir][0], 16, 18);
+    player.x = nx; player.y = ny;
+    player.iframe = Math.max(player.iframe, a.iframe || 0.18);
+    if (hitOne) {
+      const r = rollDamage(a.mul, { skill: true });
+      const da = Math.atan2(hitOne.y - player.y, hitOne.x - player.x);
+      const dealt = hitEnemy(hitOne, {
+        dmg: r.dmg, crit: r.crit, pierceDef: a.pierceDef || 0,
+      }, da, a.kb || 16);
+      afterArtHit(hitOne, a, dealt, da);
+      shakeX += 5; shakeY += 5;
+      hitstop = Math.max(hitstop, 0.07);
+      burst(player.x + Math.cos(aim) * 10, player.y - 8 + Math.sin(aim) * 10, col[0], 12, 90);
+    }
+    AUDIO.play('dash');
+
+  } else if (a.fx === 'cleave') {
+    // 开天辟地：正前方一条长条，沿路径全中，中线更狠。
+    // 以前它是 360° 圈身、半径 130 —— **开天辟地是一条线，不是一个圆。**
+    const len = (a.len || 132) * (1 + artBuff('reachPct') / 100);
+    const half = (a.width || 58) / 2;
+    const ux = Math.cos(aim), uy = Math.sin(aim);
+    const ox = player.x, oy = player.y - 8;
+    artSwingFx(a, aim, len, a.arc || 1.6);
+    for (const e of enemies) {
+      if (e.dead) continue;
+      const ex = e.x - ox, ey = (e.y - e.h * 0.5) - oy;
+      const along = ex * ux + ey * uy;
+      if (along < -6 || along > len) continue;
+      const lat = Math.abs(-ex * uy + ey * ux);
+      if (lat > half + e.h * 0.3) continue;
+      const r = rollDamage(a.mul, { skill: true });
+      const cb = (a.centerBonus && lat < half * 0.42) ? a.centerBonus : 1;
+      const da = Math.atan2(ey, ex);
+      const dealt = hitEnemy(e, {
+        dmg: Math.round(r.dmg * cb), crit: r.crit, pierceDef: a.pierceDef || 0,
+      }, da, a.kb || 12);
+      afterArtHit(e, a, dealt, da);
+    }
+    shakeX += 12; shakeY += 12;
+    hitstop = Math.max(hitstop, 0.14);
+    AUDIO.play('quake');
 
   } else if (a.fx === 'spin') {
     player.artSpin = {
@@ -3014,19 +3237,29 @@ function execArt(a) {
     if (def.shieldPct) {
       player.shield = Math.max(player.shield, Math.round(maxHp() * def.shieldPct / 100));
     }
-    slashGhosts.push({
-      x: player.x, y: player.y - 8, ring: true, R: 26,
-      colors: W.trail, t: 0.42, max: 0.42,
-    });
+    // 铁壁：锤插在地上，人半蹲在它后面 —— 增益类招式以前完全没有表现，
+    // 玩家看不出自己处于什么状态。这一招是这条规矩的样板。
+    if (a.pose && a.pose.mode === 'plant') player.plantT = dur;
+    if (a.shape) {
+      artSwingFx(a, aim, 20, 1.6);
+    } else {
+      slashGhosts.push({
+        x: player.x, y: player.y - 8, ring: true, R: 26,
+        colors: W.trail, t: 0.42, max: 0.42,
+      });
+    }
     burst(player.x, player.y - 8, C.gold3, 14, 70);
     msg(a.name + ' · ' + dur + ' 息', C.gold3);
 
   } else if (a.fx === 'zone') {
     // 地面区域：火雨 / 地裂 / 定军 / 千刃 / 铁蒺藜
     const z = a.zone || {};
+    // 招式自带形状的才画自己的刀光；没写的 56 招保持 P6 的样子，不擅自加东西
+    if (a.shape) artSwingFx(a, aim, z.radius || 30, 1.6);
     const n = z.count || 1;
     const kind = a.status && a.status.kind;
-    const col = kind === 'burn' || kind === 'poison' ? C.red3 : kind === 'stun' ? C.gold3 : C.jade3;
+    const col = a.color ? a.color[0]
+      : kind === 'burn' || kind === 'poison' ? C.red3 : kind === 'stun' ? C.gold3 : C.jade3;
     // 一片区域的伤害要摊到每个分片上，否则"四道地裂"就是四倍伤害
     const per = z.once ? 1 : (n > 1 ? n : 1);
     for (let i = 0; i < n; i++) {
@@ -3047,6 +3280,9 @@ function execArt(a) {
         t: z.dur || 3, max: z.dur || 3,
         tick: z.tick || 0.4, tickGap: z.tick || 0.4,
         art: a, once: !!z.once, color: col,
+        // 依次裂开：第 i 段晚 i×stagger 息才出现。
+        // 四段一起刷出来，玩家看到的只是一块红斑，读不出"裂缝往前裂"。
+        delay: i * (z.stagger || 0),
         mul: (a.mul || 1) / per,
       });
     }
@@ -3107,14 +3343,95 @@ function clearArts() {
   if (player.orbs) for (const o of player.orbs) scene.remove(o.mesh);
   player.orbs = null; player.orbArt = null; player.orbT = 0;
   player.artSpin = null; player.blinkQ = null;
+  // 抛出去还没回来的锤 / 还在扩的冲击波：mesh 得一起收，否则换局之后
+  // 天上会留着一把没人管的锤，而且它还会继续打人。
+  for (const b of boomerangs) scene.remove(b.mesh);
+  boomerangs.length = 0; waves.length = 0;
+  player.throwHide = 0; player.plantT = 0; player.holdT = 0;
   // 地面区域、增益、一次性标记都是"这一趟"的东西：跨局残留会让玩家一进游戏
   // 就白捡一层增益，或者脚底下踩着上一局点下的火雨。
   zones.length = 0;
   player.artBuffs = []; player.forceCrit = 0; player.nextDmg = 0;
   for (const k in artCds) delete artCds[k];
 }
+// ---- 抛出去的兵器（回旋锤）----
+// 去程 → 顶点 → 回程，回到手上才结束。同一个目标整招只吃一次，
+// 但"去程打一个人、回程打另一个人"是允许的 —— 这才叫扔出去。
+function updateBoomerangs(dt) {
+  for (let i = boomerangs.length - 1; i >= 0; i--) {
+    const b = boomerangs[i];
+    b.p += dt / b.dur;
+    if (b.p >= 1) {
+      // 回手：手上接住的那一下
+      burst(b.ox, b.oy, b.col[0], 6, 60);
+      AUDIO.play('boomerang', 'back');
+      scene.remove(b.mesh);
+      boomerangs.splice(i, 1);
+      continue;
+    }
+    // 外凸弧线：前一半出去，后一半回来；顶点在 0.5，侧向鼓包由 bulge 给
+    const out = b.p < 0.5 ? b.p * 2 : (1 - b.p) * 2;
+    const bulge = Math.sin(out * Math.PI) * b.bulge;
+    const px = b.ox + Math.cos(b.ang) * b.dist * out - Math.sin(b.ang) * bulge;
+    const py = b.oy + Math.sin(b.ang) * b.dist * out + Math.cos(b.ang) * bulge;
+    b.x = px; b.y = py;
+    b.mesh.position.set(px, py, 0);
+    b.mesh.renderOrder = 1500 + Math.round(py);
+    b.mesh.rotation.z += dt * 22;
+    for (const e of enemies) {
+      if (e.dead || b.hitSet.has(e)) continue;
+      if (Math.hypot(px - e.x, py - (e.y - e.h * 0.5)) > 13 + e.h * 0.4) continue;
+      b.hitSet.add(e);
+      const r = rollDamage(b.art.mul, { skill: true });
+      const da = Math.atan2(py - (e.y - e.h * 0.5), px - e.x);
+      const dealt = hitEnemy(e, {
+        dmg: r.dmg, crit: r.crit, pierceDef: b.art.pierceDef || 0,
+      }, da, b.art.kb || 10);
+      afterArtHit(e, b.art, dealt, da);
+      burst(px, py, b.col[0], 8, 70);
+    }
+    if (Math.random() < dt * 26) burst(px, py, b.col[1], 1, 18);
+    // 尘迹：每 40ms 在锤的位置留一个淡点。飞出去再回来这件事，
+    // 光看锤本身是读不出轨迹的 —— 一条弧形的尾巴才让"回旋"成立。
+    b.trailT = (b.trailT || 0) - dt;
+    if (b.trailT <= 0) {
+      b.trailT = 0.04;
+      slashGhosts.push({ x: px, y: py, dot: 4, colors: b.col, t: 0.26, max: 0.26 });
+    }
+  }
+}
+
+// ---- 冲击波（震地）----
+// 波前按 speed 往外走，走到谁身上才结算 —— 远处的人晚半拍才飞。
+// 这一拍就是"震地"和"半径内立刻受伤"的全部区别。
+function updateWaves(dt) {
+  for (let i = waves.length - 1; i >= 0; i--) {
+    const w = waves[i];
+    w.r += w.speed * dt;
+    for (const e of enemies) {
+      if (e.dead || w.hitSet.has(e)) continue;
+      const d = Math.hypot(e.x - w.x, (e.y - e.h * 0.5) - w.y);
+      if (d > w.r + e.h * 0.3) continue;
+      w.hitSet.add(e);
+      const r = rollDamage(w.art.mul, { skill: true });
+      const da = Math.atan2((e.y - e.h * 0.5) - w.y, e.x - w.x);
+      const dealt = hitEnemy(e, {
+        dmg: r.dmg, crit: r.crit, pierceDef: w.art.pierceDef || 0,
+      }, da, w.art.kb || 12);
+      afterArtHit(e, w.art, dealt, da);
+      burst(e.x, e.y - 6, w.col[0], 7, 70);
+    }
+    if (w.r >= w.max) {
+      burst(w.x, w.y, w.col[1], 10, 90);
+      waves.splice(i, 1);
+    }
+  }
+}
+
 function updateArts(dt) {
   for (const k in artCds) if (artCds[k] > 0) artCds[k] -= dt;
+  updateBoomerangs(dt);
+  updateWaves(dt);
 
   // ---- 旋转（血战八方 / 舞棍）----
   const sp = player.artSpin;
@@ -3234,6 +3551,8 @@ function updateArts(dt) {
   // ---- 玩家留下的地面区域（火雨 / 地裂 / 定军 / 千刃 / 铁蒺藜）----
   for (let i = zones.length - 1; i >= 0; i--) {
     const z = zones[i];
+    // 依次裂开的段：还没轮到它，就还没长出来（也不能开始计时）
+    if (z.delay > 0) { z.delay -= dt; continue; }
     z.t -= dt;
     if (z.once) {
       // 陷阱：敌人踩进来才响，响过就没了 —— 所以它不是"持续区域"
@@ -5769,6 +6088,10 @@ function update(dt) {
   player.atkCd -= dt; player.atkT -= dt; player.dashT -= dt;
   player.dashCd -= dt; player.flash -= dt; player.iframe -= dt; player.windCd -= dt;
   player.hurtFlash = Math.max(0, player.hurtFlash - dt);
+  // P10 的三个"动作余韵"计时：锤离手 / 锤插地 / 收招前倾
+  player.throwHide = Math.max(0, (player.throwHide || 0) - dt);
+  player.plantT = Math.max(0, (player.plantT || 0) - dt);
+  player.holdT = Math.max(0, (player.holdT || 0) - dt);
   comboPulse = Math.max(0, comboPulse - dt * 4);
   if (player.atkCd <= 0) player.atkBuf -= dt;
   skills.qi.cd -= dt; skills.wu.cd -= dt; skills.thunder.cd -= dt; wuT -= dt;
@@ -6294,8 +6617,10 @@ function update(dt) {
   for (const g of ghosts) { g.t -= dt; g.mesh.material.opacity = Math.max(0, g.t / 0.22) * 0.42; }
   ghosts = ghosts.filter(g => { if (g.t <= 0) { scene.remove(g.mesh); return false; } return true; });
 
-  for (const g of slashGhosts) g.t -= dt;
-  slashGhosts = slashGhosts.filter(g => g.t > 0);
+  // delay：还没轮到它出现（地裂的四段依次裂开）。等的时候不扣寿命，
+  // 否则"晚出来的那一段"一出生就只剩半条命。
+  for (const g of slashGhosts) { if (g.delay > 0) { g.delay -= dt; continue; } g.t -= dt; }
+  slashGhosts = slashGhosts.filter(g => g.t > 0 || g.delay > 0);
 
   for (const n of dmgNums) { n.t -= dt; n.y -= dt * 26; n.x += n.vx * dt; }
   dmgNums = dmgNums.filter(n => n.t > 0);
@@ -6325,12 +6650,35 @@ const HAND_OFF = { right: [4, 2], left: [-4, 2], up: [-3, 1], down: [3, 1] };
 
 // 挥砍角度曲线：主手用真实进度，副手用滞后进度 + 绕朝向镜像，
 // 这样两把刀一正一反、有先有后，才看得出是"双刀交替劈"。
+//
+// P10：加 ease 与六种新动作。ease 不写就是原来的 out 曲线 ——
+// 普攻和另外 56 招一个像素都不动，这是"只加不改"的前提。
 function swingAng(sw, base, p) {
-  const e = 1 - Math.pow(1 - Math.max(0, Math.min(1, p)), 2.2);
+  const q = Math.max(0, Math.min(1, p));
+  let e;
+  if (sw.ease === 'in') e = Math.pow(q, 2.4);                    // 慢蓄猛落
+  else if (sw.ease === 'both') e = q < 0.5 ? 2 * q * q : 1 - Math.pow(-2 * q + 2, 2) / 2;
+  else e = 1 - Math.pow(1 - q, 2.2);                             // 快起慢收（原样）
   if (sw.mode === 'ring') return { ang: base - Math.PI * 1.1 + e * Math.PI * 2.2, off: 0, cast: false };
   if (sw.mode === 'thrust') return { ang: base, off: e * 9, cast: false };
   if (sw.mode === 'cast') return { ang: base - 0.62 + e * 0.42, off: e * 3, cast: true };
-  return { ang: base + sw.a0 + (sw.a1 - sw.a0) * e, off: 0, cast: false };
+  const sweep = { ang: base + sw.a0 + (sw.a1 - sw.a0) * e };
+  // 过顶下砸 / 砸地：从身后上方扫到身前，同时**先回拉再前送** ——
+  // "举起"和"落下"两拍都在，才看得出这一锤有重量。
+  if (sw.mode === 'overhead' || sw.mode === 'overheadBig' || sw.mode === 'slam' || sw.mode === 'slamLow') {
+    const big = sw.mode === 'overheadBig' ? 1.6 : 1;
+    return { ang: sweep.ang, off: -3.5 * big * (1 - e) + 7 * big * e * e, cast: false };
+  }
+  // 横抡：起手在身体的**另一侧**（a0 为正，落在下方），扫回正前。
+  // 方向轴是左右，不是上下 —— 这是它和「碎骨锤」唯一但足够清楚的区别。
+  if (sw.mode === 'sideSwing') return { ang: sweep.ang, off: 2.5 * e - 1.5, cast: false };
+  // 抛出：手臂前甩一下，锤就离手了（锤的贴图在 boomerangs 那条通道里画）
+  if (sw.mode === 'throw') return { ang: sweep.ang, off: e * 4, cast: false };
+  // 插地：锤往下沉，之后不跟手（立在地上的那把单独画）
+  if (sw.mode === 'plant') return { ang: sweep.ang, off: -e * 3, cast: false };
+  // 冲锋：锤端在正前方不动，动的是人
+  if (sw.mode === 'charge') return { ang: base + sw.a0, off: e * 10, cast: false };
+  return { ang: sweep.ang, off: 0, cast: false };
 }
 
 function drawWeaponHeld(camX, camY) {
@@ -6345,6 +6693,17 @@ function drawWeaponHeld(camX, camY) {
   const dual = fam === 'dual';
   let ang = 0, alpha = 1, off = 0, casting = false;
   let dualAng = 0, dualP = 0, hasDual = false;
+
+  // P10：锤离手时手上是空的；锤插地时它立在脚边、不跟手。
+  // 这两种状态以前不存在 —— 因为此前没有任何一招会让武器离开手。
+  if (player.throwHide > 0 || player.plantT > 0) {
+    if (player.plantT > 0) {
+      // 插在地上的锤：锤头朝上、微微后仰；护体时锤面有一层薄光
+      drawWeaponAt(octx, cv, px + 8, py + 7, -Math.PI / 2 - 0.10, 1, HELD_SCALE * 1.15);
+      drawRareAura(octx, px + 8, py - 7, 6, W.trail[0], 0.40 + Math.sin(time * 6) * 0.18, time, 0);
+    }
+    return;
+  }
 
   if (player.swing) {
     const sw = player.swing.sw;
@@ -6361,6 +6720,9 @@ function drawWeaponHeld(camX, camY) {
       dualAng = base * 2 - swingAng(sw, base, dualP).ang;
       hasDual = true;
     }
+  } else if (player.holdT > 0) {
+    // 收招保持（地裂落地后的前倾）：人不动，武器停在落点上 —— 收招空档也是重量
+    ang = base + 0.80;
   } else {
     // 待机：贴着手斜垂，缩小到掌中尺寸
     if (player.dir === 'left') ang = Math.PI - 1.05;
@@ -6681,6 +7043,45 @@ function drawSundial() {
   }
 }
 
+// 爆点：一击落在一个点上的表现（碎骨锤 / 震地中心 / 裂缝节点）。
+// 径向渐变 + 白芯，读作"砸出来的坑"，而不是一块色斑。
+function drawDotFx(ctx, x, y, R, colors, alpha) {
+  const r = Math.max(1, R);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r * 1.9);
+  g.addColorStop(0, rgba(C.white, 0.85 * alpha));
+  g.addColorStop(0.35, rgba(colors[0], 0.60 * alpha));
+  g.addColorStop(1, rgba(colors[0], 0));
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r * 1.9, 0, 6.28); ctx.fill();
+  ctx.restore();
+}
+
+// 一道有方向的刃光（纵向巨劈 / 裂缝 / 尘线）：中段最亮、两端收细。
+function drawLineFx(ctx, x, y, ln, colors, alpha) {
+  const len = ln.len || 20, w = ln.w || 1.5;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.translate(Math.round(x), Math.round(y));
+  ctx.rotate(ln.ang || 0);
+  const g = ctx.createLinearGradient(0, 0, len, 0);
+  g.addColorStop(0, rgba(colors[0], 0.12 * alpha));
+  g.addColorStop(0.5, rgba(colors[0], 0.70 * alpha));
+  g.addColorStop(1, rgba(C.white, 0.85 * alpha));
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(0, -w * 0.7);
+  ctx.lineTo(len * 0.80, -w * 2.0);
+  ctx.lineTo(len, 0);
+  ctx.lineTo(len * 0.80, w * 2.0);
+  ctx.lineTo(0, w * 0.7);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = rgba(C.white, 0.72 * alpha);
+  ctx.fillRect(len * 0.15, -w * 0.35, len * 0.85, w * 0.7);
+  ctx.restore();
+}
+
 function drawOverlay(camX, camY) {
   octx.clearRect(0, 0, LW, LH);
   octx.imageSmoothingEnabled = false;
@@ -6688,10 +7089,22 @@ function drawOverlay(camX, camY) {
 
   // ---- 世界层特效 ----
   for (const g of slashGhosts) {
+    if (g.delay > 0) continue;
     const a = Math.max(0, g.t / g.max);
-    if (g.ring) drawRingFx(octx, g.x - camX, g.y - camY, g.R * (1.4 - a * 0.4), g.colors, a, 1);
+    if (g.ring) {
+      // grow：从 r0 长到 r1（冲击波 / 扩散环）；否则是原来"由外收拢"的收势
+      const R = g.grow ? g.grow[0] + (g.grow[1] - g.grow[0]) * (1 - a) : g.R * (1.4 - a * 0.4);
+      drawRingFx(octx, g.x - camX, g.y - camY, R, g.colors, a, 1);
+    }
     else if (g.thrust) drawThrustFx(octx, g.x - camX, g.y - camY, g.thrust, g.len, g.colors, a * 0.9, 1);
+    else if (g.dot) drawDotFx(octx, g.x - camX, g.y - camY, g.dot * (0.5 + a * 0.8), g.colors, a);
+    else if (g.line) drawLineFx(octx, g.x - camX, g.y - camY, g.line, g.colors, a);
     else drawArcFx(octx, g.x - camX, g.y - camY, g.a0, g.a1, g.R, g.colors, a * 0.9, 1);
+  }
+  // 冲击波的波前：按**真实半径**画，所以看得见它往外走
+  for (const w of waves) {
+    const a = Math.max(0, 1 - w.r / w.max);
+    drawRingFx(octx, w.x - camX, w.y - camY, w.r, w.col, a * 0.9, 1);
   }
   for (const b of boltFx) {
     const a = b.t / b.max;
@@ -7417,6 +7830,7 @@ window.__game = {
   // 招式 / 专精
   ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_FX, ART_SLOT_LABEL, PROF_MAX,
   artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower,
+  artShape, artPose, artColor, ART_SHAPES, ART_POSES, swingAng,
   castArt, execArt, updateArts, clearArts, autoLoadout, addProf, applyStatus, afterArtHit,
   renderArts, showArtPage, artMaxOf, artCdOf,
   get artCds() { return artCds; },
@@ -7429,6 +7843,9 @@ window.__game = {
   artBuff, artBuffActive, dealDot,
   get artBuffs() { return player.artBuffs; },
   get zones() { return zones; },
+  // P10 的两条新通道：抛出去还没回来的兵器 / 还在往外扩的冲击波
+  get boomerangs() { return boomerangs; },
+  get waves() { return waves; },
   setLoadout(ids) {
     player.loadout = new Array(ART_SLOTS).fill(null);
     (ids || []).slice(0, ART_SLOTS).forEach((id, i) => { player.loadout[i] = id; });
