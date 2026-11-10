@@ -4,6 +4,8 @@
 //   node tools/run.js devtest            跑 devtest.js 的全量断言，打印 #devout
 //   node tools/run.js eval tools/weapons.js   在页面里执行某个 IIFE 片段并打印返回值
 //   node tools/run.js shot out.png 1280 720   截图
+//   PAGE=dist/index.html node tools/run.js online     验打包产物是否真的能跑
+//   URL=https://... node tools/run.js online          验线上（跳过本地服务）
 //
 // 为什么要自建 http server：nohup 起的静态服务会随 shell 退出被回收，
 // 脚本自己 listen 才不会被半路掐掉。
@@ -77,7 +79,12 @@ async function waitFor(fn, timeout, label) {
 
 (async () => {
   const mode = process.argv[2] || 'devtest';
-  const srv = await serve();
+  // URL= 直接打远程地址（线上验证用）。
+  // 为什么需要：打包版白屏时，HTML 里的文案照样在，grep 全都能命中 ——
+  // P4/P5 就是这么把坏掉的 dist 发上线的，连着两轮。
+  // 只有真的把页面打开、等 __game 出现、跑一遍自检，才算验过。
+  const REMOTE = process.env.URL || '';
+  const srv = REMOTE ? null : await serve();
   const chrome = spawn(CHROME, [
     '--headless=new', '--disable-gpu-sandbox', '--no-sandbox', '--no-first-run',
     '--no-proxy-server', '--proxy-bypass-list=*',
@@ -116,13 +123,69 @@ async function waitFor(fn, timeout, label) {
     // 传 PAGE=逍遥行.html 才能验打包产物 —— 单文件版走的是另一套代码路径
     // （build.js 把 ESM 拆成 __M.xxx），module 版绿了不代表它能跑。
     const page = process.env.PAGE || 'index.html';
-    const url = 'http://127.0.0.1:' + PORT + '/' + encodeURIComponent(page) + '?' + (process.env.QS || 'dev=1');
+    const url = REMOTE || ('http://127.0.0.1:' + PORT + '/' + encodeURIComponent(page) + '?' + (process.env.QS || 'dev=1'));
     await api.send('Page.navigate', { url });
     await sleep(500);
     await waitFor(() => api.send('Runtime.evaluate', { expression: '!!window.__game', returnByValue: true })
       .then(r => r.result.value).catch(() => false), 25000, '等 __game 就绪');
 
-    if (mode === 'devtest') {
+    if (mode === 'online') {
+      // 线上健康检查：能起、有心法、有道人、画面真的画出来了、控制台没报错。
+      // 只查关键字是不够的 —— 白屏时 HTML 里的字一个不少。
+      await sleep(1200);
+      const r = await api.send('Runtime.evaluate', {
+        returnByValue: true,
+        expression: `(() => {
+          const g = window.__game || {};
+          // 页面有两块画布：#gl 是 webgl2（地面光照），#ov 才是 2d 覆盖层。
+          // 千万别对 #gl 试 getContext('2d') —— 那会把它占成 2d，
+          // three.js 随后就报 "Canvas has an existing context of a different type"，
+          // 一条本来不存在的报错就这么被探针造出来了（踩过一次）。
+          const cv = document.getElementById('ov')
+            || [].slice.call(document.querySelectorAll('canvas'))
+              .filter(c => c.id !== 'gl')
+              .sort((a, b) => b.width * b.height - a.width * a.height)[0] || null;
+          let painted = 'no-canvas', err = '';
+          if (cv && cv.width > 0 && cv.height > 0) {
+            try {
+              const c2 = cv.getContext('2d');
+              if (!c2) { painted = 'no-ctx'; }
+              else {
+                const d = c2.getImageData(0, 0, Math.min(60, cv.width), Math.min(60, cv.height)).data;
+                painted = false;
+                for (let i = 0; i < d.length; i += 4) {
+                  if (d[i] || d[i+1] || d[i+2]) { painted = true; break; }
+                }
+              }
+            } catch (e) { painted = 'threw'; err = e.message; }
+          }
+          return {
+            ok: !!window.__game,
+            mantras: (g.MANTRA_IDS || []).length,
+            main: (g.MAIN_IDS || []).length,
+            sub: (g.SUB_IDS || []).length,
+            npc: !!((g.npcs || []).find(n => n && n.npc === 'daoshi')),
+            shop: !!(g.shops && g.shops.daoshi),
+            canvas: cv ? (cv.id || '?') + ' ' + cv.width + 'x' + cv.height : 'none',
+            painted, err,
+            title: document.title,
+            reqs: performance.getEntriesByType('resource').length,
+          };
+        })()`,
+      });
+      drainLogs();
+      const v = r.result.value || {};
+      const bad = [];
+      if (!v.ok) bad.push('__game 没起来（白屏）');
+      if (v.mantras !== 22) bad.push('心法数 ' + v.mantras + ' ≠ 22');
+      if (!v.npc) bad.push('游方道人不在 NPC 表里');
+      if (!v.shop) bad.push('道人商店没注册');
+      if (v.painted !== true) bad.push('画面没画出来（painted=' + v.painted + ' ' + (v.err || '') + '）');
+      if (logs.length) bad.push('控制台有错：' + logs.slice(0, 3).join(' | '));
+      console.log(JSON.stringify(v, null, 2));
+      console.log(bad.length ? '\n线上验证失败：\n- ' + bad.join('\n- ') : '\n线上验证通过');
+      process.exitCode = bad.length ? 1 : 0;
+    } else if (mode === 'devtest') {
       const out = await waitFor(async () => {
         const r = await api.send('Runtime.evaluate', {
           expression: `(() => { const b = document.getElementById('devout'); return b ? b.innerText : ''; })()`,
@@ -178,6 +241,6 @@ async function waitFor(fn, timeout, label) {
   } finally {
     if (api) api.close();
     chrome.kill();
-    srv.close();
+    if (srv) srv.close();   // URL= 打远程时没有本地服务
   }
 })();

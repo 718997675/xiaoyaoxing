@@ -50,6 +50,19 @@ PAGE="逍遥行.html" QS=x=1 node tools/run.js eval tools/arts.js
 PAGE="逍遥行.html" QS=x=1 node tools/run.js eval tools/mantras.js   # 应该和 module 版一样全绿
 ```
 
+**发布后必须验线上**（`URL=` 直接打远程地址，会等 `__game` 就绪、查心法数 / 道人 /
+画布是否真的画出了像素 / 控制台有没有报错）：
+
+```bash
+PAGE=dist/index.html node tools/run.js online                        # 本地先验打包产物
+URL="https://718997675.github.io/xiaoyaoxing/" node tools/run.js online   # 再验线上
+URL="https://718997675.github.io/xiaoyaoxing/" node tools/run.js shot /tmp/online.png 1280 720
+```
+
+**只 grep 关键字不算验过**。打包版白屏时 HTML 里的文案照样在，grep 全都能命中 ——
+P4 / P5 连着两轮就是这么把坏掉的 `dist` 发上线的。要真的把页面打开、等 `__game` 出现、
+确认画布上有像素。
+
 截图想拍"某一瞬间"（毒雾正在炸、Boss 正在抬手）用环境变量：
 
 ```bash
@@ -203,6 +216,13 @@ dawn-s1/
   反查 ORDER，漏了直接 build 失败。
 - **发布后一定要真的打开一次线上页面**，不能只 `grep` 关键字 —— 打包版白屏时，
   HTML 里的文案照样在，grep 全都能命中。
+  现在有 `node tools/run.js online`（配 `URL=` 打远程），它会等 `__game` 就绪、
+  查心法数 / 道人 / 画布有没有真的画出像素 / 控制台有没有报错。
+- **验页面时别对 `#gl` 试 `getContext('2d')`**。页面有两块画布：`#gl` 是 webgl2
+  （地面光照），`#ov` 才是 2d 覆盖层。对 `#gl` 请求 2d 会把它占成 2d 类型，
+  three.js 随后报 `Canvas has an existing context of a different type` ——
+  一条本来不存在的报错就这么被探针造出来，然后你会去查一个不存在的 bug。
+  检查像素只读 `#ov`。
 - `PAGE="逍遥行.html"` 可以换入口页跑自检（`tools/run.js`）。传中文文件名要传**原文**，
   它内部会 `encodeURIComponent`，自己先编码一次会变成 `%25E9...` → 404。
 
