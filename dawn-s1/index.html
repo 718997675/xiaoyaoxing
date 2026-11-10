@@ -318,10 +318,13 @@
   #storyPage .sItem .q{font:10px/1.55 SimSun;color:#4A5568;margin-top:2px}
   #storyPage .sItem .lock{font:9px SimSun;color:#8A8268;margin-top:2px}
   /* 三条线索横排：形状本身就在说"一共三条"，比写一行"1/3"有效 */
-  #storyPage .sClue{display:flex;gap:6px;margin-bottom:4px}
-  #storyPage .sClue div{flex:1;background:#DCD2B8;border:1px solid #8A8268;padding:5px 4px;text-align:center}
+  /* 四列网格而不是 flex 横排：P8 之后线索从 6 条涨到 11 条，
+     flex 会让每条只剩 1/11 宽，「木牌 · 第一道纹」这种名字直接挤成竖排。
+     grid 的列宽固定，最后一行也不会被拉伸。 */
+  #storyPage .sClue{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:4px}
+  #storyPage .sClue div{background:#DCD2B8;border:1px solid #8A8268;padding:5px 3px;text-align:center;overflow:hidden}
   #storyPage .sClue div.on{background:#E2E9C8;border-color:#2F6E6A}
-  #storyPage .sClue b{display:block;font:bold 11px SimSun;color:#12161F}
+  #storyPage .sClue b{display:block;font:bold 11px SimSun;color:#12161F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #storyPage .sClue span{font:9px SimSun;color:#8A8268}
 </style>
 </head>

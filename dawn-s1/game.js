@@ -3585,7 +3585,8 @@ function renderStoryLog() {
   const read = player.readLog || {};
   const rows = [];
 
-  // 线索：三条横排，得到一条亮一条
+  // 线索：四列网格，得到一条亮一条。用网格不用横排 —— 11 条横排每条只剩
+  // 不到 60px，「木牌 · 第一道纹」会被压成竖排。
   const cl = player.clues || {};
   const nClue = CLUE_IDS.filter(id => cl[id]).length;
   rows.push('<div class="sSec">线 索 ' + nClue + '/' + CLUE_IDS.length + '</div>');

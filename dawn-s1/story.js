@@ -40,9 +40,16 @@ export const POI = {
   village:    { x: 1900, y: 1330, r: 150, name: '青云集' },
   seal:       { x: 1152, y: 640,  r: 90,  name: '封碑' },
   graveEdge:  { x: 1600, y: 192,  r: 160, name: '北坡乱葬岗' },
+  gravePit:   { x: 1760, y: 400,  r: 90,  name: '挖开的合葬墓' },
   graveHut:   { x: 1952, y: 512,  r: 90,  name: '守墓人小屋' },
   bambooEdge: { x: 700,  y: 900,  r: 130, name: '南岭竹海' },
+  cutterGrave: { x: 520, y: 1040, r: 80,  name: '砍竹人的坟' },
   hunterHut:  { x: 256,  y: 1120, r: 90,  name: '猎户棚' },
+  // 竹桥的坐标不是随手定的：竹海的溪涧是从北缘蜿蜒到南缘的一条实心水带，
+  // 只在三行（tile y=62/76/90）架了桥。这里是中间那处，桥面 tile 是 9。
+  // 桥削断在剧情里是"第二道剑痕"，所以它必须是一座**真的能走过去的桥**，
+  // 玩家站在断口上看见下游卡着另外半截，那一刀才有分量。
+  bambooBridge: { x: 680, y: 1224, r: 70, name: '断掉的竹桥' },
   qinglin:    { x: 288,  y: 1408, r: 110, name: '青鳞潭' },
   workshop:   { x: 864,  y: 1216, r: 100, name: '废弃机坊' },
   caveMouth:  { x: 192,  y: 320,  r: 120, name: '矿口' },
@@ -122,6 +129,27 @@ export const STORY = {
     ],
     onEnd: { flag: 'saw_dig', clue: 'dig' },
   },
+  // P8 · 第一幕正文
+  // 这一幕要回答的问题是"他们到底在挖什么"。答案不能一次给完：
+  // 坟外围只看到土是新的（s_clue_dig）→ 挖开的那座墓里没有尸骨（这里）→
+  // 守墓人不是人（s_a1_keeper_kill）→ 树妖肚子里全是同门的兵器（s_a1_treant）。
+  // 四步一步比一步往里，玩家自己会把"守"这个字拼出来。
+  s_a1_pit: {
+    id: 's_a1_pit', act: 'act1', title: '合葬墓',
+    trigger: { type: 'enter', at: 'gravePit' },
+    need: ['saw_dig'],
+    lines: [
+      { who: 'narrator', text: '坟地中间有一座被挖开的合葬墓。棺盖推到一边，搁在土坡上。' },
+      { who: 'narrator', text: '棺里没有尸骨。' },
+      { who: 'narrator', text: '只有一层白灰，铺得平平整整，像谁特意抹过。' },
+      { who: 'narrator', text: '灰上有一个人形的印子。躺着压出来的那种。' },
+      { who: 'narrator', text: '印子比活人长。两头都多出一截。' },
+      { who: 'narrator', text: '棺盖内侧有一道痕，从上往下劈到底 —— 一刀，劈穿了整块木头。' },
+      { who: 'narrator', text: '断口很新。木头的茬还是白的。' },
+      { who: null, text: '（有人比山贼更早来过这里。他劈开棺盖，看了一眼，又走了。）' },
+    ],
+    onEnd: { flag: 'saw_pit', clue: 'pit' },
+  },
   s_clue_hut: {
     id: 's_clue_hut', act: 'act1', title: '碑，别碰',
     trigger: { type: 'enter', at: 'graveHut' },
@@ -136,6 +164,25 @@ export const STORY = {
     ],
     onEnd: { flag: 'met_gravekeeper' },
   },
+  // 夜里的守墓人。任务里他就是那只「守墓人」，白天在小屋背对着人说话的是同一个影子。
+  // lord 分支的 key 只能是 bossKills 的键 —— 那是 e.type（yinhun），不是显示名，
+  // 所以 label 单独给一个，日志页才不会写着「斩「yinhun」」。
+  s_a1_keeper_kill: {
+    id: 's_a1_keeper_kill', act: 'act1', title: '他没有脸',
+    trigger: { type: 'kill', lord: 'yinhun', label: '守墓人' },
+    need: ['met_gravekeeper'],
+    lines: [
+      { who: 'narrator', text: '守墓人倒下的时候没有出声。' },
+      { who: 'narrator', text: '他的脸是一团白灰。灰散开了，底下还是灰。' },
+      { who: 'narrator', text: '他手里攥着半截香。香是点着的，一直没灭。' },
+      { who: 'narrator', text: '风把灰吹起来，绕着小屋转了半圈，落回碑前。' },
+      { who: 'narrator', text: '地上只剩一件衣服。衣服下面是空的。' },
+      { who: 'narrator', text: '你想起他那句话。他说的是"土你拿去"，不是"我把它给你"。' },
+      { who: null, text: '（他不是人。他是那块碑的影子。）' },
+      { who: null, text: '（碑还在，他还会回来。）' },
+    ],
+    onEnd: { flag: 'killed_keeper' },
+  },
   s_clue_soil: {
     id: 's_clue_soil', act: 'act1', title: '木牌',
     trigger: { type: 'item', relic: 'yin_soil' },
@@ -148,6 +195,27 @@ export const STORY = {
     ],
     onEnd: { flag: 'mark1', clue: 'mark1' },
   },
+  // 第一幕的收束。不写"寨主遗言"—— 寨主是别处的营地首领，玩家未必打得到，
+  // 把主线收在一个玩家可能跳过的人身上，等于把这一幕的结尾交给运气。
+  // 收在树妖身上：它就在坟地尽头，而且是"收了三十年东西"的那一个。
+  // 最关键的是它吐出来的东西能反打主角自己：同制式的刀、同样的三道刻纹。
+  s_a1_treant: {
+    id: 's_a1_treant', act: 'act1', title: '树心是空的',
+    trigger: { type: 'kill', types: ['treant'], label: '千年树妖' },
+    need: ['saw_dig'],
+    lines: [
+      { who: 'narrator', text: '树妖倒下去的时候，根须还在地里抓着。' },
+      { who: 'narrator', text: '它的树心是空的。' },
+      { who: 'narrator', text: '空心里塞着东西：几把刀，一堆铜钱，两副护腕。' },
+      { who: 'narrator', text: '刀都是同一制式。刀鞘上三道刻纹，磨得快平了。' },
+      { who: 'narrator', text: '和你手里这把，一模一样。' },
+      { who: 'narrator', text: '铜钱串在一起，绳子烂了，铜锈结成一块。' },
+      { who: 'narrator', text: '最底下压着一张纸。纸上写着一个名字，被水浸烂了。' },
+      { who: 'narrator', text: '能认出的只有最后一个字：守。' },
+      { who: null, text: '（树妖不是吃人。它是在替谁收东西。）' },
+    ],
+    onEnd: { flag: 'killed_treant', clue: 'treant_hoard' },
+  },
   s_clue_bamboo: {
     id: 's_clue_bamboo', act: 'act2', title: '风里有哭声',
     trigger: { type: 'enter', at: 'bambooEdge' },
@@ -159,6 +227,61 @@ export const STORY = {
       { who: 'narrator', text: '林子里有脚印，不是野兽的。三拨人，三个方向。' },
     ],
     onEnd: { flag: 'saw_bamboo' },
+  },
+  // ---------------- 第二幕正文（P8）----------------
+  // 这一幕的主题是"声音"。猎户说别应，砍竹人的账本写着"他们都听见了"，
+  // 竹海的残碑刻着"节断则竹死"。风穿过竹节像哭 —— 整幕都在讲"有人在里面喊你"。
+  // 真正的危险不是喊声，是你应了之后，声音就换成了你自己的嗓子。
+  s_a2_hut: {
+    id: 's_a2_hut', act: 'act2', title: '别应',
+    trigger: { type: 'enter', at: 'hunterHut' },
+    need: ['mark1'],
+    lines: [
+      { who: 'narrator', text: '猎户棚。吴老六蹲在门口补网。' },
+      { who: 'narrator', text: '网破得很厉害。破口是圆的 —— 不是鱼咬的，也不是刀割的。' },
+      { who: 'w_hunter', text: '往南走，听见有人喊你名字，别应。' },
+      { who: 'narrator', text: '他说这话的时候没抬头。' },
+      { who: 'w_hunter', text: '我兄弟应了。' },
+      { who: 'narrator', text: '针在网眼里停了一下，又接着走。' },
+      { who: 'w_hunter', text: '他应完，那声音就换成了他自己的嗓子。' },
+      { who: 'w_hunter', text: '后半夜我在林子里听见他喊我。喊了一整夜。' },
+      { who: 'narrator', text: '他把补好的网折起来，压在膝上。' },
+      { who: 'w_hunter', text: '天亮了我才敢进去看。人还在。就是不肯出来。' },
+    ],
+    onEnd: { flag: 'met_hunter' },
+  },
+  s_a2_cutter: {
+    id: 's_a2_cutter', act: 'act2', title: '七个土包',
+    trigger: { type: 'enter', at: 'cutterGrave' },
+    need: ['saw_bamboo'],
+    lines: [
+      { who: 'narrator', text: '竹林里有一小块空地，堆着七个土包。' },
+      { who: 'narrator', text: '没有碑。每个土包前插着一根竹节。' },
+      { who: 'narrator', text: '竹节是空的。风过的时候会响。' },
+      { who: 'narrator', text: '七个，七个声音不一样高。' },
+      { who: 'narrator', text: '最边上一个土包是新的。插的竹节还是青的。' },
+      { who: 'narrator', text: '竹节里塞着一张纸，卷成细条。' },
+      { who: 'narrator', text: '纸上写着名字。写了一半，笔停了。' },
+      { who: 'narrator', text: '停笔的地方洇开一团墨。像是写着写着，手被人按住了。' },
+      { who: null, text: '（砍竹的人，一个也没出去。）' },
+    ],
+    onEnd: { flag: 'saw_cutter_grave', clue: 'cutter' },
+  },
+  s_a2_bridge: {
+    id: 's_a2_bridge', act: 'act2', title: '桥是被人削断的',
+    trigger: { type: 'enter', at: 'bambooBridge' },
+    need: ['saw_bamboo'],
+    lines: [
+      { who: 'narrator', text: '竹桥断了一半。' },
+      { who: 'narrator', text: '断口是斜的，一刀削到底。不是踩塌的，也不是水冲的。' },
+      { who: 'narrator', text: '断茬还是青的。' },
+      { who: 'narrator', text: '断掉的那半截被水冲到下游，卡在两块石头中间。' },
+      { who: 'narrator', text: '溪水从它上面翻过去，翻出一道白线。' },
+      { who: 'narrator', text: '有人在前面走。走过去之后，把桥削了。' },
+      { who: 'narrator', text: '他不想让人跟。' },
+      { who: null, text: '（这是第二道。第一道在坟地，劈开的是棺盖。）' },
+    ],
+    onEnd: { flag: 'saw_broken_bridge', clue: 'bridge' },
   },
   s_clue_workshop: {
     id: 's_clue_workshop', act: 'act2', title: '不该有的工坊',
@@ -184,6 +307,26 @@ export const STORY = {
       { who: null, text: '（第二道纹指向西北 —— 西荒石窟。）' },
     ],
     onEnd: { flag: 'mark2', clue: 'mark2' },
+  },
+  // 第二幕的收束。傀儡倒下去露出的东西要能改掉玩家对"工坊"的整个理解：
+  // 不是"有人在这里造傀儡"，是"傀儡先在这里，房子是后来照着它盖的"。
+  // 这条和第三幕的矿道木梁是同一件事的两头 —— 有人比所有人更早，一直在守着。
+  s_a2_puppet: {
+    id: 's_a2_puppet', act: 'act2', title: '它守的不是工坊',
+    trigger: { type: 'kill', types: ['kuilei'], label: '机关傀儡' },
+    need: ['saw_blueprint'],
+    lines: [
+      { who: 'narrator', text: '傀儡散架了。齿轮还在转，转到最后一格，卡住。' },
+      { who: 'narrator', text: '它的胸腔是空的。' },
+      { who: 'narrator', text: '里面立着一块碑。巴掌大，碑面朝里。' },
+      { who: 'narrator', text: '碑上刻着字。笔法和封碑上的一样，一样被凿掉一半。' },
+      { who: 'narrator', text: '凿痕在碑面上，从里往外。' },
+      { who: 'narrator', text: '它不是守工坊的。' },
+      { who: 'narrator', text: '它是被派来守这块碑的。工坊是后来才盖在它外面的。' },
+      { who: 'narrator', text: '梁上的榫头对得那么准，是因为它已经在这儿站了很多年。' },
+      { who: null, text: '（有人在照着它的位置，盖了一座房子。）' },
+    ],
+    onEnd: { flag: 'killed_puppet', clue: 'puppet_stone' },
   },
   s_clue_mine: {
     id: 's_clue_mine', act: 'act3', title: '钉在梁上的剑痕',
@@ -253,13 +396,21 @@ export function storyByAct() {
 // 线索不是任务：任务有"完成/未完成"，线索只有"知道/不知道"。
 // 玩家漏掉一条线索不该被卡住 —— 所以线索只影响木牌上有没有那道纹，
 // 不影响能不能打、能不能开门（开门看三物本身）。
+//
+// 顺序 = 旧事页里的横排顺序，按幕排，不按 id 字母排：
+// 玩家回想事情的时候是按"我先看见什么、后看见什么"想，不是按字典序想。
 export const CLUES = {
   dig:   { name: '坟底三尺', text: '山贼不偷陪葬，只挖坟底三尺的土。土是湿的，闻着是干的。' },
+  pit:   { name: '空棺', text: '合葬墓被挖开，棺里没有尸骨，只有一层抹平的白灰。灰上的人形印子比活人长。' },
   mark1: { name: '木牌 · 第一道纹', text: '无字木牌，牌背三道纹。第一道朝西南。' },
+  treant_hoard: { name: '树心', text: '树妖的树心是空的，塞满同制式的刀。刀鞘上三道刻纹。纸上的名字只剩一个「守」。' },
+  cutter: { name: '七个土包', text: '竹海空地七个土包，七根竹节，风过七个音。新坟里的纸上名字写了一半。' },
+  bridge: { name: '削断的桥', text: '竹桥断口是斜的，一刀削到底，断茬还青。走过的人把桥削了，不想让人跟。' },
   blueprint: { name: '封碑图', text: '竹海工坊里的图纸：碑座、碑身、碑顶，碑后三道槽。落款被磨掉了。' },
+  puppet_stone: { name: '傀儡里的碑', text: '机关傀儡胸腔里立着一块巴掌大的碑，凿痕从里往外。工坊是后来盖在它外面的。' },
   mark2: { name: '木牌 · 第二道纹', text: '第二道朝西北。亮过的那道摸上去是温的。' },
   gap:   { name: '只差三尺', text: '矿道最深处与另一侧只隔一道岩壁。缝里有暖风，也有火把的光。' },
-  mark3: { name: '木牌 · 第三道纹', text: '三道并排，皆指正北。' },
+  mark3: { name: '木牌 · 第三道纹', text: '三道并排，皆指正北。三道同时发烫，木牌在手里震了一下。' },
 };
 export const CLUE_IDS = Object.keys(CLUES);
 
@@ -280,6 +431,15 @@ export const ENV_TEXTS = {
     text: '一块矮碑，没有名字，只刻了四个字：'
       + '「勿启勿视」。字是倒着刻的 —— 刻碑的人不想让躺着的人看见。'
       + '碑背有更小的一行：「我在下面等了三百年，够了。」',
+  },
+  e_grave_pit: {
+    // 放在合葬墓 POI（r=90）的南沿 60px：剧情是走进去自动播，碑要主动按 E。
+    // 两者叠在同一块地上没关系 —— 播的时候按 E 是翻页，播完了按 E 才是读碑。
+    at: { x: 1760, y: 460, r: 34 }, name: '棺盖内侧',
+    text: '棺盖内侧刻着一行小字，是刻的，不是写的：「此处不葬人，只葬名」。'
+      + '下面还有一行更小的：「名葬尽了，就该轮到人了」。'
+      + '刻字的手很稳，最后一笔却拖出去很长 —— 像是刻到一半被人打断了。'
+      + '木茬是新的。有人刻完这些字，没多久又劈了一刀。',
   },
   e_bamboo_stone: {
     at: { x: 262, y: 1096, r: 34 }, name: '竹海残碑',
@@ -304,6 +464,23 @@ export const ENV_TEXTS = {
     text: '潭边石头上刻着一行字，被水泡得发黑：'
       + '「此水通北」。往北看，只有竹子和雾。'
       + '字下面还有一道深深的划痕，像是有人想把这行字划掉，划到一半停了。',
+  },
+  e_bamboo_bridge: {
+    // 桥东岸。桥面本身是 tile 9（可走），碑要立在岸上，不能立在桥上 ——
+    // 站在桥上读碑的时候，怪会从水里那一侧绕过来。
+    at: { x: 720, y: 1224, r: 34 }, name: '桥头木牌',
+    text: '桥头钉着一块木牌：「过桥者，回头看一眼」。'
+      + '木牌背面钉着七枚竹片，每片刻着一个名字。'
+      + '最上面一片是新的，名字刻到一半，刀口停了。'
+      + '木牌的钉子是从背面钉进去的 —— 挂这块牌的人，不想让人看见自己的字。',
+  },
+  e_cutter_pole: {
+    at: { x: 560, y: 1064, r: 34 }, name: '竹节里的账',
+    text: '一根竹节被剖开，里面塞着一卷纸。'
+      + '纸上是工钱账：「初一，三人。初二，两人。初三，一人」。'
+      + '后面没有初四。'
+      + '账的最下面写着一行：「他们都听见了。我让他们别应。」'
+      + '墨迹到这里就断了，笔尖在纸上戳出一个洞。',
   },
 };
 export const ENV_IDS = Object.keys(ENV_TEXTS);
@@ -435,6 +612,52 @@ export const NPC_LINES = {
       ask: '我数过：进竹海的人，十个回来三个。回来的三个，有两个不说话。',
     },
   },
+  // P8 补的三个是**野外**NPC（WANDERERS），不是村里的。
+  // 他们原来只有 village.js 里的 greet / ask 一档，走到哪说到哪；
+  // 有了三层之后，"吴老六" 这个人会随着你走的路慢慢变 ——
+  // 初见时他只顾补网，深交之后他才肯说他兄弟还在林子里。
+  w_hunter: {
+    first: {
+      lines: ['别过来，风里血腥味重，会惊着东西。', '这林子从前不这样。'],
+      ask: '青鳞潭在林子最南头。那条蛇吃人，也吃它自己人。',
+    },
+    known: {
+      lines: ['你身上没血腥味了。进来坐。', '我兄弟的刀，你见着了吗？'],
+      ask: '听见喊你名字的，别应。应了，声音就会换成你自己的嗓子。',
+    },
+    close: {
+      lines: ['……坐。', '网补好了。我不去了。'],
+      ask: '我在林子里活了四十年。这三年，林子开始听人说话。',
+    },
+  },
+  w_stone: {
+    first: {
+      lines: ['碑不能看，只能摸。', '你身上有土气，进过坟地了。'],
+      ask: '封碑要三物：阴土、竹心、石髓。少一件，碑就是块石头。',
+    },
+    known: {
+      lines: ['你又来了。', '碑没动。它一直没动。'],
+      ask: '我不是守碑的。我是被碑留下的。这两件事不一样。',
+    },
+    close: {
+      lines: ['……', '（他没有回头。）'],
+      ask: '你摸过碑心了吧。凉的，对不对。凉的东西才守得住。',
+    },
+  },
+  w_boat: {
+    first: {
+      lines: ['水浅了，船撑不动。', '过河么？铜钱就不必了。'],
+      ask: '水底下有根铁链，我撑了二十年船，从没见它到底。',
+    },
+    known: {
+      lines: ['今天不摆渡。', '竹海那头，哭声又起来了。'],
+      ask: '铁链是往上拴的，不是往下坠的。有人把它拴在岸上。',
+    },
+    close: {
+      lines: ['上船吧。', '不用钱。你下去过一次，我知道。'],
+      ask: '我撑船送过一个人往北去。他刀鞘上有三道纹。他没回来，铁链也没松。',
+    },
+  },
 };
 
 // 按侠名挑一层。纯函数 —— 自检要能在不碰 game.js 的情况下验它。
@@ -481,13 +704,19 @@ export function storyReady(s, ctx) {
 
 // 一句话说明"这个节点在等什么"，给日志页显示未解锁的节点用。
 // 不写会剧透的细节 —— 只写条件，不写内容。
+//
+// label 是给 kill 用的显示名。不加这个的话，日志页会写着「斩「yinhun」」——
+// bossKills 的键是怪物 type，那是给代码看的，不是给人看的。
 export function storyHint(s) {
   const t = (s && s.trigger) || {};
   const need = (s && s.need || []).length ? '（需前情）' : '';
   switch (t.type) {
     case 'boot': return '开局';
     case 'enter': return '去' + ((POI[t.at] || {}).name || t.at) + need;
-    case 'kill': return t.lord ? '斩「' + t.lord + '」' + need : '杀敌' + need;
+    case 'kill': {
+      const who = t.label || t.lord || null;
+      return who ? '斩「' + who + '」' + need : '杀敌' + need;
+    }
     case 'item': return '得信物' + need;
     case 'time': return '夜半' + need;
     case 'triple': return '三物齐' + need;

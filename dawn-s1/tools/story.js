@@ -69,6 +69,11 @@
         ctx.relics[t.relic] = 1;
       } else if (t.type === 'time') {
         ctx.phase = t.phase;
+      } else if (t.type === 'kill') {
+        // P8 之前这张表里没有 kill 节点，这条分支一直没写过 ——
+        // 加了三个之后才发现"每个节点都能播"根本没覆盖 kill。
+        if (t.lord) ctx.bossKills[t.lord] = 1;
+        else for (const ty of t.types || []) ctx.kills[ty] = t.count || 1;
       }
       if (!g.storyReady(s, ctx)) unready.push(id);
     }
@@ -114,7 +119,7 @@
       if (!g.canStand(t.at.x, t.at.y)) bad.push(id + ':站不住');
       if (!t.text || t.text.length < 20) bad.push(id + ':文字太短');
     }
-    T('6 处旧物都站得住且有正文', bad.length === 0,
+    T('每处旧物都站得住且有正文', bad.length === 0,
       g.ENV_IDS.length + ' 处' + (bad.length ? '，问题：' + bad.join('/') : ''));
 
     // 土地庙门口（56px 内）是"打坐 / 铁匠台"的交互位，碑不能挤进去 ——
@@ -370,7 +375,65 @@
         n += (l.lines || []).join('').length + (l.ask || '').length;
       }
     }
-    T('剧情文本量 ≥ 3000 字', n >= 3000, n + ' 字');
+    // 门槛随批次往上抬，不写死一个"永远能过"的数 —— 写死就等于没验。
+    // P7 收尾 3013 字，P8 加了第一幕三节 + 第二幕四节，涨到 4700 以上。
+    T('剧情文本量 ≥ 4600 字', n >= 4600, n + ' 字');
+  }
+
+  // ---------- 16. P8：第一幕 / 第二幕的正文节点 ----------
+  {
+    // 每幕都要有"正文"，不能只有线索节点。线索节点讲的是"东西在哪"，
+    // 正文节点讲的是"这里发生过什么" —— 少了后者，三幕就退化成一条取物链。
+    const byAct = {};
+    for (const id of g.STORY_IDS) {
+      const a = S[id].act;
+      byAct[a] = (byAct[a] || 0) + 1;
+    }
+    T('第一幕节点 ≥ 6', (byAct.act1 || 0) >= 6, (byAct.act1 || 0) + ' 个');
+    T('第二幕节点 ≥ 7', (byAct.act2 || 0) >= 7, (byAct.act2 || 0) + ' 个');
+
+    // kill 触发器必须真的能被打亮。这一条以前是空的 —— P7 只做了框架，
+    // 没有任何节点用 kill，等于一条从没跑过的分支。
+    const kills = g.STORY_IDS.filter(id => S[id].trigger.type === 'kill');
+    T('有节点真的用 kill 触发器', kills.length >= 3, kills.join(','));
+
+    // 每个 kill 节点都必须有前置铺垫。没有 need 的 kill 节点会在玩家第一次
+    // 撞见那只怪的时候就播 —— 那时他还没见过坟、没看过图纸，字全白写。
+    const noSetup = kills.filter(id => !(S[id].need || []).length);
+    T('kill 节点都有前置铺垫', noSetup.length === 0,
+      noSetup.length ? noSetup.join('/') : kills.map(id => S[id].need.join('+')).join(' / '));
+
+    // 日志页上的 kill 提示不能露出内部 type
+    const bad = [];
+    for (const id of kills) {
+      const h = g.storyHint(S[id]);
+      if (/[a-z_]{3,}/.test(h)) bad.push(id + ':' + h);
+    }
+    T('kill 的未解锁提示不露内部 type', bad.length === 0, bad.length ? bad.join('/') : 'ok');
+
+    // 三条剑痕要按"坟地 → 竹桥 → 矿道"的次序落在三幕里，
+    // 而且每一处都得有对应的节点 —— 这是贯穿全篇的那根暗线。
+    T('三处剑痕各归其幕',
+      S.s_a1_pit.act === 'act1' && S.s_a2_bridge.act === 'act2' &&
+      !!g.STORY_IDS.find(id => S[id].act === 'act3' && /剑痕/.test(S[id].title)),
+      [S.s_a1_pit.title, S.s_a2_bridge.title].join(' / '));
+
+    // 新增线索必须都有节点发放，且都在表里有名字和正文
+    const orphan = g.CLUE_IDS.filter(c => {
+      const hasNode = g.STORY_IDS.some(id => (S[id].onEnd || {}).clue === c);
+      const ok = g.CLUES[c] && g.CLUES[c].name && g.CLUES[c].text && g.CLUES[c].text.length >= 12;
+      return !hasNode || !ok;
+    });
+    T('11 条线索都有节点且正文齐全', orphan.length === 0,
+      g.CLUE_IDS.length + ' 条' + (orphan.length ? '，问题：' + orphan.join('/') : ''));
+
+    // 野外 NPC 也要有三层 —— 他们才是玩家跑图时见得最多的人
+    const wild = ['w_hunter', 'w_stone', 'w_boat'];
+    const noLayers = wild.filter(id => {
+      const t = g.NPC_LINES[id];
+      return !t || g.NPC_LAYERS.some(L => !t[L.id] || !t[L.id].ask);
+    });
+    T('三个野外 NPC 也有三层', noLayers.length === 0, noLayers.length ? noLayers.join('/') : wild.join(','));
   }
 
   R.ok = R.checks.every(c => c.startsWith('PASS'));
