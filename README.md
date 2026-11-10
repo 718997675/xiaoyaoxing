@@ -13,6 +13,10 @@
 |---|---|
 | ![洞主](dawn-s1/screenshot-dungeon-boss.png) | ![对话](dawn-s1/screenshot-talk.png) |
 
+| 招式装配页（P6） | 火雨地面区域（P6） |
+|---|---|
+| ![招式装配](dawn-s1/docs-arts-panel-p6.png) | ![火雨区域](dawn-s1/docs-arts-zone-p6.png) |
+
 ---
 
 ## 快速开始

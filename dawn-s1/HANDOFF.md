@@ -136,7 +136,7 @@ for(let i=0;i<25;i++)g.tick(0.016)" \
 
 ```
 dawn-s1/
-├── game.js        ~4400 行，主逻辑。世界生成 / 战斗 / 掉落 / 存档 / HUD / 输入
+├── game.js        ~7000 行，主逻辑。世界生成 / 战斗 / 掉落 / 存档 / HUD / 输入
 ├── weapons.js     八类兵器的挥砍参数（a0→a1 角度、hitArc、reach、lunge、弹道）
 ├── monsters.js    怪物与首领
 ├── items.js       装备生成与词条
@@ -155,6 +155,7 @@ dawn-s1/
     ├── map.js     大地图连通性自检
     ├── mapview.js 把整张地图画成一张 png，肉眼检查地貌
     ├── weapons.js 兵器与触屏专项自检
+    ├── camps.js   营地生态专项自检（巡逻 / 吹哨 / 食物链 / 作息）
     ├── bosses.js  首领与危险区自检
     ├── quests.js  任务线自检
     ├── arts.js    招式与专精自检
