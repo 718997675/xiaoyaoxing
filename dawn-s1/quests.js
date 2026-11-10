@@ -69,7 +69,7 @@ export const QUESTS = {
     outro: '“土你拿去。”守墓人背过身，“碑，别碰。”',
   },
 
-  // ============ 支线七条 ============
+  // ============ 支线九条 ============
   q_side_dog: {
     id: 'q_side_dog', kind: 'side', place: '青云集',
     title: '恶犬成群',
@@ -132,6 +132,38 @@ export const QUESTS = {
     steps: [{ text: '斩了无面剑客', kind: 'kill', types: ['wumian'], count: 1 }],
     reward: { gold: 800, fame: 10, xp: 400, gear: { r: 3, kind: 'weapon' } },
     outro: '“成了。”他把醒木一拍，“从明日起，讲你。”',
+  },
+
+  // ============ P9 补的两条支线（7 → 9） ============
+  // 第一条是**跨区**的：委托在竹海，活儿在石窟。设计文档要求至少一条跨区，
+  // 理由是"玩家得为一件小事跑一趟别的区"，那趟路会把三个区连成一个地方，
+  // 而不是三个互不相干的关卡。
+  q_side_oar: {
+    id: 'q_side_oar', kind: 'side', place: '南岭竹海',
+    title: '沉在暗河的桨',
+    giver: 'w_boat',
+    brief: '陈九兄弟的船顺流漂到了北边，桨卡在石窟的暗河里。',
+    steps: [
+      // 火鸦把桨叼去做巢了 —— 所以先得清火鸦，才敢下去捞。
+      { text: '清八只火鸦', kind: 'kill', types: ['crow'], count: 8 },
+      { text: '走到石窟矿口', kind: 'reach', at: { x: 192, y: 320, r: 90 } },
+    ],
+    reward: { gold: 300, fame: 4, xp: 120 },
+    outro: '桨找回来了，断了一截。陈九把它插在船头，说这样船就走不快了。',
+  },
+  // 第二条接在第三幕的人身上：老矿工要一盏能烧到他们出去那天的灯。
+  // 它同时也是给玩家的一条"该带精铁"的提示 —— 石窟那一片怪硬，装备得跟上。
+  q_side_lamp: {
+    id: 'q_side_lamp', kind: 'side', place: '西荒石窟',
+    title: '烧到出去那天',
+    giver: 'w_miner',
+    brief: '老矿工说火把一灭，洞里就有人不见。他要十二块精铁打灯盏。',
+    steps: [
+      { text: '交十二块精铁', kind: 'have', field: 'iron', count: 12, spend: true },
+      { text: '清五只符傀', kind: 'kill', types: ['fukui'], count: 5 },
+    ],
+    reward: { gold: 320, fame: 3, xp: 130, potion: 2 },
+    outro: '灯盏打好了。他把它挂在营口，说这盏灯能烧三年 —— 正好烧到他出去那天。',
   },
 };
 

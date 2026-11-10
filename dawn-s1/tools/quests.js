@@ -18,10 +18,10 @@
       if (!q.reward) bad.push(id + ':无奖励');
       if (q.id !== id) bad.push(id + ':id 不一致');
     }
-    T('10 条任务定义齐全', g.QUEST_IDS.length === 10 && bad.length === 0,
+    T('12 条任务定义齐全', g.QUEST_IDS.length === 12 && bad.length === 0,
       g.QUEST_IDS.length + ' 条' + (bad.length ? '，问题：' + bad.join('/') : ''));
     const mains = g.QUEST_IDS.filter(id => Q[id].kind === 'main');
-    T('主线 3 条 / 支线 7 条', mains.length === 3 && g.QUEST_IDS.length - mains.length === 7,
+    T('主线 3 条 / 支线 9 条', mains.length === 3 && g.QUEST_IDS.length - mains.length === 9,
       '主线 ' + mains.length + ' / 支线 ' + (g.QUEST_IDS.length - mains.length));
   }
 
@@ -33,7 +33,7 @@
     ['inn', 'herb', 'smith', 'tavern', 'pedlar'].forEach(k => ids.add(k));
     const miss = g.QUEST_IDS.filter(id => !ids.has(Q[id].giver));
     T('每条任务的发放者都能找到', miss.length === 0,
-      miss.length ? '缺：' + miss.map(id => id + '→' + Q[id].giver).join('/') : '10/10');
+      miss.length ? '缺：' + miss.map(id => id + '→' + Q[id].giver).join('/') : g.QUEST_IDS.length + '/' + g.QUEST_IDS.length);
   }
 
   // ---------- 3. 至少 3 条依赖新区域 ----------
@@ -53,6 +53,23 @@
       (o.kind === 'reach' && inReg(o.at.x, o.at.y)) ||
       (o.kind === 'kill' && (o.types || []).some(t => NEWBOSS.indexOf(t) >= 0))));
     T('至少 3 条任务的目标落在新区域', hit.length >= 3, hit.length + ' 条：' + hit.join('/'));
+
+    // P9：至少一条支线是**跨区**的。委托写在竹海，活儿要跑到石窟 ——
+    // 那一趟路才是把三个区连成一个地方的东西，否则它们只是三个关卡。
+    const crossSide = g.QUEST_IDS.filter(id => {
+      const q = Q[id];
+      if (q.kind !== 'side') return false;
+      const zones = new Set();
+      for (const o of q.steps) {
+        if (o.kind !== 'reach') continue;
+        for (const k of Object.keys(REG)) {
+          const r = REG[k];
+          if (o.at.x >= r.x0 && o.at.x <= r.x1 && o.at.y >= r.y0 && o.at.y <= r.y1) zones.add(k);
+        }
+      }
+      return q.place === '南岭竹海' && zones.has('石窟');
+    });
+    T('至少一条支线是跨区的', crossSide.length >= 1, crossSide.join('/') || '没有');
   }
 
   // ---------- 4. 主线顺序解锁 ----------
@@ -224,8 +241,8 @@
     for (const id of order) finish(id);
 
     const finished = g.QUEST_IDS.filter(id => g.player.quests[id] && g.player.quests[id].st === 'done');
-    T('10 条任务全部可完成', finished.length === 10 && fails.length === 0,
-      finished.length + '/10' + (fails.length ? '，问题：' + fails.join(' / ') : ''));
+    T('12 条任务全部可完成', finished.length === 12 && fails.length === 0,
+      finished.length + '/12' + (fails.length ? '，问题：' + fails.join(' / ') : ''));
     T('主线三件三物都到手', g.tripleState().ok === true,
       '竹心=' + (g.player.relics.bamboo_heart || 0) + ' 石髓=' + (g.player.relics.stone_marrow || 0) +
       ' 阴土=' + (g.player.relics.yin_soil || 0));

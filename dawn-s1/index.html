@@ -427,6 +427,22 @@
   #story .sDots i{width:5px;height:5px;background:#B6AB8F;display:block}
   #story .sDots i.on{background:#C8453B}
   #story .sHint{font:9px SimSun;color:#8A8268;letter-spacing:1px;text-align:right;margin-top:2px}
+  /* 终章的选择：整章唯一一处按钮。做成两块牌子并排 ——
+     不是"确定 / 取消"，是"挑一块翻过来"。所以两个都做成一等一的分量，
+     不给任何一个加主色，玩家不该看出哪个是"对的"。 */
+  #story .sChoice{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  #story .sChoice button{background:#DCD2B8;border:2px solid #8A6520;padding:9px 6px 7px;
+    font:bold 14px SimSun;letter-spacing:4px;color:#12161F;cursor:pointer;text-align:center;
+    box-shadow:inset 0 0 0 1px #E8DFC8;transition:background .12s,border-color .12s,transform .12s}
+  #story .sChoice button:hover{background:#E2E9C8;border-color:#2F6E6A;transform:translateY(-1px)}
+  #story .sChoice button:active{transform:translateY(0)}
+  #story .sChoice button i{display:block;font:9px SimSun;letter-spacing:1px;color:#8A8268;
+    margin-top:3px;font-style:normal}
+  #story .sChoice button:hover i{color:#2F6E6A}
+  /* 选中那一瞬的反馈：朱红压印。只有 220ms，之后立刻切进结局旁白，
+     所以它其实只是"你确实按下去过"的证据，不是一种状态。 */
+  #story .sChoice button.picked{background:#C8453B;border-color:#000;color:#E8DFC8}
+  #story .sChoice button.picked i{color:#E8DFC8}
 
   /* ---------- 旧事（剧情日志） ---------- */
   #storyPage{text-align:left;max-height:62vh;overflow:auto}
@@ -437,6 +453,8 @@
   #storyPage .sItem .t{font:bold 12px SimSun;color:#12161F;letter-spacing:1px}
   #storyPage .sItem .q{font:10px/1.55 SimSun;color:#4A5568;margin-top:2px}
   #storyPage .sItem .lock{font:9px SimSun;color:#8A8268;margin-top:2px}
+  /* 终章分岔：记下当时选了哪条。用朱红，因为它是"你做的"，不是"发生的" */
+  #storyPage .sItem .pick{font:9px SimSun;color:#C8453B;letter-spacing:1px;margin-top:3px}
   /* 三条线索横排：形状本身就在说"一共三条"，比写一行"1/3"有效 */
   /* 四列网格而不是 flex 横排：P8 之后线索从 6 条涨到 11 条，
      flex 会让每条只剩 1/11 宽，「木牌 · 第一道纹」这种名字直接挤成竖排。
@@ -531,7 +549,11 @@
       <div class="sName hidden" id="storyName"></div>
       <div class="sLine" id="storyLine"></div>
       <div class="sDots" id="storyDots"></div>
-      <div class="sHint">点击 / 空格 · 继续</div>
+      <!-- 终章的「选择」：整章只有这一处有按钮。
+           平时这块是 hidden，连占位都不留 —— 剧情最值钱的是"读完这一句"，
+           多一个按钮就多一个可以点掉的东西。 -->
+      <div class="sChoice hidden" id="storyChoice"></div>
+      <div class="sHint" id="storyHint">点击 / 空格 · 继续</div>
     </div>
   </div>
 

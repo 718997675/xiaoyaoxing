@@ -6,13 +6,20 @@
 // 塞进 village.js 会让 village 知道怪物，塞进 game.js 会让运行时被文案淹没。
 // 只被 game.js 单向引用，谁都不脏。
 //
-// ---------- 触发器只有六种 ----------
+// ---------- 触发器只有七种 ----------
 //   boot   开局第一次（序章专用：玩家一睁眼就在土地庙里，没有"走进去"这回事）
 //   enter  走进某个地标（POI 圆形范围）
 //   kill   击杀某类怪 / 某个首领
 //   item   持有某件信物
 //   time   到某个时辰（可叠加前置 flag）
 //   triple 三物齐（阴土 + 竹心 + 石髓）
+//   floor  下到古洞第 N 层（P9 加的唯一一种）
+//
+// 为什么 P9 要加 floor：终章发生在古洞里，而古洞不是一个"地标"—— 它是三块
+// 每次进去都重排的房间，玩家在里面的坐标没有叙事意义，有意义的是"第几层"。
+// 硬拿 enter 去凑，只能把地标钉在洞口，那样"下到第三层"这件事就写不出来了。
+// 注意 floor 是"≥ N"不是"= N"：玩家从三层回一层，二层那段字不该重播 ——
+// readLog 已经挡了一次，但语义上也该是"至少下到这么深"。
 //
 // 为什么不做 talk 触发器：
 // 对话触发的剧情会和"接任务 / 复命"抢同一个点击位 —— 玩家点一下，要么接任务
@@ -26,8 +33,15 @@
 //   need: ['flag'],         // 全部满足才播（可省）
 //   minFame: n,             // 侠名门槛（可省）
 //   lines: [{ who, name, text }],   // who=null 旁白 / 'narrator' 旁白 / NPC id
-//   onEnd: { flag, clue, fame, msg },
+//   onEnd: { flag, clue, fame, msg, choice },
 // }
+//
+// choice 只有终章用得上，是 P7 以来 onEnd 第一次装不下的东西：
+//   { prompt: '一句话问玩家',
+//     options: [{ id, label, hint, flag, fame, clue, msg,
+//                 lines: [...] }] }   // lines = 选完接着播的结局旁白
+// 设计上不设对错 —— 两个分支都给 flag，都不扣任何东西，只改"后来怎样了"。
+// 玩家做选择时不该算账，否则那就不是选择，是一道数学题。
 //
 // 已读记录在 player.readLog（存进存档）。once 默认 true —— 剧情节点播一次就该过去，
 // 能反复播的"节点"其实是系统提示，不该放在这张表里。
@@ -56,6 +70,13 @@ export const POI = {
   collapse:   { x: 576,  y: 544,  r: 110, name: '塌方矿道' },
   shimu:      { x: 144,  y: 544,  r: 110, name: '石母洞' },
   huoya:      { x: 640,  y: 320,  r: 110, name: '火鸦绝壁' },
+  // 矿工营地：探出来的点，不是画的。石窟这一片能站人的地方稀疏，
+  // 这里离最近的地标（塌方矿道 / 石母洞）还有 154px，玩家不会"走过去同时满足两段字"。
+  mineCamp:   { x: 352,  y: 720,  r: 95,  name: '矿工营地' },
+  // 打通侧壁：石窟东缘最后一处能站人的点（tile 51,31），正对古洞西壁。
+  // 古洞占 tile 57..87 × 10..38，中间那 88px 的岩层就是"最后三尺"。
+  // 这个坐标是洪水填充验过连通的 —— 只是 canStand 为真还不够，中间被岩层隔断照样走不到。
+  breakthrough: { x: 824, y: 496, r: 95,  name: '打通的侧壁' },
 };
 
 // ============ 幕 ============
@@ -340,6 +361,32 @@ export const STORY = {
     ],
     onEnd: { flag: 'saw_mine' },
   },
+  // 第三幕的主题是"黑"。第一幕是恨（谁在挖坟），第二幕是怕（有人在喊你），
+  // 第三幕该轮到"认"了 —— 玩家在这一幕里第一次看见别人和他一样在数日子。
+  // 矿工营地是这一幕唯一有人说话的地方，所以它必须早出现：先看见人，
+  // 后面石母、火鸦王那些"不是人的东西"才有分量。
+  s_a3_camp: {
+    id: 's_a3_camp', act: 'act3', title: '外面天亮没有',
+    trigger: { type: 'enter', at: 'mineCamp' },
+    need: ['saw_mine'],
+    lines: [
+      { who: 'narrator', text: '营地是半塌的。塌下来的那一半用坑木撑着，撑得歪。' },
+      { who: 'narrator', text: '有人在。六七个，都蹲在火边，没一个人在干活。' },
+      { who: 'w_miner', text: '外面……天亮没有？' },
+      { who: 'narrator', text: '他问得很小心，像怕听见答案。' },
+      { who: 'narrator', text: '你说天亮了。' },
+      { who: 'narrator', text: '他们互相看了看，谁也没高兴。' },
+      { who: 'w_miner', text: '我们数到三百二十七。' },
+      { who: 'narrator', text: '壁根上刻着一排道子，一道一天。刻到三百多就乱了，后面开始重复。' },
+      { who: 'narrator', text: '锅里有东西在煮。是蛋。蛋壳比拳头大，壳上有褐斑。' },
+      { who: 'w_miner', text: '往东走，能出去。' },
+      { who: 'narrator', text: '说到一半他停了，改口。' },
+      { who: 'w_miner', text: '往东走，得先过石母那一段。' },
+      { who: 'narrator', text: '你问下面还有几个人。他伸出三个指头，又收回去一个。' },
+      { who: null, text: '（他们不说"三年"。他们只说"从那年冬天起"。）' },
+    ],
+    onEnd: { flag: 'met_miners', clue: 'miners' },
+  },
   s_clue_collapse: {
     id: 's_clue_collapse', act: 'act3', title: '只差三尺',
     trigger: { type: 'enter', at: 'collapse' },
@@ -352,6 +399,69 @@ export const STORY = {
       { who: null, text: '（他们挖了三年，只差最后三尺。）' },
     ],
     onEnd: { flag: 'saw_gap', clue: 'gap' },
+  },
+  // 石母不是"守关的怪"，是"在生的东西"。这一节要改掉玩家对它的整个理解：
+  // 矿工以为在跟石头较劲，其实是在跟一个一直长的东西较劲 —— 挖开第二天又长回去。
+  // 它也不打你，它拉塌顶。所以这一节的写法是"它没动过"，而不是"它出招了"。
+  s_a3_shimu: {
+    id: 's_a3_shimu', act: 'act3', title: '它没站起来过',
+    trigger: { type: 'kill', types: ['shimu'], label: '石母' },
+    need: ['saw_gap'],
+    lines: [
+      { who: 'narrator', text: '石母趴着，肚子贴着地。' },
+      { who: 'narrator', text: '它从头到尾没站起来过。' },
+      { who: 'narrator', text: '它不动。可顶上的石头一直在掉。' },
+      { who: 'narrator', text: '它不是在打你。它是要把你压在这儿 —— 压住了，就不必打了。' },
+      { who: 'narrator', text: '你砍到第七刀，它肚子里有东西动了一下。' },
+      { who: 'narrator', text: '石皮裂开，里面是一汪凝住的石，像冻住的奶。' },
+      { who: 'narrator', text: '那滴东西是凉的。握在手里，掌心发烫。' },
+      { who: 'narrator', text: '矿工说这一段挖不动。挖开了，第二天又长回去。' },
+      { who: 'narrator', text: '他们以为是在跟石头较劲。' },
+      { who: null, text: '（它不是在挡路。它是在生。）' },
+    ],
+    onEnd: { flag: 'killed_shimu', clue: 'shimu_womb' },
+  },
+  // 火鸦王这一节要和营地那口锅对上。玩家先看见有人在煮蛋，再看见蛋壳里是手指骨 ——
+  // 两件事之间隔了二十分钟游戏时间，自己拼出来的那一下比直接告诉他狠得多。
+  // 所以这一节从头到尾不提"人"，只提骨头。
+  s_a3_huoya: {
+    id: 's_a3_huoya', act: 'act3', title: '它撞的是火',
+    trigger: { type: 'kill', types: ['huoya'], label: '火鸦王' },
+    need: ['saw_gap'],
+    lines: [
+      { who: 'narrator', text: '火把灭了三次。' },
+      { who: 'narrator', text: '第一次是被风。第二次是被翅膀。第三次，你干脆不点了。' },
+      { who: 'narrator', text: '黑暗里有一双翅膀，在数你的脚步。' },
+      { who: 'narrator', text: '它撞的从来不是你。它撞的是火。' },
+      { who: 'narrator', text: '它知道人怕黑。它比人更早知道。' },
+      { who: 'narrator', text: '巢在绝壁上。用骨头搭的，搭得很整齐，一根一根码着。' },
+      { who: 'narrator', text: '巢里有蛋。蛋壳是空的，壳里不是雏。' },
+      { who: 'narrator', text: '是手指骨。很细的那种。' },
+      { who: null, text: '（营地里那口锅，煮的就是这个。）' },
+    ],
+    onEnd: { flag: 'killed_huoya', clue: 'crow_nest' },
+  },
+  // 第三幕的收束，也是全章最狠的一下：不是矿工挖到了古洞，是古洞在往外挖。
+  // 这一下必须放在"只差三尺"之后 —— 先让玩家替矿工憋三年，再告诉他这三年
+  // 从头到尾都不是他在挖。三处剑痕的暗线也在这里收口：剑痕是"有人走过"，
+  // 凿痕是"有人挖了很久"，前者是一个人的痕迹，后者是一代人的。
+  s_a3_break: {
+    id: 's_a3_break', act: 'act3', title: '从对面凿过来',
+    trigger: { type: 'enter', at: 'breakthrough' },
+    need: ['killed_huoya', 'killed_shimu'],
+    lines: [
+      { who: 'narrator', text: '最后三尺是空的。' },
+      { who: 'narrator', text: '不是被凿开的 —— 是本来就已经透了，只差一层石皮。' },
+      { who: 'narrator', text: '石壁上有凿痕。密密麻麻，一层压一层。' },
+      { who: 'narrator', text: '凿痕的走向不对。' },
+      { who: 'narrator', text: '从这边看，凿子是往外凿的。' },
+      { who: 'narrator', text: '可凿痕的斜坡在另一面 —— 对面有人在往这边凿。' },
+      { who: 'narrator', text: '他们挖了三年。' },
+      { who: 'narrator', text: '对面挖得更久。凿痕的层数，比三年多得多。' },
+      { who: 'narrator', text: '风从那边过来。是暖的。' },
+      { who: null, text: '（不是他们挖到了古洞。是古洞在往外挖。）' },
+    ],
+    onEnd: { flag: 'saw_break', clue: 'breakthrough' },
   },
   s_clue_marrow: {
     id: 's_clue_marrow', act: 'act3', title: '三道纹齐了',
@@ -373,10 +483,124 @@ export const STORY = {
       { who: 'narrator', text: '碑脚有三个槽，槽的形状和木牌上的三道纹对得上。' },
       { who: 'narrator', text: '三件东西放上去，碑面裂开一道缝，往里吸气。' },
       { who: 'narrator', text: '缝里有风。风是暖的。' },
-      { who: 'narrator', text: '碑后站着一个人。他没有脸，手里握着和你一样的兵器。' },
+      // 原来这里写的是"碑后站着一个人，他没有脸" —— 那样等于把终章的底牌
+      // 提前亮在门口，可无面剑客物理上只在第三层出现。改成脚印：
+      // 玩家看见的是"有人刚刚站在这儿"，比直接看见人更难受，也不和后面的对不上。
+      { who: 'narrator', text: '碑后的地上有一双脚印，朝着洞口。' },
+      { who: 'narrator', text: '印子是新的。脚比你的大一点。' },
       { who: null, text: '（碑后有路。往下。）' },
     ],
     onEnd: { flag: 'seal_open' },
+  },
+  // ---------------- 终章（5）----------------
+  // 终章的写法：一路往下，一路只做一件事 —— 数。
+  // 一层数到三十七，三层地上刻着"第四十次"，无面剑客的牌上写着"第四十"。
+  // 三个数字不是随手写的：玩家在矿道里已经见过矿工壁根上的三百多道日子，
+  // 那时候他在看别人数；到了这里，数字变成在数他自己。
+  s_fin_descend: {
+    id: 's_fin_descend', act: 'final', title: '数到三十七',
+    trigger: { type: 'floor', n: 1 },
+    need: ['seal_open'],
+    lines: [
+      { who: 'narrator', text: '第一层。火把只照到一丈，一丈之外是黑的。' },
+      { who: 'narrator', text: '壁上有刻痕。不是凿的，是指甲划的。' },
+      { who: 'narrator', text: '一道，两道……数到三十七，停了。' },
+      { who: 'narrator', text: '停的地方有一小片深色。是干掉的血。' },
+      { who: 'narrator', text: '一间屋里摆着三只碗。碗沿磨得很薄，洗得干净。' },
+      { who: 'narrator', text: '有人在这里住过。住的时间不短。' },
+      { who: null, text: '（他也在数日子。）' },
+    ],
+    onEnd: { flag: 'saw_stair' },
+  },
+  s_fin_deep: {
+    id: 's_fin_deep', act: 'final', title: '第四十次',
+    trigger: { type: 'floor', n: 3 },
+    need: ['saw_stair'],
+    lines: [
+      { who: 'narrator', text: '第三层。这里的黑和上面不一样 —— 上面的黑是空的，这里的黑是满的。' },
+      { who: 'narrator', text: '最深那间屋的地上，有一把刀。' },
+      { who: 'narrator', text: '刀鞘三道刻纹。和你手里这把一模一样。' },
+      { who: 'narrator', text: '刀是断的。断口很新。' },
+      { who: 'narrator', text: '刀旁边的地上刻着一行字。' },
+      { who: 'narrator', text: '「第四十次」' },
+      { who: 'narrator', text: '刻痕边上还有更小的字，被磨掉了，磨到只剩一个起笔。' },
+      { who: null, text: '（有人在数。数的是你。）' },
+    ],
+    onEnd: { flag: 'saw_deep', clue: 'forty' },
+  },
+  // 无面剑客：招式一模一样，是因为他本来就是主角。
+  // 这里不能写成"他摘下面具，原来是某某" —— 那样是廉价的反转。
+  // 写成"他没有脸"，然后让玩家自己去摸自己的脸，那一下才是玩家自己完成的。
+  s_fin_wumian: {
+    id: 's_fin_wumian', act: 'final', title: '没有脸的那个',
+    trigger: { type: 'kill', types: ['wumian'], label: '无面剑客' },
+    need: ['saw_deep'],
+    lines: [
+      { who: 'narrator', text: '他不说话。' },
+      { who: 'narrator', text: '起手的角度一样。收刀的位置一样。连招第三下会顿半拍 —— 也一样。' },
+      { who: 'narrator', text: '你打他，像在打自己的影子。影子比你熟。' },
+      { who: 'narrator', text: '他倒下的时候，脸是空的。' },
+      { who: 'narrator', text: '不是没有五官。是那一块本来就是平的，像被人抹过。' },
+      { who: 'narrator', text: '你伸手摸自己的脸。还在。' },
+      { who: 'narrator', text: '他腰间挂着一块木牌。和你那块一样，三道纹。' },
+      { who: 'narrator', text: '牌背刻着字：「守碑人 · 第四十」。' },
+      { who: 'narrator', text: '你想起一场火。火是从碑后烧起来的。' },
+      { who: 'narrator', text: '点火的人背对着你站着，刀鞘上有三道纹。' },
+      { who: 'narrator', text: '他转过身来 ——' },
+      { who: null, text: '（那是你。）' },
+    ],
+    onEnd: { flag: 'killed_wumian', clue: 'wumian_face' },
+  },
+  // 终章的选择。这是 P7 以来第一次 onEnd 装不下的东西 —— 见文件头对 choice 的说明。
+  // 两个分支都不设对错，也都不扣东西：给 flag、给结局旁白，只改"后来怎样了"。
+  // 「记起来」给侠名 +12，但那不是奖励 —— 它是"村里人开始怕你"的代价，
+  // 侠名越高，NPC 的三层对话越深，可柳三娘那一层的门是关着的。
+  s_fin_choice: {
+    id: 's_fin_choice', act: 'final', title: '刻回去，还是烧了',
+    trigger: { type: 'kill', types: ['wumian'], label: '无面剑客' },
+    need: ['killed_wumian'],
+    lines: [
+      { who: 'narrator', text: '你记起来了。' },
+      { who: 'narrator', text: '你不记得的是：为什么。' },
+      { who: 'narrator', text: '碑还在。三道槽空着。木牌在你手里，还有余温。' },
+      { who: 'narrator', text: '你可以把名字刻回去。' },
+      { who: 'narrator', text: '也可以把它烧了。' },
+    ],
+    onEnd: {
+      choice: {
+        prompt: '这件事没有对错。',
+        options: [
+          {
+            id: 'remember', label: '记起来', hint: '把名字刻回碑上',
+            flag: 'chose_remember', fame: 12, msg: '你把名字刻回了碑上',
+            lines: [
+              { who: 'narrator', text: '你把名字刻回碑上。刻到最后一笔，手很稳。' },
+              { who: 'narrator', text: '下山的时候，天刚亮。' },
+              { who: 'narrator', text: '村口没有人。' },
+              { who: 'narrator', text: '柳三娘站在门口，看了你很久。' },
+              { who: 'narrator', text: '她把门关上了。门上换了新的门神。' },
+              { who: 'narrator', text: '那天晚上，你睡在庙里。' },
+              { who: 'narrator', text: '香灰是凉的。' },
+              { who: null, text: '（第一章 · 终）' },
+            ],
+          },
+          {
+            id: 'letgo', label: '放下', hint: '把木牌烧了',
+            flag: 'chose_letgo', msg: '你把木牌扔进了火里',
+            lines: [
+              { who: 'narrator', text: '你把木牌扔进火里。' },
+              { who: 'narrator', text: '木头烧起来有响声，像有人在里面说话。' },
+              { who: 'narrator', text: '说到一半，断了。' },
+              { who: 'narrator', text: '柳三娘给你留了门。灶上温着一碗面。' },
+              { who: 'narrator', text: '你没说你记起了什么。' },
+              { who: 'narrator', text: '她也没问。' },
+              { who: 'narrator', text: '第二天，你照常去后山砍柴。' },
+              { who: null, text: '（第一章 · 终）' },
+            ],
+          },
+        ],
+      },
+    },
   },
 };
 
@@ -411,6 +635,13 @@ export const CLUES = {
   mark2: { name: '木牌 · 第二道纹', text: '第二道朝西北。亮过的那道摸上去是温的。' },
   gap:   { name: '只差三尺', text: '矿道最深处与另一侧只隔一道岩壁。缝里有暖风，也有火把的光。' },
   mark3: { name: '木牌 · 第三道纹', text: '三道并排，皆指正北。三道同时发烫，木牌在手里震了一下。' },
+  // P9 · 第三幕与终章
+  miners: { name: '矿工营地', text: '半塌的营地里还有六七个活人。他们不问来路，先问外面天亮没有。壁根刻着三百多道日子。' },
+  shimu_womb: { name: '石母的胎', text: '石母从头到尾没站起来过。它不是挡路，是在生。挖开第二天又长回去。' },
+  crow_nest: { name: '骨巢', text: '火鸦王的巢用骨头搭成，一根一根码得极整齐。蛋壳里不是雏，是手指骨。' },
+  breakthrough: { name: '从对面凿过来', text: '打通的那面石壁，凿痕的斜坡朝着这边 —— 对面有人在往这边凿，比三年久得多。' },
+  forty: { name: '第四十次', text: '古洞第三层地上有一把断刀，刀鞘三道刻纹。旁边刻着「第四十次」。' },
+  wumian_face: { name: '无面的牌', text: '无面剑客腰间那块木牌和主角的一样，三道纹。牌背刻着「守碑人 · 第四十」。' },
 };
 export const CLUE_IDS = Object.keys(CLUES);
 
@@ -481,6 +712,16 @@ export const ENV_TEXTS = {
       + '后面没有初四。'
       + '账的最下面写着一行：「他们都听见了。我让他们别应。」'
       + '墨迹到这里就断了，笔尖在纸上戳出一个洞。',
+  },
+  e_mine_names: {
+    // 放在矿工营地（352,720）北侧 30px 的壁根上 —— 营地半径 95 覆盖得到，
+    // 和合葬墓那处一样：走过去自动播剧情，想读碑得自己按 E。
+    at: { x: 352, y: 690, r: 34 }, name: '壁根上的道子',
+    text: '壁根上刻着一排竖道，一道一天。刻得很浅，是拿石片划的。'
+      + '前三百道还算齐，之后开始歪，同一个位置反复划，划出一道沟。'
+      + '沟的尽头换了个人接着划 —— 笔迹比前面细，划得更慢。'
+      + '最下面有一行字：「数到这儿，就不数了。反正天也不亮。」'
+      + '字底下压着六枚铜钱，摆成一排。像是给谁留的船钱。',
   },
 };
 export const ENV_IDS = Object.keys(ENV_TEXTS);
@@ -658,6 +899,22 @@ export const NPC_LINES = {
       ask: '我撑船送过一个人往北去。他刀鞘上有三道纹。他没回来，铁链也没松。',
     },
   },
+  // P9：西荒石窟唯一的活口。三层不是"他态度变好"，是"他越来越不想让你下去"——
+  // 初见时他还在问外面，深交之后他劝你别去。那才是他知道的东西的分量。
+  w_miner: {
+    first: {
+      lines: ['你从上面下来的？', '……上面现在什么时辰。'],
+      ask: '洞里别点火把。点了，它们就来。',
+    },
+    known: {
+      lines: ['我们数到三百二十七就不数了。', '数下去也没什么用。'],
+      ask: '石母那一段挖不动。挖开了，第二天又长回去。',
+    },
+    close: {
+      lines: ['你要是出去了，别跟人说我们在下面。', '说了，也没人来。'],
+      ask: '往东凿，能到古洞的侧壁。这话我憋了三年 —— 你别去。',
+    },
+  },
 };
 
 // 按侠名挑一层。纯函数 —— 自检要能在不碰 game.js 的情况下验它。
@@ -698,6 +955,7 @@ export function storyReady(s, ctx) {
     case 'item': return !!(ctx.relics && ctx.relics[t.relic] > 0);
     case 'time': return ctx.phase === t.phase;
     case 'triple': return !!ctx.triple;
+    case 'floor': return (ctx.floor || 0) >= (t.n || 1);
     default: return false;
   }
 }
@@ -720,6 +978,7 @@ export function storyHint(s) {
     case 'item': return '得信物' + need;
     case 'time': return '夜半' + need;
     case 'triple': return '三物齐' + need;
+    case 'floor': return '下到古洞第 ' + (t.n || 1) + ' 层' + need;
     default: return '未知';
   }
 }

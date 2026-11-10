@@ -978,6 +978,15 @@ const WANDERERS = [
     greet: ['水浅了，船撑不动。', '过河么？铜钱就不必了。', '竹海那头，最近总有人哭。'],
     ask: '水底下有根铁链，我撑了二十年船，从没见它到底。',
   },
+  // 第四个是 P9 加的。西荒石窟原本一个人都没有 —— 整幕只有旁白，
+  // 玩家在那儿待二十分钟听不到一句人话。老矿工站在营地火边，
+  // 他既是那一幕唯一的活口，也是"石髓在哪"这件事在世界上的人证。
+  {
+    id: 'w_miner', art: 'npcQiao', name: '老矿工', role: '矿工',
+    x: 352, y: 752, phases: 'always',
+    greet: ['你从上面下来的？', '……上面现在什么时辰。', '别站在门口，风里有味道。'],
+    ask: '洞里别点火把。点了，它们就来。',
+  },
 ];
 for (const w of WANDERERS) {
   const o = vobj(w.art, w.x, w.y, { villager: w.id, baseY: w.y, wild: true });
@@ -1281,6 +1290,9 @@ const player = {
   // 剧情：flags 是"玩家知道 / 发生过什么"，readLog 是已播节点，clues 是三条线索。
   // 三者都进存档 —— 读档后剧情不该重播一遍，那会把"一次性的事"变成循环。
   flags: {}, readLog: {}, clues: {},
+  // 终章选过哪一条：「{ s_fin_choice: 'remember' }」。单独存一份而不是只落 flag，
+  // 是因为旧事页要显示"你当时选了什么" —— 从 flag 反推要写一串 if，改文案就得改代码。
+  choices: {},
   // 按怪 type 记击杀数。任务只看"当前这一步攒了多少"，剧情要看"这辈子杀过几只某类"，
   // 两者口径不同，不能共用 —— 任务进度会随步骤重置，累计击杀不会。
   typeKills: {},
@@ -3611,8 +3623,14 @@ function renderStoryLog() {
         // 拿它当摘要等于每条都写着省略号。
         let best = s.lines[0].text;
         for (const l of s.lines) if (l.text.length > best.length) best = l.text;
+        // 做过分岔的节点要留一个"你当时选了哪条"。结局不是唯一的，
+        // 旧事页如果只显示正文，玩家第二次看会觉得这段没写完。
+        const picked = (player.choices || {})[id];
+        const ch = (s.onEnd || {}).choice;
+        const opt = picked && ch ? (ch.options || []).find(o => o.id === picked) : null;
         rows.push('<div class="sItem"><div class="t">' + s.title + '</div>' +
-          '<div class="q">' + best + '</div></div>');
+          '<div class="q">' + best + '</div>' +
+          (opt ? '<div class="pick">你选了「' + opt.label + '」</div>' : '') + '</div>');
       } else {
         rows.push('<div class="sItem locked"><div class="t">？？</div>' +
           '<div class="lock">' + storyHint(s) + '</div></div>');
@@ -4236,6 +4254,9 @@ const storyLineEl = document.getElementById('storyLine');
 // 表现是覆盖层里显示出整页剧情日志、而旧事页永远是空的。
 const storyPageEl = document.getElementById('storyAct');
 const storyDotsEl = document.getElementById('storyDots');
+// 终章的选择：整章唯一一处按钮。平时 hidden，连占位都不留。
+const storyChoiceEl = document.getElementById('storyChoice');
+const storyHintEl = document.getElementById('storyHint');
 // ?story=0 关掉剧情的"自动播放"。
 // 为什么要这个开关：无头回归里有 8 个套件靠 tick() 手动步进世界，
 // 而剧情一播世界就暂停 —— 表现是"某个断言莫名失败"，这是最难查的一类问题。
@@ -4245,6 +4266,15 @@ let storyCur = null;        // 正在播的节点
 let storyIdx = 0;           // 第几行
 let storyTimer = null, storyFull = '', storyShown = 0;
 let storyPending = [];      // 同一帧触发的多个节点，排队播
+// 正在等玩家做选择的那一屏。非空时 storyNext() 一律不响应 ——
+// 玩家点一下屏幕就跳过一个"没有对错的选择"，那这个选择等于不存在。
+let storyChoice = null;
+// 选完之后那 220ms 的压印停顿里，待执行的转场函数。自检用 storyPickGo() 直接跳过它。
+let storyChoiceNext = null;
+// 这一屏已经选了哪条。**不能存在 storyChoice.picked 上** —— storyChoice 指向的是
+// STORY 表里的那个对象本身，往上面写一个字段，等于把"选过了"永久刻进剧情数据：
+// 第二周目再播到这一屏，两个按钮都是死的。这个 bug 只在跑第二遍时才现形。
+let storyChoicePicked = null;
 
 function storyCtx() {
   return {
@@ -4254,6 +4284,8 @@ function storyCtx() {
     bossKills: player.bossKills || {},
     triple: tripleReady(player.relics),
     pos: { x: player.x, y: player.y },
+    // 古洞第几层。终章靠它 —— 洞里每次重排坐标都没意义，有意义的是"下到多深"。
+    floor: dgIn(player.x, player.y) ? dgFloor : 0,
   };
 }
 function storyPlaying() { return !!storyCur; }
@@ -4283,6 +4315,10 @@ function storyPlay(id) {
 // 碑文用飘字显示两秒根本读不完，而"读一段字"这件事本来就该有它自己的界面。
 function storyShow(node) {
   storyCur = node; storyIdx = 0;
+  storyChoice = null;
+  storyChoicePicked = null;
+  if (storyChoiceEl) { storyChoiceEl.classList.add('hidden'); storyChoiceEl.innerHTML = ''; }
+  if (storyHintEl) storyHintEl.classList.remove('hidden');
   storyEl.classList.remove('hidden');
   storyPageEl.textContent = node.page || '';
   // 圆点：这一节有几句。玩家能看见"还有两下就完了"，才会愿意读完。
@@ -4309,6 +4345,8 @@ function storyLine(l) {
 // 点一下：没吐完就直接给全（急着看的人不该被动画拖住），吐完了就翻下一句。
 function storyNext() {
   if (!storyCur) return false;
+  // 等选择的时候，点屏幕没有任何作用 —— 这一屏必须点按钮才能过。
+  if (storyChoice) return true;
   if (storyShown < storyFull.length) {
     if (storyTimer) { clearInterval(storyTimer); storyTimer = null; }
     storyShown = storyFull.length; storyLineEl.textContent = storyFull;
@@ -4323,10 +4361,18 @@ function storyEnd() {
   const s = storyCur;
   if (!s) return;
   if (storyTimer) { clearInterval(storyTimer); storyTimer = null; }
+  const e = s.onEnd || {};
+  // 终章的选择：播到这儿不关窗，先把两个分支摆出来。
+  // 这里**不写 readLog** —— 玩家还没选，这一段就还没算完。
+  if (e.choice && !storyChoice) { storyAskChoice(e.choice); return; }
   storyEl.classList.add('hidden');
   storyCur = null;
   player.readLog[s.id] = 1;
-  const e = s.onEnd || {};
+  storyApply(e);
+}
+// onEnd 的结算。拆出来是因为选择分支也要走同一套（flag / 线索 / 侠名 / 心法解锁），
+// 复制一份迟早会漏掉 checkMantraUnlocks 这种"不补就得等下次升级"的东西。
+function storyApply(e) {
   if (e.flag) player.flags[e.flag] = 1;
   if (e.clue && CLUES[e.clue]) {
     player.clues[e.clue] = 1;
@@ -4340,6 +4386,67 @@ function storyEnd() {
   if (e.flag) checkMantraUnlocks();
   // 剧情会改 flag / 线索 / 侠名，而这三样都能满足别的节点的条件 —— 播完再扫一遍。
   storyScan();
+}
+// 把两个分支摆出来。整章只有这一处有按钮，所以它值得为它单独写一屏：
+// 圆点清掉（这里没有"还有几句"）、名字条收起（没有人在说话）、
+// 底部那行"点击继续"也收起（这时候点屏幕没用，写着就是骗人）。
+function storyAskChoice(ch) {
+  storyChoice = ch;
+  storyChoicePicked = null;
+  if (storyTimer) { clearInterval(storyTimer); storyTimer = null; }
+  storyDotsEl.innerHTML = '';
+  storyNameEl.classList.add('hidden');
+  storyFull = ch.prompt || ''; storyShown = storyFull.length;
+  storyLineEl.textContent = storyFull;
+  if (storyHintEl) storyHintEl.classList.add('hidden');
+  storyChoiceEl.innerHTML = '';
+  for (const o of ch.options || []) {
+    const b = document.createElement('button');
+    b.dataset.opt = o.id;
+    b.innerHTML = o.label + (o.hint ? '<i>' + o.hint + '</i>' : '');
+    b.onclick = ev => { if (ev) ev.stopPropagation(); storyChoose(o.id); };
+    storyChoiceEl.appendChild(b);
+  }
+  storyChoiceEl.classList.remove('hidden');
+}
+// 选了一个。压印 220ms 再走 —— 直接换屏的话玩家会怀疑自己到底按没按到。
+function storyChoose(optId) {
+  const s = storyCur, ch = storyChoice;
+  if (!s || !ch) return false;
+  if (storyChoicePicked) return false;     // 连点两下不许连选两次
+  const o = (ch.options || []).find(x => x.id === optId);
+  if (!o) return false;
+  storyChoicePicked = optId;
+  const btn = storyChoiceEl.querySelector('button[data-opt="' + optId + '"]');
+  if (btn) btn.classList.add('picked');
+  // 记下"选过哪个"：存档要带，旧事页要显示，读档后也不该再问一次。
+  player.choices = player.choices || {};
+  player.choices[s.id] = o.id;
+  player.readLog[s.id] = 1;
+  storyApply(o);
+  const finish = () => {
+    storyChoiceNext = null;
+    storyChoice = null;
+    if (o.lines && o.lines.length) {
+      // 选择是"你做了什么"，结局旁白是"后来怎样了"。两段必须分开播，
+      // 挤在同一屏里的话，玩家会以为那只是选择的说明文字。
+      storyShow({ id: s.id, page: '终章 · 古洞', lines: o.lines, onEnd: { msg: '第一章 · 终' } });
+    } else {
+      storyEl.classList.add('hidden');
+      storyCur = null;
+      storyScan();
+    }
+  };
+  // 220ms 的压印停顿。存下这个待执行的转场，是为了让自检能同步跑完 ——
+  // 不然每一处验终章的用例都得真等 220ms，一条套件就多出好几秒。
+  storyChoiceNext = finish;
+  setTimeout(() => { if (storyChoiceNext === finish) finish(); }, 220);
+  return true;
+}
+// 立刻执行待转场（自检用；正常游玩走 220ms 的定时器）
+function storyPickGo() {
+  if (storyChoiceNext) storyChoiceNext();
+  return !storyChoiceNext;
 }
 function storyClose() { storyEnd(); }
 
@@ -4371,6 +4478,11 @@ function storyOnBoot() {
 function storyReset() {
   if (storyTimer) { clearInterval(storyTimer); storyTimer = null; }
   storyCur = null; storyIdx = 0; storyFull = ''; storyShown = 0;
+  storyChoice = null;
+  storyChoicePicked = null;
+  storyChoiceNext = null;
+  if (storyChoiceEl) { storyChoiceEl.classList.add('hidden'); storyChoiceEl.innerHTML = ''; }
+  if (storyHintEl) storyHintEl.classList.remove('hidden');
   storyBootDone = false;
   if (storyEl) storyEl.classList.add('hidden');
 }
@@ -4986,7 +5098,8 @@ function save() {
     // 已读节点必须存 —— 不存的话读档会把"一次性的事"变成循环，
     // 玩家每次读档都要重看一遍序章。
     flags: player.flags || {}, readLog: player.readLog || {},
-    clues: player.clues || {}, typeKills: player.typeKills || {},
+    clues: player.clues || {}, choices: player.choices || {},
+    typeKills: player.typeKills || {},
     clock: clock.serialize(),
   }));
 }
@@ -5071,7 +5184,7 @@ function load() {
     // 剧情：老存档没有这几样，给空对象。空 readLog 意味着序章会在读档后补播一次 ——
     // 这是好事（P7 之前的档也该看到序章），而且只播一次。
     flags: s.flags || {}, readLog: s.readLog || {},
-    clues: s.clues || {}, typeKills: s.typeKills || {},
+    clues: s.clues || {}, choices: s.choices || {}, typeKills: s.typeKills || {},
   });
   player.mantras = mantraSanitize(s.mantras, player.mantrasOwned);
   invalidateStats();
@@ -5121,7 +5234,7 @@ function startGame(cont) {
       loadoutManual: false,
       artBuffs: [], forceCrit: 0, nextDmg: 0,
       mantras: { main: null, sub: [null, null] }, mantrasOwned: {},
-      flags: {}, readLog: {}, clues: {}, typeKills: {},
+      flags: {}, readLog: {}, clues: {}, choices: {}, typeKills: {},
     });
     invalidateStats();
   }
@@ -7334,19 +7447,24 @@ window.__game = {
   STORY, STORY_IDS, POI, ACTS, CLUES, CLUE_IDS, ENV_TEXTS, ENV_IDS,
   NPC_LAYERS, NPC_LINES, storyByAct, npcLayer, npcLines, storyReady, storyHint,
   storyPlay, storyNext, storyPlaying, storyScan, storyReset, renderStoryLog,
+  storyChoose, storyPickGo,
   nearEnvText, envRead,
   get storyCur() { return storyCur; },
   get storyIdx() { return storyIdx; },
+  // 正在等选择的那一屏（没有选择时为 null）。自检要能看见"它确实拦住了点屏幕"。
+  get storyChoice() { return storyChoice; },
   // 当前这一句的完整文本（打字机还没吐完时也拿得到全句）
   get storyText() { return storyFull; },
   // 测试用：直接把剧情播完（不用等打字机）
   finishStory() {
     let guard = 0;
-    while (storyCur && guard++ < 200) {
+    // 停在选择那一屏 —— 这一屏必须点名选一条，不能替玩家选。
+    // 自动选等于给"结局"设了个默认值，而这段设计的全部意义是没有默认值。
+    while (storyCur && !storyChoice && guard++ < 200) {
       if (storyShown < storyFull.length) { storyShown = storyFull.length; storyLineEl.textContent = storyFull; }
       else storyNext();
     }
-    return { playing: !!storyCur, guard };
+    return { playing: !!storyCur, guard, choice: storyChoice ? storyChoice.prompt : null };
   },
   setFlag(id, v) { player.flags[id] = v === false ? 0 : 1; return player.flags; },
   setRelic(id, n) { player.relics[id] = n || 1; return player.relics; },

@@ -42,18 +42,18 @@
     T('flag 不重复', dup.length === 0, dup.length ? dup.join('/') : Object.keys(flags).length + ' 个');
   }
 
-  // ---------- 2. 六种触发器都能真的触发 ----------
+  // ---------- 2. 七种触发器都能真的触发 ----------
   {
     const kinds = new Set(g.STORY_IDS.map(id => S[id].trigger.type));
-    const want = ['boot', 'enter', 'item', 'time', 'triple'];
+    const want = ['boot', 'enter', 'item', 'time', 'triple', 'floor'];
     const miss = want.filter(k => !kinds.has(k));
-    T('触发器覆盖 boot / enter / item / time / triple', miss.length === 0,
+    T('触发器覆盖 boot / enter / item / time / triple / floor', miss.length === 0,
       [...kinds].join(',') + (miss.length ? '，缺 ' + miss.join(',') : ''));
 
     // 每个节点都能在自己声明的条件下被 storyReady 判成"该播"
     const base = {
       flags: {}, relics: {}, read: {}, fame: 99, phase: 'zi',
-      kills: {}, bossKills: {}, triple: true, pos: { x: 0, y: 0 },
+      kills: {}, bossKills: {}, triple: true, pos: { x: 0, y: 0 }, floor: 9,
     };
     const unready = [];
     for (const id of g.STORY_IDS) {
@@ -74,6 +74,8 @@
         // 加了三个之后才发现"每个节点都能播"根本没覆盖 kill。
         if (t.lord) ctx.bossKills[t.lord] = 1;
         else for (const ty of t.types || []) ctx.kills[ty] = t.count || 1;
+      } else if (t.type === 'floor') {
+        ctx.floor = t.n || 1;
       }
       if (!g.storyReady(s, ctx)) unready.push(id);
     }
@@ -376,8 +378,9 @@
       }
     }
     // 门槛随批次往上抬，不写死一个"永远能过"的数 —— 写死就等于没验。
-    // P7 收尾 3013 字，P8 加了第一幕三节 + 第二幕四节，涨到 4700 以上。
-    T('剧情文本量 ≥ 4600 字', n >= 4600, n + ' 字');
+    // P7 收尾 3013 字，P8 加了第一幕三节 + 第二幕四节，涨到 4700 以上；
+    // P9 加了第三幕四节 + 终章四节（含两条结局旁白），涨到 6000 以上。
+    T('剧情文本量 ≥ 6000 字', n >= 6000, n + ' 字');
   }
 
   // ---------- 16. P8：第一幕 / 第二幕的正文节点 ----------
@@ -428,12 +431,138 @@
       g.CLUE_IDS.length + ' 条' + (orphan.length ? '，问题：' + orphan.join('/') : ''));
 
     // 野外 NPC 也要有三层 —— 他们才是玩家跑图时见得最多的人
-    const wild = ['w_hunter', 'w_stone', 'w_boat'];
+    const wild = ['w_hunter', 'w_stone', 'w_boat', 'w_miner'];
     const noLayers = wild.filter(id => {
       const t = g.NPC_LINES[id];
       return !t || g.NPC_LAYERS.some(L => !t[L.id] || !t[L.id].ask);
     });
-    T('三个野外 NPC 也有三层', noLayers.length === 0, noLayers.length ? noLayers.join('/') : wild.join(','));
+    T('四个野外 NPC 也有三层', noLayers.length === 0, noLayers.length ? noLayers.join('/') : wild.join(','));
+  }
+
+  // ---------- 17. P9：第三幕 / 终章 ----------
+  {
+    const byAct = {};
+    for (const id of g.STORY_IDS) {
+      const a = S[id].act;
+      byAct[a] = (byAct[a] || 0) + 1;
+    }
+    T('第三幕节点 ≥ 7', (byAct.act3 || 0) >= 7, (byAct.act3 || 0) + ' 个');
+    T('终章节点 ≥ 5', (byAct.final || 0) >= 5, (byAct.final || 0) + ' 个');
+    T('全篇 28 个节点', g.STORY_IDS.length === 28, g.STORY_IDS.length + ' 个');
+
+    // floor 是 P9 新加的第七种触发器。它必须"没进洞就不成立"——
+    // 不然读档之后人在村里，终章那两节会站在村口播。
+    const mk = f => ({
+      flags: { seal_open: 1, saw_stair: 1, saw_deep: 1 }, relics: {}, read: {},
+      fame: 0, phase: 'wu', kills: {}, bossKills: {}, triple: true, pos: { x: 0, y: 0 }, floor: f,
+    });
+    T('没下洞时不播「数到三十七」', g.storyReady(S.s_fin_descend, mk(0)) === false, 'floor=0');
+    T('下到一层播「数到三十七」', g.storyReady(S.s_fin_descend, mk(1)) === true, 'floor=1');
+    T('二层不播「第四十次」', g.storyReady(S.s_fin_deep, mk(2)) === false, 'floor=2');
+    T('三层播「第四十次」', g.storyReady(S.s_fin_deep, mk(3)) === true, 'floor=3');
+    // "≥ N" 而不是 "= N"：从三层回一层，二层那段不该重播
+    T('floor 是「至少这么深」', g.storyReady(S.s_fin_deep, mk(9)) === true, 'floor=9');
+    T('floor 的未解锁提示不露内部字段', !/[a-z_]{3,}/.test(g.storyHint(S.s_fin_deep)),
+      g.storyHint(S.s_fin_deep));
+
+    // 第三幕必须有"人的戏"。石母 / 火鸦王两节全是"不是人的东西"，
+    // 只有矿工营地那一节是活人说话 —— 少了它，这一幕就退化成打怪清单。
+    const act3Human = g.STORY_IDS.filter(id =>
+      S[id].act === 'act3' && S[id].lines.some(l => l.who && l.who !== 'narrator'));
+    T('第三幕有活人说话', act3Human.length >= 1, act3Human.join(',') || '没有');
+    // 但那一节用的是旁白转述（矿工的原话用 narrator 讲），所以还得确认
+    // 它真的在讲人：标题或正文里得出现"矿工 / 人"
+    const camp = S.s_a3_camp;
+    T('矿工营地讲的是人不是怪',
+      !!camp && /矿工|活人|人/.test(camp.lines.map(l => l.text).join('')), camp ? camp.title : '无');
+
+    // 三处剑痕之外，P9 还要收一条凿痕的线：古洞是往外挖的。
+    // 这一条如果丢了，第三幕的收束就只剩"拿到石髓"，白瞎了三年的铺垫。
+    T('第三幕收在"从对面凿过来"',
+      S.s_a3_break && /对面/.test(S.s_a3_break.lines.map(l => l.text).join('')) &&
+      (S.s_a3_break.need || []).length >= 2,
+      S.s_a3_break ? S.s_a3_break.need.join('+') : '无');
+  }
+
+  // ---------- 18. 终章的选择：两条路都要真的能走通 ----------
+  {
+    const playChoice = (pick) => {
+      const read = {};
+      for (const id of g.STORY_IDS) read[id] = 1;
+      delete read.s_fin_choice;
+      g.player.readLog = read;
+      g.player.flags = { seal_open: 1, saw_stair: 1, saw_deep: 1, killed_wumian: 1 };
+      g.player.choices = {};
+      g.storyReset();
+      g.storyPlay('s_fin_choice');
+      const r = g.finishStory();
+      return r;
+    };
+    const r = playChoice('remember');
+    T('终章播到选择处停下', !!r.choice && g.storyCur && g.storyCur.id === 's_fin_choice',
+      r.choice || '没停');
+    T('选择屏有两个按钮',
+      document.querySelectorAll('#storyChoice button').length === 2,
+      document.querySelectorAll('#storyChoice button').length + ' 个');
+    T('选择屏的按钮带说明小字',
+      !!document.querySelector('#storyChoice button i'), 'ok');
+
+    // 这一条是这一整节的要点：等选择的时候点屏幕不能把这段跳过去。
+    // 能跳过的话，"选择"就只是两行没人读的字。
+    const i0 = g.storyIdx;
+    g.storyNext();
+    T('等选择时点屏幕不推进',
+      g.storyIdx === i0 && !!g.storyChoice && g.storyPlaying(),
+      'idx ' + i0 + '→' + g.storyIdx);
+
+    const fame0 = g.player.fame;
+    g.storyChoose('remember');
+    T('选完当场压印', !!document.querySelector('#storyChoice button.picked'), 'ok');
+    T('连点第二下无效', g.storyChoose('letgo') === false, '已锁');
+    g.storyPickGo();
+    T('选完接着播结局旁白',
+      g.storyPlaying() && g.storyCur.lines.length >= 5,
+      g.storyPlaying() ? g.storyCur.lines.length + ' 句' : '没播');
+    T('结局旁白落在终章幕下', g.storyCur && g.storyCur.page === '终章 · 古洞',
+      g.storyCur ? g.storyCur.page : '无');
+    g.finishStory();
+    T('「记起来」落 flag', g.player.flags.chose_remember === 1, JSON.stringify(g.player.flags));
+    T('「记起来」加侠名', g.player.fame > fame0, fame0 + ' → ' + g.player.fame);
+    T('「记起来」不落另一条 flag', !g.player.flags.chose_letgo, 'ok');
+    T('选择记进 choices', g.player.choices.s_fin_choice === 'remember',
+      JSON.stringify(g.player.choices));
+    T('选完之后覆盖层收起', !g.storyPlaying() &&
+      document.getElementById('story').classList.contains('hidden'), 'ok');
+    T('选择屏按钮被回收', document.querySelectorAll('#storyChoice button').length === 0, 'ok');
+
+    // 旧事页要能看出"你当时选了哪条"
+    g.renderStoryLog();
+    T('旧事页记下选择', document.getElementById('storyPage').innerHTML.indexOf('你选了「记起来」') >= 0,
+      'ok');
+
+    // 另一条路：放下。不给侠名，但要有自己的结局旁白。
+    const r2 = playChoice('letgo');
+    const fame1 = g.player.fame;
+    T('重开选择屏仍然停下', !!r2.choice, r2.choice || '没停');
+    g.storyChoose('letgo');
+    g.storyPickGo();
+    const epi = g.storyPlaying() ? g.storyCur.lines.map(l => l.text).join('') : '';
+    g.finishStory();
+    T('「放下」落 flag', g.player.flags.chose_letgo === 1, JSON.stringify(g.player.flags));
+    T('「放下」不加侠名', g.player.fame === fame1, fame1 + ' → ' + g.player.fame);
+    T('两条结局的旁白不一样', /面/.test(epi) && !/门神/.test(epi), epi.slice(0, 18) + '…');
+    T('两条结局都收在「第一章 · 终」', /第一章 · 终/.test(epi), 'ok');
+  }
+
+  // ---------- 19. 选择进存档 ----------
+  {
+    g.save();
+    const want = JSON.stringify(g.player.choices || {});
+    g.player.choices = {};
+    g.load();
+    T('存档带回选择', JSON.stringify(g.player.choices || {}) === want,
+      want + ' → ' + JSON.stringify(g.player.choices || {}));
+    T('读档后不再问一次', !g.storyChoice, 'ok');
   }
 
   R.ok = R.checks.every(c => c.startsWith('PASS'));
