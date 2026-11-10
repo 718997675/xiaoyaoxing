@@ -64,6 +64,13 @@
 
   /* ---------- 行囊 ---------- */
   #inv{display:none;text-align:left;padding:12px 16px 10px;z-index:12;min-width:560px}
+  /* 行囊里的双击会触发浏览器的「双击缩放」手势，缩进去就退不出来（连双击都还原不了）。
+     manipulation = 保留拖动/捏合，但禁掉双击缩放；dblclick 再兜一层底。 */
+  #inv,#inv *{touch-action:manipulation}
+  #inv .xclose{position:absolute;top:6px;right:8px;width:26px;height:26px;padding:0;margin:0;
+    font:bold 16px/1 SimSun,monospace;letter-spacing:0;background:#C9BFA3;color:#12161F;
+    border:2px solid #000;box-shadow:0 0 0 1px #8A6520;cursor:pointer}
+  #inv .xclose:hover{background:#D9A441}
   #inv .top{font-size:12px;color:#2F6E6A;line-height:1.7;margin-bottom:6px}
   #inv .top b{color:#12161F}
   #inv .body{display:flex;gap:12px;align-items:flex-start}
@@ -162,6 +169,7 @@
       Shift 身法 · Q 回春丹 · T 道行 · Tab 行囊 · E 铁匠台 · R 御风</p>
     <button id="btnNew">踏入江湖</button>
     <button id="btnCont">继续闯荡</button>
+    <button id="btnFull" class="ctrl">全屏（F11）</button>
     <button id="btnCtrl" class="ctrl">当前：键盘鼠标 · 点此改用触屏摇杆</button>
   </div>
   <div id="dead" class="panel hidden">
@@ -177,6 +185,7 @@
   </div>
 
   <div id="inv" class="panel">
+    <button id="btnInvClose" class="xclose" title="关闭（Tab / Esc）">×</button>
     <div class="top" id="invStats"></div>
     <div class="body">
       <div class="eqCol">
@@ -57538,6 +57547,20 @@ function toggleInv(force) {
   if (show) renderInv();
 }
 
+// 行囊右上角的关闭按钮
+const btnInvClose = document.getElementById('btnInvClose');
+if (btnInvClose) btnInvClose.onclick = () => toggleInv(false);
+
+// 双击缩放防护：面板上双击本来是「装备/服用」，但浏览器会顺手把页面放大，
+// 放大后画布只剩中间一小块，玩家就再也点不回去了。
+// 浏览器对「双击缩放」的判定发生在默认手势层，CSS 的 touch-action 拦的是触摸路径，
+// 桌面端还要靠 preventDefault 兜住 dblclick 的默认缩放行为。
+document.addEventListener('dblclick', e => {
+  const el = e.target;
+  // 只在游戏面板内拦截，别影响正常网页行为
+  if (el && el.closest && el.closest('.panel')) e.preventDefault();
+}, { passive: false });
+
 // ============ 铁匠台 ============
 const forgeEl = document.getElementById('forge');
 function forgeOpen() { forgeEl.classList.remove('hidden'); renderForge(); }
@@ -58155,6 +58178,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Tab' || e.code === 'KeyI') { if (state === 'play') toggleInv(); }
   if (e.code === 'Escape') { toggleInv(false); forgeClose(); toggleSkills(false); shopClose(); talkClose(); }
   if (e.code === 'KeyM') { AUDIO.enabled = !AUDIO.enabled; msg(AUDIO.enabled ? '音效开' : '音效关', C.paper2); }
+  if (e.code === 'F11' || (e.code === 'KeyF' && e.ctrlKey)) { e.preventDefault(); toggleFullscreen(); }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('beforeunload', save);
@@ -58929,7 +58953,10 @@ function drawSkillBar() {
     { id: 'potion', key: 'Q', icon: ICONS.potion, cd: 0, max: 1, cost: 0 },
   ];
   const size = 22, gap = 3;
-  const x0 = LW / 2 - (slots.length * (size + gap) - gap) / 2, y0 = LH - 34;
+  // 底栏高 44（LH-44 起）。格子原来放 LH-34，格子底正好压在 258，
+  // 下面的按键字母只分到 12px，再叠上 textBaseline='top' 的偏移，
+  // 字母下半截直接被画布底边切掉。整条上移 2px，字母留出 4px 余量。
+  const x0 = LW / 2 - (slots.length * (size + gap) - gap) / 2, y0 = LH - 36;
   skillRects = [];
   slots.forEach((s, i) => {
     const x = Math.round(x0 + i * (size + gap)), y = y0;
@@ -58953,8 +58980,10 @@ function drawSkillBar() {
         octx.fillText(cd.toFixed(1), x + 4, y + 9);
       }
     }
-    octx.font = 'bold 8px monospace'; octx.fillStyle = C.gold3;
-    octx.fillText(s.key, x + (size - octx.measureText(s.key).width) / 2, y + size + 7);
+    // 注意：drawOverlay 前面为了左上角数值把 textBaseline 设成了 'top' 且没恢复，
+    // 这里必须显式声明，否则 y 会被当成字形顶部往下画，字母下半截出画。
+    octx.font = 'bold 8px monospace'; octx.fillStyle = C.gold3; octx.textBaseline = 'top';
+    octx.fillText(s.key, x + (size - octx.measureText(s.key).width) / 2, y + size + 2);
   });
 }
 
@@ -59508,16 +59537,53 @@ function drawTouchUI() {
   octx.restore();
 }
 
+// ============ 全屏 ============
+// 桌面端浏览器 F11 全屏时，页面本身就有大片黑边（浏览器 UI 占掉一截），
+// 加上游戏自己的取整缩放留边，屏幕上真正能看的区域就更少了。
+// 用 Fullscreen API 让游戏占满整块屏幕，缩放策略再配合铺满，两层黑边一起消掉。
+function toggleFullscreen() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else {
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (req) {
+      const p = req.call(el);
+      if (p && p.catch) p.catch(() => msg('全屏被浏览器拒绝，可按 F11', C.paper2));
+    } else {
+      msg('此浏览器不支持全屏，请按 F11', C.paper2);
+    }
+  }
+}
+document.addEventListener('fullscreenchange', () => { resize(); refreshFullscreenBtn(); });
+document.addEventListener('webkitfullscreenchange', () => { resize(); refreshFullscreenBtn(); });
+function refreshFullscreenBtn() {
+  const b = document.getElementById('btnFull');
+  if (!b) return;
+  const on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  b.textContent = on ? '退出全屏（F11）' : '全屏（F11）';
+}
+const btnFull = document.getElementById('btnFull');
+if (btnFull) btnFull.onclick = toggleFullscreen;
+refreshFullscreenBtn();   // 初始状态同步一次（万一页面本身就在全屏里）
+
 // ============ 尺寸 / 主循环 ============
 const wrap = document.getElementById('wrap');
 function resize() {
   const raw = Math.min(innerWidth / LW, innerHeight / LH);
-  // 桌面：放大取整数倍，像素最锐利。
-  // 手机：屏幕本来就小，取整会让画面只占半个屏幕，所以按实际比例铺满（略糊但看得清、按得着）。
-  const s = touch.enabled ? Math.min(raw, 2.4) : (raw >= 1 ? Math.floor(raw) : raw);
+  // 桌面：像素游戏优先整数倍（最锐利），但**不能为了锐利留大片黑边**——
+  // 以前一律 Math.floor(raw)，1366×768 的笔记本上 2.844 被砍成 2，
+  // 画布只剩 960×540，画面占屏不到一半。
+  // 现在：缩放比几乎正好是整数时才取整（保持完美像素），
+  // 否则按实际比例铺满整个窗口，只剩宽高比本身带来的那条窄边。
+  // 触屏以前额外压了个 2.4 倍上限，大屏平板上等于自己给自己加黑边，去掉。
+  const fl = Math.floor(raw);
+  const s = (fl >= 1 && raw - fl < 0.005) ? fl : raw;
   viewScale = s;
-  wrap.style.width = LW * s + 'px'; wrap.style.height = LH * s + 'px';
-  for (const c of [glCanvas, ov]) { c.style.width = LW * s + 'px'; c.style.height = LH * s + 'px'; }
+  // 画布尺寸取整到设备像素，避免浏览器再做一次小数缩放（会糊）
+  const cw = Math.round(LW * s), ch = Math.round(LH * s);
+  wrap.style.width = cw + 'px'; wrap.style.height = ch + 'px';
+  for (const c of [glCanvas, ov]) { c.style.width = cw + 'px'; c.style.height = ch + 'px'; }
   fitPanels();
   checkRotateHint();
 }
@@ -59621,6 +59687,8 @@ window.__game = {
   get lights() { return lightSources; },
   get meditateT() { return meditateT; },
   get tiles() { return tiles; },
+  get viewScale() { return viewScale; },
+  fitPanels,
   get village() { return VILLAGE; },
   get shops() { return SHOPS; },
   shopOpenNow, nearShop, shopOpen, shopClose, interact, buyGood,
