@@ -131,6 +131,11 @@
   #shop .gn{font-size:13px;color:#12161F;letter-spacing:1px;display:flex;justify-content:space-between}
   #shop .gn b{font:11px monospace;color:#8A6520;letter-spacing:0}
   #shop .gd{font:11px/1.5 SimSun;color:#4A5568;margin:1px 0 4px}
+  /* 任务行和货品行长得一样会误导：一个买不起的货和一个能接的任务，
+     按钮看着没区别，玩家会以为任务也点不动。任务行给个青色边。 */
+  #shop .qrow{background:#E4E4CC;border-left:3px solid #2F6E6A;padding-left:7px}
+  #shop .qrow button{background:#2F6E6A;color:#F2E9CE;border-color:#1D4A46}
+  #shop .qrow button:hover{background:#3C8A84}
   #shop button{display:inline-block;width:auto;margin:0;padding:2px 12px;font-size:11px;letter-spacing:2px}
 
   /* ---------- 对话 ---------- */
@@ -165,6 +170,29 @@
   #skills .nBar i.on{background:var(--bc)}
   #skills .nHint{font:9px SimSun;color:#8A8268}
   #skills .node.maxed .nHint{color:#2F6E6A}
+
+  /* ---------- 任务 ---------- */
+  #quest{z-index:13;width:520px;max-height:80vh;overflow:auto}
+  #quest h1{letter-spacing:10px}
+  #quest .sp{font-size:12px;color:#8A6520;margin-bottom:6px}
+  #quest .qsec{font:bold 11px SimSun;letter-spacing:3px;color:#8A6520;
+    border-bottom:1px solid #8A8268;margin:10px 0 6px;padding-bottom:3px;text-align:left}
+  #quest .qcard{background:#E8DFC8;border:1px solid #8A6520;padding:6px 8px 7px;margin-bottom:6px;text-align:left}
+  #quest .qcard.done{opacity:.62;background:#DCD2B8}
+  #quest .qcard.ready{border-color:#2F6E6A;box-shadow:0 0 0 1px #2F6E6A}
+  #quest .qTop{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  #quest .qTop b{font:bold 13px SimSun;letter-spacing:1px;color:#12161F}
+  #quest .qTop i{font:9px SimSun;font-style:normal;color:#8A6520;white-space:nowrap}
+  #quest .qWhere{font:9px SimSun;color:#8A8268;margin:1px 0 3px}
+  #quest .qStep{font:10px/1.5 SimSun;color:#4A5568}
+  #quest .qStep.cur{color:#C8453B}
+  #quest .qStep.ok{color:#2F6E6A;text-decoration:line-through}
+  #quest .qRew{font:9px SimSun;color:#8A6520;margin-top:3px}
+  #quest .qRelic{display:flex;gap:8px;justify-content:center;margin:2px 0 8px}
+  #quest .qRelic div{flex:1;background:#DCD2B8;border:1px solid #8A8268;padding:5px 4px;text-align:center}
+  #quest .qRelic div.on{background:#E2E9C8;border-color:#2F6E6A}
+  #quest .qRelic b{display:block;font:bold 12px SimSun;color:#12161F}
+  #quest .qRelic span{font:9px SimSun;color:#8A8268}
 </style>
 </head>
 <body>
@@ -239,6 +267,14 @@
     <div class="sp">余下参悟点 <b id="spLeft">0</b> · 每次境界提升得 1 点</div>
     <div class="cols" id="skillTree"></div>
     <button id="btnSkillClose">收功（T / Esc）</button>
+  </div>
+
+  <div id="quest" class="panel hidden">
+    <h1>任务</h1>
+    <div class="sp" id="questSub">三物齐，封碑自开</div>
+    <div class="qRelic" id="questRelics"></div>
+    <div id="questBody"></div>
+    <button id="btnQuestClose">收起（B / Esc）</button>
   </div>
 </div>
 <div id="tip"></div>

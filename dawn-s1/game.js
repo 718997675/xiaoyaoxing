@@ -15,6 +15,10 @@ import { ART, loadArt } from './art.js';
 import { Clock, PHASES, PHASE_EDGES } from './time.js';
 import { VILLAGE, inVillage, villageArt, BUILDINGS, PROPS, NPCS, VILLAGERS, SHOPS } from './village.js';
 import {
+  QUESTS, QUEST_IDS, QUEST_ITEMS, RELICS_TRIPLE, MAIN_ORDER,
+  questById, objDone, objText, tripleReady, tripleMissing, relicName, questsOfGiver,
+} from './quests.js';
+import {
   DG, DGT, DG_FLOORS, FLOOR_MOBS, inDungeon, genFloor, paintDungeon, dungeonArt,
 } from './dungeon.js';
 
@@ -936,6 +940,39 @@ for (const v of VILLAGERS) {
   o.spoke = 0;
   vilObjs.push(o);
 }
+
+// ============ 野外的三个人 ============
+// 他们不在青云集，各自站在自己的地头上：猎户在竹海边上，守碑人在古洞前，
+// 船夫在溪涧桥头。坐标是世界坐标，不走 V_SHIFT_X/Y ——
+// village.js 那份表存的是"村庄内相对位置"，混进来会让平移逻辑变脏。
+// 复用现有村民点阵：这三个人的辨识度靠名字与台词，不靠像素。
+const WANDERERS = [
+  {
+    id: 'w_hunter', art: 'npcQiao', name: '吴老六', role: '猎户',
+    x: 300, y: 1150, phases: 'always',
+    greet: ['别过来，风里血腥味重，会惊着东西。', '这林子从前不这样。', '我兄弟的刀，你见着了吗？'],
+    ask: '青鳞潭在林子最南头。那条蛇吃人，也吃它自己人。',
+  },
+  {
+    id: 'w_stone', art: 'npcDao', name: '碑奴', role: '守碑人',
+    x: 1152, y: 656, phases: 'always',
+    greet: ['碑不能看，只能摸。', '你身上有土气，进过坟地了。', '洞里那位，不是你能问的。'],
+    ask: '封碑要三物：阴土、竹心、石髓。少一件，碑就是块石头。',
+  },
+  {
+    id: 'w_boat', art: 'npcGeng', name: '陈九', role: '渡口船夫',
+    x: 600, y: 1240, phases: 'always',
+    greet: ['水浅了，船撑不动。', '过河么？铜钱就不必了。', '竹海那头，最近总有人哭。'],
+    ask: '水底下有根铁链，我撑了二十年船，从没见它到底。',
+  },
+];
+for (const w of WANDERERS) {
+  const o = vobj(w.art, w.x, w.y, { villager: w.id, baseY: w.y, wild: true });
+  o.data = w;
+  o.spoke = 0;
+  vilObjs.push(o);
+}
+const ALL_TALKERS = VILLAGERS.concat(WANDERERS);
 // 村口牌坊两侧各挂一盏灯：夜里从野外望过去，那是"这里有人"的唯一信号
 for (const dx of [-34, 34]) {
   const o = { kind: 'lantern', x: VILLAGE.gateX + dx, y: VILLAGE.y1 - 20 };
@@ -1110,6 +1147,28 @@ function dgBuild(floor, seed) {
   paintDungeon(groundC.getContext('2d'), dgData);
   ground.material.map.needsUpdate = true;
   dgPlace();
+  refreshSeal();
+}
+
+// 封碑：三物未齐时，古洞门口那两格是实心的。
+// 不做"对话框拦一道"—— 弹窗只是通知，把门真的堵上，玩家才会回去找碑奴问缺什么。
+// 每层重排都要重新上一次封，因为 dgBuild 会把整块地重写。
+let sealOn = false;
+function refreshSeal() {
+  if (!dgData) return;
+  const miss = tripleMissing(player.relics);
+  sealOn = miss.length > 0;
+  const W = dgData.W, H = dgData.H;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (dgData.t[y * W + x] !== DGT.DOOR) continue;
+    const gx = DG.tx0 + x, gy = DG.ty0 + y;
+    if (gx < 0 || gy < 0 || gx >= MAPW || gy >= MAPH) continue;
+    solid[gy * MAPW + gx] = sealOn ? 1 : 0;
+  }
+}
+function nearSeal() {
+  if (!sealOn || !dgData) return false;
+  return Math.hypot(player.x - dgData.doorX, player.y - DG.y1) < 44;
 }
 
 function dgReset() { dgBuild(1, (Math.random() * 1e9) | 0); }
@@ -1181,6 +1240,9 @@ const player = {
   dashT: 0, dashCd: 0, flash: 0, iframe: 0, shield: 0, hurtFlash: 0,
   poison: 0, poisonT: 0, poisonImmuneT: 0, rootT: 0,
   bossKills: {},
+  // 任务：quests 只存"走到第几步、这一步攒了多少"，条件判定每次现算 ——
+  // 把判定结果也存下来，改一个数值就得写迁移，不值。
+  quests: {}, relics: {}, track: null,
   drunkT: 0, drunk: 0, rested: false,
   inv: [], invMax: 20, equip: { weapon: null, armor: null, necklace: null, artifact: null },
   windCd: 0, skillPts: 0, skillLv: {}, kills: 0,
@@ -1251,7 +1313,7 @@ const touch = {
 
 const KEY_HINT = '天地任逍遥 · 第一章 青云野<br>'
   + 'WASD/方向键 移动 · J/空格 斩击 · K 剑气 · L 剑舞 · H 天雷<br>'
-  + 'Shift 身法 · Q 回春丹 · T 道行 · Tab 行囊 · E 铁匠台 · R 御风';
+  + 'Shift 身法 · Q 回春丹 · T 道行 · B 任务 · Tab 行囊 · E 铁匠台 · R 御风';
 const TOUCH_HINT = '天地任逍遥 · 第一章 青云野<br>'
   + '建议横屏 · 左下按住即出摇杆走位<br>'
   + '右侧「斩/气/舞/雷」出招 · 「闪」身法 · 「丹」回春<br>'
@@ -1322,6 +1384,7 @@ const TOUCH_BTNS = [
   { id: 'sit', label: '坐', x: 376, y: 104, r: 13, size: 11, run: () => meditate(), cd: () => [meditateT, 0.9] },
   { id: 'bag', label: '囊', x: 416, y: 104, r: 13, size: 11, run: () => toggleInv(true), cd: () => [0, 0] },
   { id: 'dao', label: '道', x: 456, y: 104, r: 13, size: 11, run: () => toggleSkills(true), cd: () => [0, 0] },
+  { id: 'quest', label: '事', x: 296, y: 104, r: 13, size: 11, run: () => toggleQuests(true), cd: () => [0, 0] },
 ];
 function touchHit(p) {
   // 取「离圆心最近」的键，而不是数组里第一个：即使容错圈偶然相交，
@@ -1874,6 +1937,8 @@ function killEnemy(e) {
   const m = MONSTERS[e.type];
   player.kills = (player.kills || 0) + 1;
   player.xp += m.xp;
+  // 任务计数放在最前面：后面有通关判定会改 state，改完之后再计数容易被漏掉
+  questOnKill(e);
   dmgNum(e.x, e.y - e.h - 6, '+' + m.xp + '历练', C.paper3);
   const cols = [C.paper2, C.red2, C.ink3];
   for (let i = 0; i < (e.elite ? 4 : 2); i++) burst(e.x, e.y - e.h / 2, cols[i % 3], 10, 90);
@@ -2542,6 +2607,18 @@ function renderShop() {
   const line = open ? s.line
     : (s.deepNightClosed && clock.deepNight ? s.closedDeep : s.closed);
   rows.push('<div class="say">' + line + '</div>');
+  // 店主的"事"：买卖之外还得能问出点东西来，否则柜台只是一台自动售货机。
+  // 能复命的排在能接的前面 —— 先把这一趟收掉，再接新的，顺序反了会让人以为自己没做完。
+  for (const q of questTurnInAt(shopId)) {
+    rows.push('<div class="goods qrow"><div class="gn">复命 · ' + q.title +
+      '<b>可交付</b></div><div class="gd">' + (q.outro || '') + '</div>' +
+      '<button data-quest="' + q.id + '" data-act="turnin">复命</button></div>');
+  }
+  for (const q of questOffered(shopId)) {
+    rows.push('<div class="goods qrow"><div class="gn">问事 · ' + q.title +
+      '<b>' + q.place + '</b></div><div class="gd">' + q.brief + '</div>' +
+      '<button data-quest="' + q.id + '" data-act="take">接下</button></div>');
+  }
   if (open) {
     for (const g of SHOP_GOODS[shopId] || []) {
       const price = goodPrice(g);
@@ -2560,6 +2637,15 @@ function renderShop() {
   document.getElementById('shopBody').innerHTML = rows.join('');
   document.getElementById('shopBody').querySelectorAll('button[data-buy]')
     .forEach(b => { b.onclick = () => buyGood(b.dataset.buy); });
+  document.getElementById('shopBody').querySelectorAll('button[data-quest]')
+    .forEach(b => {
+      b.onclick = () => {
+        const id = b.dataset.quest;
+        if (b.dataset.act === 'take') questAccept(id);
+        else questTurnIn(id);
+        renderShop();
+      };
+    });
 }
 function buyGood(id) {
   if (!shopId) return;
@@ -2647,12 +2733,171 @@ function interact() {
     Math.hypot(player.x - SHOPS[id].x, player.y - SHOPS[id].y))) { talkTo(v); return; }
   if (id) { shopOpen(id); return; }
   if (nearNotice()) { boardRead(); return; }
+  if (nearSeal()) {
+    const miss = tripleMissing(player.relics).map(relicName).join('、');
+    msg('封碑未启 · 还缺 ' + miss, C.red3);
+    return;
+  }
   if (nearTemple()) { forgeOpen(); return; }
   msg('此处无人可谈', C.paper1);
 }
 function boardRead() {
   msg('告示：日出开市，入夜闭户。夜行遇阴物，莫追。', C.paper3);
 }
+
+// ============ 任务系统 ============
+// 状态只存两样：走到第几步（step）、这一步攒了多少（prog）。
+// 其余全部现算 —— 存"是否完成"会让数值一改就要写存档迁移。
+function qState(id) { const s = player.quests[id]; return s ? s.st : 'none'; }
+function qRec(id) { return player.quests[id] || null; }
+function qCurStep(id) {
+  const q = QUESTS[id], s = player.quests[id];
+  if (!q || !s) return null;
+  return q.steps[s.step] || null;
+}
+// 当前这一步是否已经满足 —— 满足就可以回去交
+function qStepDone(id) {
+  const q = QUESTS[id], s = player.quests[id];
+  if (!q || !s) return false;
+  return s.step >= q.steps.length;
+}
+function questAccept(id) {
+  const q = QUESTS[id];
+  if (!q || player.quests[id]) return false;
+  player.quests[id] = { st: 'active', step: 0, prog: 0 };
+  player.track = id;
+  AUDIO.play('levelup');
+  msg('接下「' + q.title + '」', C.gold3);
+  renderQuests();
+  return true;
+}
+// 推进到下一步。走完最后一步时给一次提示，但奖励要回去找委托人领 ——
+// 自动结算会让"回去一趟"这件事失去意义，而那一趟才是任务的收尾。
+function qAdvance(id) {
+  const q = QUESTS[id], s = player.quests[id];
+  if (!q || !s) return;
+  s.step++; s.prog = 0;
+  if (s.step >= q.steps.length) {
+    msg('「' + q.title + '」· 可回去复命了', C.jade3);
+    AUDIO.play('rare');
+  } else {
+    msg('「' + q.title + '」· ' + q.steps[s.step].text, C.paper1);
+  }
+  renderQuests();
+}
+function questTick(dt) {
+  for (const id of QUEST_IDS) {
+    const s = player.quests[id];
+    if (!s || s.st !== 'active') continue;
+    const o = qCurStep(id);
+    if (!o) continue;
+    if (o.kind === 'reach') {
+      if (Math.hypot(player.x - o.at.x, player.y - o.at.y) <= (o.at.r || 40)) qAdvance(id);
+    } else if (o.kind === 'dg') {
+      if (dgIn(player.x, player.y) && dgFloor >= (o.floor || 1)) qAdvance(id);
+    } else if (o.kind === 'item') {
+      const n = (player.relics[o.item] || 0);
+      s.prog = Math.min(n, o.count || 1);
+      if (objDone(o, s.prog)) qAdvance(id);
+    } else if (o.kind === 'have') {
+      const n = o.field === 'iron' ? (player.iron || 0)
+        : o.field === 'gold' ? (player.gold || 0) : (player.level || 1);
+      s.prog = Math.min(n, o.count);
+      if (objDone(o, s.prog)) qAdvance(id);
+    }
+  }
+}
+function questOnKill(e) {
+  if (!e || !e.type) return;
+  for (const id of QUEST_IDS) {
+    const s = player.quests[id];
+    if (!s || s.st !== 'active') continue;
+    const o = qCurStep(id);
+    if (!o || o.kind !== 'kill') continue;
+    if (o.types.indexOf(e.type) < 0) continue;
+    // 「守墓人」和普通阴魂是同一个 type，只能靠 lord 字段区分
+    if (o.lord && e.lord !== o.lord) continue;
+    // 夜里才作数的目标：白天杀的不算，否则"夜探乱葬岗"就白写了
+    if (o.night && !clock.isNight) {
+      if (!s.warned) { s.warned = true; msg('这类东西得夜里才有', C.paper1); }
+      continue;
+    }
+    s.prog = (s.prog || 0) + 1;
+    if (objDone(o, s.prog)) qAdvance(id);
+    else renderQuests();
+  }
+}
+function questOnTalk(npcId) {
+  for (const id of QUEST_IDS) {
+    const s = player.quests[id];
+    if (!s || s.st !== 'active') continue;
+    const o = qCurStep(id);
+    if (!o || o.kind !== 'talk' || o.npc !== npcId) continue;
+    qAdvance(id);
+  }
+}
+function questReady(id) {
+  const q = QUESTS[id], s = player.quests[id];
+  return !!(q && s && s.st === 'active' && s.step >= q.steps.length);
+}
+function questTurnIn(id) {
+  const q = QUESTS[id];
+  if (!q || !questReady(id)) return null;
+  const s = player.quests[id];
+  s.st = 'done';
+  // 消耗型目标（交精铁）在交付时才扣，接任务时就扣会让玩家没法先看要求
+  for (const o of q.steps) {
+    if (o.kind === 'have' && o.spend) {
+      if (o.field === 'iron') player.iron = Math.max(0, (player.iron || 0) - o.count);
+      else if (o.field === 'gold') player.gold = Math.max(0, player.gold - o.count);
+    }
+  }
+  const r = q.reward || {};
+  if (r.relic) {
+    player.relics[r.relic] = (player.relics[r.relic] || 0) + 1;
+    msg('得「' + relicName(r.relic) + '」', C.gold3);
+  }
+  if (r.gold) { player.gold += r.gold; }
+  if (r.fame) addFame(r.fame);
+  if (r.xp) { player.xp += r.xp; }
+  if (r.potion) { for (let i = 0; i < r.potion; i++) addPotion('回春丹', 40, 0); }
+  if (r.gear) {
+    const it = makeGear(r.gear.kind, r.gear.r, Math.max(1, player.level + 1));
+    if (invFull()) addDrop('gear', it, player.x, player.y);
+    else { player.inv.push(it); }
+  }
+  invalidateStats();
+  while (player.xp >= player.level * 42) {
+    player.xp -= player.level * 42; player.level++;
+    player.maxHpBase += 15; player.atkBase += 2; player.skillPts++;
+    invalidateStats(); player.hp = maxHp(); player.qi = maxQi();
+    msg('境界提升 · ' + realm() + '　（得参悟点 1，按 T 参悟）', C.gold3);
+    AUDIO.play('levelup');
+    renderSkills();
+  }
+  player.track = QUEST_IDS.find(k => player.quests[k] && player.quests[k].st === 'active') || null;
+  refreshSeal();   // 拿到第三件三物时，封碑当场就该开
+  AUDIO.play('rare');
+  msg('「' + q.title + '」已了', C.gold3);
+  renderInv(); renderQuests();
+  return q;
+}
+// 可接的任务：没接过、且（主线要按顺序）前置已了
+function questOffered(npcId) {
+  return questsOfGiver(npcId).filter(q => {
+    if (player.quests[q.id]) return false;
+    if (q.kind !== 'main') return true;
+    const i = MAIN_ORDER.indexOf(q.id);
+    if (i <= 0) return true;
+    const prev = player.quests[MAIN_ORDER[i - 1]];
+    return !!(prev && prev.st === 'done');
+  });
+}
+function questTurnInAt(npcId) {
+  return questsOfGiver(npcId).filter(q => questReady(q.id));
+}
+// 三物：齐了才能下古洞
+function tripleState() { return { ok: tripleReady(player.relics), miss: tripleMissing(player.relics) }; }
 
 // ---- 地宫里的三件事：开箱、深入地脉、回地面 ----
 function dgUse(o) {
@@ -2721,7 +2966,7 @@ function phaseOn(phases) {
 }
 function nearVillager() {
   let best = null, bd = 1e9;
-  for (const v of VILLAGERS) {
+  for (const v of ALL_TALKERS) {
     if (!phaseOn(v.phases)) continue;
     const d = Math.hypot(player.x - v.x, player.y - v.y);
     if (d < 34 && d < bd) { bd = d; best = v; }
@@ -2746,6 +2991,7 @@ function sayAll() {
 }
 function talkTo(v) {
   talkNpc = v; talkAsked = false;
+  questOnTalk(v.id);
   const o = vilObjs.find(x => x.villager === v.id);
   const n = o ? o.spoke : 0;
   if (o) o.spoke = (n + 1) % v.greet.length;
@@ -2765,6 +3011,19 @@ function renderTalk(line) {
     talkOptsEl.appendChild(b);
   };
   if (!talkAsked) add('打听', () => { talkAsked = true; renderTalk(talkNpc.ask); });
+  // 任务：先复命，再接新。店主走的是店铺面板，村民走这里。
+  for (const q of questTurnInAt(talkNpc.id)) {
+    add('复命 · ' + q.title, () => {
+      const done = questTurnIn(q.id);
+      renderTalk((done && done.outro) || '……');
+    });
+  }
+  for (const q of questOffered(talkNpc.id)) {
+    add('接下 · ' + q.title, () => {
+      questAccept(q.id);
+      renderTalk(q.brief);
+    });
+  }
   if (talkNpc.act) add(talkNpc.actLabel, () => {
     const r = NPC_ACT[talkNpc.act](talkNpc);
     if (r) renderTalk(r);
@@ -2879,6 +3138,76 @@ function toggleSkills(force) {
   if (show) renderSkills();
 }
 
+// ============ 任务面板 ============
+const questEl = document.getElementById('quest');
+function qRewardText(r) {
+  const out = [];
+  if (r.relic) out.push('「' + relicName(r.relic) + '」');
+  if (r.gold) out.push('银两 ' + r.gold);
+  if (r.fame) out.push('侠名 +' + r.fame);
+  if (r.xp) out.push('历练 ' + r.xp);
+  if (r.potion) out.push('回春丹 ×' + r.potion);
+  if (r.gear) out.push(RARITY[r.gear.r].name + SLOT_LABEL[r.gear.kind] + ' ×1');
+  return out.join(' · ');
+}
+function renderQuests() {
+  if (!questEl) return;
+  const body = document.getElementById('questBody');
+  if (!body) return;
+
+  // 三物进度：这是整章唯一的"主线看得见"的进度条
+  const t = tripleState();
+  document.getElementById('questRelics').innerHTML = RELICS_TRIPLE.map(id => {
+    const got = (player.relics[id] || 0) > 0;
+    return '<div class="' + (got ? 'on' : '') + '"><b>' + relicName(id) + '</b>' +
+      '<span>' + (got ? '已得' : '未得') + '</span></div>';
+  }).join('');
+  document.getElementById('questSub').textContent = t.ok
+    ? '三物已齐 · 古洞封碑可启'
+    : '三物齐，封碑自开（缺 ' + t.miss.map(relicName).join('、') + '）';
+
+  const card = (q, st) => {
+    const s = player.quests[q.id];
+    const stepIdx = s ? s.step : -1;
+    const done = s && s.st === 'done';
+    const ready = questReady(q.id);
+    const steps = q.steps.map((o, i) => {
+      const cls = done || i < stepIdx ? 'ok' : (i === stepIdx ? 'cur' : '');
+      const txt = i === stepIdx && s ? objText(o, s.prog) : o.text;
+      return '<div class="qStep ' + cls + '">' + (cls === 'ok' ? '✓ ' : (cls === 'cur' ? '▸ ' : '· ')) + txt + '</div>';
+    }).join('');
+    return '<div class="qcard' + (done ? ' done' : ready ? ' ready' : '') + '">' +
+      '<div class="qTop"><b>' + q.title + '</b><i>' +
+      (done ? '已了' : ready ? '可复命' : '进行中') + '</i></div>' +
+      '<div class="qWhere">' + q.place + ' · ' + (q.kind === 'main' ? '主线' : '支线') + '</div>' +
+      steps +
+      '<div class="qRew">酬：' + qRewardText(q.reward || {}) + '</div>' +
+      '</div>';
+  };
+
+  const act = QUEST_IDS.filter(id => player.quests[id] && player.quests[id].st === 'active');
+  const fin = QUEST_IDS.filter(id => player.quests[id] && player.quests[id].st === 'done');
+  let html = '';
+  if (act.length) {
+    html += '<div class="qsec">进行中 ' + act.length + '</div>' + act.map(id => card(QUESTS[id])).join('');
+  } else {
+    html += '<div class="qsec">进行中</div><div class="qStep">还没有接任务。村里、野外、古洞前都有人在等你。</div>';
+  }
+  if (fin.length) html += '<div class="qsec">已了 ' + fin.length + '</div>' + fin.map(id => card(QUESTS[id])).join('');
+  const relics = Object.keys(player.relics || {}).filter(k => player.relics[k] > 0);
+  if (relics.length) {
+    html += '<div class="qsec">信物</div>' + relics.map(k =>
+      '<div class="qStep">· ' + relicName(k) + '　<span style="color:#8A8268">' +
+      ((QUEST_ITEMS[k] || {}).note || '') + '</span></div>').join('');
+  }
+  body.innerHTML = html;
+}
+function toggleQuests(force) {
+  const show = force !== undefined ? force : questEl.classList.contains('hidden');
+  questEl.classList.toggle('hidden', !show);
+  if (show) renderQuests();
+}
+
 // ============ 存档 ============
 function save() {
   if (state !== 'play' && state !== 'clear') return;
@@ -2891,6 +3220,7 @@ function save() {
     skillPts: player.skillPts, skillLv: player.skillLv, kills: player.kills || 0,
     rested: !!player.rested, fame: player.fame || 0,
     bossKills: player.bossKills || {},
+    quests: player.quests, relics: player.relics, track: player.track,
     clock: clock.serialize(),
   }));
 }
@@ -2951,6 +3281,7 @@ function load() {
     skillPts: s.skillPts || 0, skillLv: s.skillLv || {}, kills: s.kills || 0,
     rested: !!s.rested, fame: s.fame || 0,
     bossKills: s.bossKills || {},
+    quests: s.quests || {}, relics: s.relics || {}, track: s.track || null,
   });
   invalidateStats();
   // 地脉变动：96×72 扩到 144×104 之后，旧存档的坐标可能落在岩层里或地图外。
@@ -2991,7 +3322,7 @@ function startGame(cont) {
       atkBase: 8, inv: [], invMax: INV_BASE, equip: { weapon: null, armor: null, necklace: null, artifact: null },
       skillPts: 0, skillLv: {}, kills: 0, atkStep: 0, swing: null, shield: 0, poison: 0, poisonT: 0,
       poisonImmuneT: 0, drunkT: 0, drunk: 0, rested: false, fame: 0,
-      rootT: 0, bossKills: {},
+      rootT: 0, bossKills: {}, quests: {}, relics: {}, track: null,
     });
     invalidateStats();
   }
@@ -3007,7 +3338,7 @@ function startGame(cont) {
   state = 'play';
   combo = 0; comboT = 0; hitstop = 0; shakeX = shakeY = 0;
   msg(cont ? '继续闯荡 · 第一章 青云野' : '第一章 · 青云野', C.gold3);
-  renderInv(); renderSkills();
+  renderInv(); renderSkills(); renderQuests();
 }
 
 // ============ 输入 ============
@@ -3030,10 +3361,11 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyR') windStep();
   if (e.code === 'KeyQ') usePotion();
   if (e.code === 'KeyT') toggleSkills();
+  if (e.code === 'KeyB') toggleQuests();   // 任务簿。L 已经被剑舞占了
   if (e.code === 'KeyF') meditate();
   if (e.code === 'KeyE') interact();
   if (e.code === 'Tab' || e.code === 'KeyI') { if (state === 'play') toggleInv(); }
-  if (e.code === 'Escape') { toggleInv(false); forgeClose(); toggleSkills(false); shopClose(); talkClose(); }
+  if (e.code === 'Escape') { toggleInv(false); forgeClose(); toggleSkills(false); toggleQuests(false); shopClose(); talkClose(); }
   if (e.code === 'KeyM') { AUDIO.enabled = !AUDIO.enabled; msg(AUDIO.enabled ? '音效开' : '音效关', C.paper2); }
   if (e.code === 'F11' || (e.code === 'KeyF' && e.ctrlKey)) { e.preventDefault(); toggleFullscreen(); }
 });
@@ -3082,6 +3414,7 @@ document.getElementById('btnShopClose').onclick = shopClose;
 document.getElementById('btnTalkClose').onclick = talkClose;
 document.getElementById('talkLine').onclick = sayAll;   // 点正文 = 跳过打字机
 document.getElementById('btnSkillClose').onclick = () => toggleSkills(false);
+document.getElementById('btnQuestClose').onclick = () => toggleQuests(false);
 document.getElementById('btnCont').disabled = !(localStorage.getItem(SAVE_KEY) || localStorage.getItem(LEGACY_KEYS[0]));
 
 // 技能栏点击（画布上直接点技能格）
@@ -3373,6 +3706,36 @@ function runBossSkills(e, dt, d) {
   return true;
 }
 
+// HUD 追踪条：只显示一条当前目标。
+// 显示两条以上就没人看了 —— 玩家在野外只想知道"我现在该去哪"。
+function drawQuestTracker() {
+  const id = player.track && player.quests[player.track] && player.quests[player.track].st === 'active'
+    ? player.track
+    : QUEST_IDS.find(k => player.quests[k] && player.quests[k].st === 'active');
+  if (!id) return;
+  const q = QUESTS[id], s = player.quests[id];
+  const o = q.steps[s.step];
+  if (!o) return;
+  const ready = s.step >= q.steps.length;
+  const x = 110, y = 42;
+  const line2 = ready ? '回去复命' : objText(o, s.prog);
+  // 底衬：HUD 左上是压在野地上的，纯文字在浅色草地上根本读不出来
+  octx.font = 'bold 9px monospace';
+  const w = Math.max(octx.measureText('▸ ' + q.title).width, octx.measureText(line2).width);
+  octx.fillStyle = 'rgba(10,12,18,0.46)';
+  octx.fillRect(x - 4, y - 3, w + 8, 23);
+  octx.textAlign = 'left';
+  octx.fillStyle = C.black;
+  octx.fillText('▸ ' + q.title, x + 1, y + 1);
+  octx.fillStyle = ready ? C.jade3 : C.paper2;
+  octx.fillText('▸ ' + q.title, x, y);
+  octx.font = '9px monospace';
+  octx.fillStyle = C.black;
+  octx.fillText(line2, x + 1, y + 11);
+  octx.fillStyle = ready ? C.gold3 : C.paper1;
+  octx.fillText(line2, x, y + 10);
+}
+
 // ============ 主循环 ============
 // 挥砍推进 + 收招留刀光
 function tickSwing(dt) {
@@ -3449,6 +3812,8 @@ function update(dt) {
     if (iv && !wasInDg) banner('青云古洞', '第 ' + dgFloor + ' 层 · 火把之外都是黑的');
     wasInDg = iv;
   }
+  // 任务：reach / dg / item / have 四种目标每帧现算，kill 与 talk 走事件
+  questTick(dt);
 
   if (hitstop > 0) { hitstop -= dt; tickSwing(dt); return; }
 
@@ -4406,6 +4771,7 @@ function drawOverlay(camX, camY) {
   octx.fillText('真气 ' + Math.round(player.qi) + '/' + Math.round(s.qiMax), 110, 18);
   octx.fillStyle = C.gold3;
   octx.fillText('银两 ' + player.gold + ' · 精铁 ' + player.iron, 110, 28);
+  drawQuestTracker();
 
   // 连击
   if (combo > 1) {
@@ -4448,7 +4814,7 @@ function drawOverlay(camX, camY) {
     octx.fillStyle = C.jade3; octx.fillText('丹药×' + potions, 8, LH - 14);
     // 走近谁就说谁的事：一条提示轮着写"E 铁匠台 / E 云来客栈 / R 御风"，
     // 比堆三行固定文案更像"脚下有东西等着你按"。
-    let hint = 'R 御风', hot = false, sub = 'T 道行  Tab 行囊';
+    let hint = 'R 御风', hot = false, sub = 'T 道行  B 任务  Tab 行囊';
     // 提示必须和 interact() 挑的是同一个对象，否则会出现"提示说找老周、按 E 却开了铺子"
     const dgo = nearDg();
     if (dgo) {
@@ -4465,6 +4831,7 @@ function drawOverlay(camX, camY) {
       if (vv && dv <= ds) { hint = 'E 与 ' + vv.name + ' 说话'; hot = true; }
       else if (sid) { hint = 'E ' + SHOPS[sid].title + (shopOpenNow(sid) ? '' : '（已打烊）'); hot = true; }
       else if (nearNotice()) { hint = 'E 告示牌'; hot = true; }
+      else if (nearSeal()) { hint = 'E 封碑（未启）'; hot = true; }
       else if (nearForge) { hint = 'E 铁匠台  F 打坐'; hot = true; }
     }
     octx.fillStyle = hot ? C.gold3 : C.paper1;
@@ -4941,6 +5308,11 @@ window.__game = {
   get objects() { return objects; },
   get hazards() { return hazards; }, addHazard, clearHazards, UNIQUES, makeUnique,
   killEnemy, execSkill, runBossSkills,
+  QUESTS, QUEST_IDS, QUEST_ITEMS, WANDERERS, ALL_TALKERS,
+  questAccept, questTurnIn, questReady, questOffered, questTurnInAt, questOnKill, questOnTalk,
+  refreshSeal, tripleState, relicName, renderQuests, toggleQuests,
+  get sealOn() { return sealOn; },
+  get talkers() { return ALL_TALKERS; },
   spawnEnemy, save, load, startGame, attack, castQi, castWu, castThunder, dash, windStep,
   salvageBulk, equipItem, unequip, usePotion, renderInv, renderForge, forgeOpen, forgeClose,
   renderSkills, learnNode, toggleSkills,

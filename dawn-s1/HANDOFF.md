@@ -35,6 +35,7 @@ node tools/run.js eval tools/weapons.js   # 八兵器 / 触屏专项，当前 32
 node tools/run.js eval tools/map.js       # 大地图连通性与地貌，当前 13 pass / 0 fail
 node tools/run.js eval tools/camps.js     # 营地生态（巡逻/吹哨/食物链/作息），当前 17 pass / 0 fail
 node tools/run.js eval tools/bosses.js    # 首领（招式表/巢穴/危险区/首杀专属），当前 22 pass / 0 fail
+node tools/run.js eval tools/quests.js    # 任务（10 条全通/三物门禁/存档），当前 28 pass / 0 fail
 node tools/run.js shot out.png 1440 900   # 截图
 ```
 
@@ -79,13 +80,13 @@ for(let i=0;i<25;i++)g.tick(0.016)" \
 | **P1 大地图 144×104 + 四区地貌 + 12 营地 + 路网** | ✅ 2026-11-10 |
 | **P2 营地生态：巡逻 / 吹哨 / 食物链 / 作息 / 营地道具 / 3 个营地首领** | ✅ 2026-11-10 |
 | **P3 首领 3→8：招式表引擎 + 4 个巢穴 + 地面危险区 + 5 件首杀专属装备** | ✅ 2026-11-10 |
+| **P4 任务系统：`quests.js` 10 条 + 面板 + 追踪条 + 三物门禁 + 4 个新 NPC** | ✅ 2026-11-10 |
 | 双渠道发布（GitHub Pages + workbuddy） | ✅ |
 
 ### 未完成（按顺序）
 
 | 批次 | 内容 | 文档 |
 |---|---|---|
-| **P4** | NPC 与任务：店主 5→9、街面 8→16、任务系统从零建、10 条任务 | `CHAPTER-1-EXPANSION.md` §4 · P4 |
 | **P5** | 技能框架 + 兵器专精 + 16 个技能 | `SKILLS-STORY-PLAN.md` §二 |
 | **P5.5** | 心法系统（22 条 + 一主二辅 + 心法页 UI） | `SKILLS-STORY-PLAN.md` §三 |
 | **P6** | 补齐剩余 48 个技能 + 装配 UI | 同上 |
@@ -179,20 +180,22 @@ dawn-s1/
 
 ## 7. 下次开工的第一件事
 
-按 `CHAPTER-1-EXPANSION.md` §4 的 **P4 · NPC 与任务** 往下做。
+按 `SKILLS-STORY-PLAN.md` 的 **P5 · 技能框架 + 兵器专精 + 16 个技能** 往下做。
 
-P1~P3 已经把地基铺好了：
+P1~P4 已经把第一章的骨架铺完了：
 
-- 12 个营地，带 `name` / `tier` / `types` / `night` / `patrol` / `alert` / `lord`
-- 每个营地都可达，都有篝火 / 帐篷 / 哨塔，夜里篝火会发光
-- 怪会巡逻、会吹哨叫援、会追猎物、按时辰睡觉
-- 3 个营地首领（教头 / 蛇母 / 守墓人）走 `lord` 字段
-- 4 个巢穴首领（青鳞蟒 / 机关傀儡 / 石母 / 火鸦王）走 `dens` + `skills` 招式表
-- 无面剑客在古洞第三层岩魈倒下后接棒
-- 招式引擎：`monsters.js` 写 `skills`，`game.js` 的 `runBossSkills` + `execSkill` 六种 `fx` 分派，
-  加新首领不用改 `game.js`
+- 地图 144×104，四区地貌，12 营地 + 4 巢穴，路网与溪涧竹桥
+- 怪会巡逻、吹哨叫援、追猎物、按时辰睡觉；8 个首领各有一套招式表
+- 10 条任务（3 主线 + 7 支线）全部可完成，三物齐了才开古洞封碑
+- 任务面板 `B`、HUD 追踪条、信物系统、店主「问事」行
 
-P4 要从零建**任务系统**。现有能借力的只有三样：侠名（`addFame`）、传闻（`rumor`）、
-店铺对话（`talkOpen` / `talkLine`）。任务数据建议单独开 `quests.js`，和 `monsters.js` 一样做成纯数据表。
+P5 要动的是**战斗的构筑层**：现在只有八类兵器 + 一棵道行树，缺"同一把刀打出不同路子"。
+按 `SKILLS-STORY-PLAN.md` §二 的施工单走，先把框架（技能槽 / 装配 / 冷却）搭起来，
+再灌 16 个技能，剩下 48 个放 P6。
 
-**动手前先读**：`CHAPTER-1-EXPANSION.md` §4 · P4，里面有任务系统的最小可行结构与 10 条任务线草案。
+**动手前先读**：
+- `SKILLS-STORY-PLAN.md` §二（技能 64 个 + 兵器专精 0→10）
+- `SKILLS-STORY-PLAN.md` §三（心法 22 条，P5.5 才做）
+
+**注意**：`game.js` 里 `skills` 这个名字已经被"气/舞/雷"三个主动技占用了，
+新的技能系统建议叫 `arts`（招式），别硬改老的。
