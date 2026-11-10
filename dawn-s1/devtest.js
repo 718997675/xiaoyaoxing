@@ -1,6 +1,13 @@
 // devtest.js · 仅在 ?dev=1 时加载的确定性自动化测试
 // 用 __game.tick(dt) 步进，结果输出到 #devout；setupScene() 用于视觉摆拍。
 
+// 大地图扩容后村庄整体挪到了东南角。测试里的村庄坐标统一走这个偏移，
+// 以后再动村庄位置只改 game.js 的 V_SHIFT_*，这里不用跟着改。
+function vp(x, y) {
+  const g = window.__game;
+  return [x + (g.village.x0 - 608), y + (g.village.y0 - 704)];
+}
+
 export function setupScene(mode) {
   const g = window.__game;
   g.startGame(false);
@@ -94,10 +101,6 @@ export function runDevTests() {
     g.attack();
   };
   const alive = () => g.enemies.filter(e => !e.dead);
-  // 大地图扩容后村庄整体挪到了东南角。测试里的村庄坐标统一走这个偏移，
-  // 以后再动村庄位置只改 game.js 的 V_SHIFT_*，这里不用跟着改。
-  const VX = g.village.x0 - 608, VY = g.village.y0 - 704;
-  const vp = (x, y) => [x + VX, y + VY];
 
   // --- T1 开局 ---
   g.startGame(false);

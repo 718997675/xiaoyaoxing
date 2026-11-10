@@ -112,7 +112,7 @@ async function waitFor(fn, timeout, label) {
       }
     };
 
-    const url = 'http://127.0.0.1:' + PORT + '/index.html?dev=1';
+    const url = 'http://127.0.0.1:' + PORT + '/index.html?' + (process.env.QS || 'dev=1');
     await api.send('Page.navigate', { url });
     await sleep(500);
     await waitFor(() => api.send('Runtime.evaluate', { expression: '!!window.__game', returnByValue: true })
