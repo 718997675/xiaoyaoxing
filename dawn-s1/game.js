@@ -18,7 +18,7 @@ import {
   DG, DGT, DG_FLOORS, FLOOR_MOBS, inDungeon, genFloor, paintDungeon, dungeonArt,
 } from './dungeon.js';
 
-const LW = 480, LH = 270, TILE = 16, MAPW = 96, MAPH = 72;
+const LW = 480, LH = 270, TILE = 16, MAPW = 144, MAPH = 104;
 const SAVE_KEY = 'xiaoyao-save-v5';
 const LEGACY_KEYS = ['xiaoyao-save-v4', 'xiaoyao-save-v3', 'xiaoyao-save-v2', 'xiaoyao-ch1-v1'];
 // 当前画布缩放倍率（resize 里算），面板自适应要用
@@ -176,6 +176,72 @@ const SHRINE = spriteCanvas([
   '...prppggpprp...', '...prppggpprp...', '...pppppppppp...', '..ssssssssssss..'], { i: C.ink1, p: C.paper3, r: C.red2, g: C.gold2, s: C.ink3 });
 const STONE = spriteCanvas([
   '...kkkkkk...', '..kkkkkkkk..', '..kKKKKKKk..', '..kKxxxxKk..', '..kKKKKKKk..', '..kkkkkkkk..', '...kkkkkk...'], { k: C.ink3, K: C.ink2, x: C.paper1 });
+// 坟头：矮碑 + 一抔土。碑面留一块浅色"刻字"，远看就知道是坟不是石头
+const GRAVE = spriteCanvas([
+  '...kkkkkk...',
+  '..kKKKKKKk..',
+  '.kKKKKKKKKk.',
+  '.kKKxxKKKKk.',
+  '.kKxxxxKKKk.',
+  '.kKKxxKKKKk.',
+  '.kKKKKKKKKk.',
+  '.kKKKKKKKKk.',
+  'kkkkkkkkkkkk',
+  '.bbbbbbbbbb.',
+], { k: C.ink3, K: C.ink2, x: C.paper1, b: '#3E3A30' });
+// 枯树：只有枝、没有叶。乱葬岗靠它和竹海拉开气质
+const DEADTREE = spriteCanvas([
+  '................',
+  '.......k........',
+  '....k..k..k.....',
+  '.....k.k.k......',
+  '..k...kkk...k...',
+  '...k..kkk..k....',
+  '....k.kbk.k.....',
+  '.....kkbkk......',
+  '......kbk.......',
+  '......kbk.......',
+  '......kbk.......',
+  '.....kkbkk......',
+  '......kbk.......',
+  '......kbk.......',
+  '......kbk.......',
+  '.....kkbkk......',
+  '....kk...kk.....',
+  '...kk.....kk....',
+], { k: '#57503F', b: C.ink2 });
+// 石笋：石窟里的立石，比地面上的 stone 更尖、更高
+const STALAG = spriteCanvas([
+  '....kk....',
+  '...kKKk...',
+  '...kKKk...',
+  '..kKKKKk..',
+  '..kKKKKk..',
+  '..kKKxKk..',
+  '.kKKKKKKk.',
+  '.kKKKKKKk.',
+  '.kKKxKKKk.',
+  'kKKKKKKKKk',
+  'kKKKKKKKKk',
+  'kkkkkkkkkk',
+  '.kkkkkkkk.',
+  '..kkkkkk..',
+], { k: C.ink3, K: C.ink2, x: C.paper1 });
+// 火把：矿道里唯一的光。夜里也是个小灯
+const TORCH = spriteCanvas([
+  '...y....',
+  '..yry...',
+  '..rrr...',
+  '...r....',
+  '...s....',
+  '...s....',
+  '...s....',
+  '...s....',
+  '...s....',
+  '...s....',
+  '...s....',
+  '..sss...',
+], { y: C.gold2, r: C.red2, s: C.ink3 });
 
 // ============ three.js ============
 const glCanvas = document.getElementById('gl');
@@ -220,33 +286,157 @@ const rng = mulberry32(20261109);
 const tiles = new Uint8Array(MAPW * MAPH);
 const solid = new Uint8Array(MAPW * MAPH);
 const objects = [];
-const SPAWN = { x: 48 * TILE + 8, y: 64 * TILE + 8 };
-const ALTAR = { x: 48 * TILE + 8, y: 9 * TILE + 8 };
-const TREANT_POS = { x: 15 * TILE + 8, y: 34 * TILE + 8 };
+// ============ 大地图：村庄整体位移 ============
+// 96×72 → 144×104 之后，青云集要留在东南角（新图往北、往西各扩了一圈）。
+// village.js 里 NPC / 建筑 / 摆件 / 店铺全是村庄内的绝对像素坐标，一个个改容易漏，
+// 这里统一加一个位移 —— 改一处就全动了，而且不用碰 village.js 里的任何美术数据。
+const V_SHIFT_X = 1120, V_SHIFT_Y = 512;
+VILLAGE.x0 += V_SHIFT_X; VILLAGE.x1 += V_SHIFT_X;
+VILLAGE.y0 += V_SHIFT_Y; VILLAGE.y1 += V_SHIFT_Y;
+VILLAGE.gateX += V_SHIFT_X;
+for (const arr of [BUILDINGS, NPCS, VILLAGERS, PROPS]) {
+  for (const o of arr) { if (o.x !== undefined) o.x += V_SHIFT_X; if (o.y !== undefined) o.y += V_SHIFT_Y; }
+}
+for (const id in SHOPS) { SHOPS[id].x += V_SHIFT_X; SHOPS[id].y += V_SHIFT_Y; }
+
+const SPAWN = { x: 1896, y: 1544 };
+const ALTAR = { x: 1152, y: 96 };
+const TREANT_POS = { x: 2000, y: 320 };
+
+// —— 四区地貌（tile 坐标，左闭右开）——
+// 竹海西南、石窟西北、乱葬岗东北，青云集东南，古洞正北。
+const REGION = {
+  cave:   { x0: 4,  y0: 6,  x1: 52,  y1: 46,  label: '西荒石窟' },
+  grave:  { x0: 92, y0: 4,  x1: 140, y1: 44,  label: '北坡乱葬岗' },
+  bamboo: { x0: 4,  y0: 52, x1: 62,  y1: 100, label: '南岭竹海' },
+};
+
 const camps = [
-  { x: 21 * TILE, y: 19 * TILE, tier: 1, types: ['zhiren', 'zhiren', 'fox', 'snake'], name: '山贼哨营' },
-  { x: 73 * TILE, y: 17 * TILE, tier: 1, types: ['zhiren', 'ghost', 'fukui'], name: '黑风前哨' },
-  { x: 37 * TILE, y: 35 * TILE, tier: 1, types: ['fox', 'snake', 'shanxiao'], name: '妖兽巢穴' },
-  { x: 77 * TILE, y: 45 * TILE, tier: 2, types: ['brute', 'shadow', 'shigan'], name: '演武场' },
-  // 乱葬岗原本在 (23,54)，正好压在青云古洞的山体上 —— 挪到西坡高处
-  { x: 24 * TILE, y: 30 * TILE, tier: 1, types: ['crow', 'fukui', 'yinhun'], name: '乱葬岗' },
-  { x: 68 * TILE, y: 63 * TILE, tier: 2, types: ['shanxiao', 'brute', 'yinhun', 'crow'], name: '黑风寨外营' },
+  // —— 青云集周边 ——
+  { x: 96 * TILE, y: 96 * TILE, tier: 1, types: ['zhiren', 'zhiren', 'fox', 'snake'], name: '山贼哨营' },
+  { x: 78 * TILE, y: 92 * TILE, tier: 1, types: ['zhiren', 'ghost', 'fukui'], name: '黑风前哨' },
+  { x: 90 * TILE, y: 74 * TILE, tier: 2, types: ['brute', 'shadow', 'shigan'], name: '演武场' },
+  // —— 南岭竹海 ——
+  { x: 30 * TILE, y: 58 * TILE, tier: 1, types: ['fox', 'snake', 'shanxiao'], name: '妖兽巢穴' },
+  { x: 16 * TILE, y: 70 * TILE, tier: 1, types: ['shanxiao', 'fox', 'snake'], name: '猎户棚' },
+  { x: 46 * TILE, y: 86 * TILE, tier: 2, types: ['snake', 'snake', 'brute'], name: '蛇窟' },
+  { x: 56 * TILE, y: 96 * TILE, tier: 2, types: ['shigan', 'brute', 'shadow'], name: '机关工坊' },
+  // —— 西荒石窟 ——
+  { x: 12 * TILE, y: 20 * TILE, tier: 1, types: ['zhiren', 'brute', 'ghost'], name: '矿口哨卡' },
+  { x: 36 * TILE, y: 34 * TILE, tier: 2, types: ['shigan', 'shadow', 'brute'], name: '塌方矿道' },
+  { x: 22 * TILE, y: 10 * TILE, tier: 2, types: ['crow', 'crow', 'fukui'], name: '火鸦巢' },
+  // —— 北坡乱葬岗 ——
+  { x: 100 * TILE, y: 12 * TILE, tier: 1, types: ['crow', 'fukui', 'yinhun'], name: '乱葬岗' },
+  { x: 122 * TILE, y: 32 * TILE, tier: 2, types: ['yinhun', 'shadow', 'yinhun'], name: '守墓人小屋' },
 ];
 for (let y = 0; y < MAPH; y++) for (let x = 0; x < MAPW; x++) {
   const i = y * MAPW + x;
   tiles[i] = rng() < 0.22 ? 1 : 0;
   if (x < 2 || y < 2 || x >= MAPW - 2 || y >= MAPH - 2) { tiles[i] = 4; solid[i] = 1; }
 }
-for (let p = 0; p < 90; p++) {
+// 荒地斑块与野花：数量按面积比放大（96×72 → 144×104 约 2.17 倍），
+// 照旧数量撒的话大图会稀得像没画完。
+for (let p = 0; p < 195; p++) {
   const cx = 3 + (rng() * (MAPW - 6)) | 0, cy = 3 + (rng() * (MAPH - 6)) | 0, r = 1 + (rng() * 2) | 0;
   for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
     if (x > 2 && y > 2 && x < MAPW - 3 && y < MAPH - 3 && (x - cx) ** 2 + (y - cy) ** 2 <= r * r) tiles[y * MAPW + x] = 2;
   }
 }
-for (let f = 0; f < 320; f++) {
+for (let f = 0; f < 700; f++) {
   const x = 3 + (rng() * (MAPW - 6)) | 0, y = 3 + (rng() * (MAPH - 6)) | 0;
   if (tiles[y * MAPW + x] === 0) tiles[y * MAPW + x] = 3;
 }
+
+// ============ 四区地貌 ============
+// 用一条抖动过的矩形边把整块地刷成该区底材。不做噪声地形 ——
+// 玩家看小地图要能一眼分出"这片是竹林、那片是坟地"，噪声会把它们糊成一团。
+function regionFloor(r, id) {
+  for (let y = r.y0; y < r.y1; y++) for (let x = r.x0; x < r.x1; x++) {
+    const i = y * MAPW + x;
+    if (tiles[i] === 4) continue;
+    const n = Math.sin(x * 0.17 + y * 0.11) * 3.1 + Math.sin(y * 0.29 - x * 0.06) * 2.2;
+    if (x < r.x0 + 4 + n || x > r.x1 - 4 - n) continue;
+    if (y < r.y0 + 4 + n || y > r.y1 - 4 - n) continue;
+    tiles[i] = id;
+  }
+}
+regionFloor(REGION.bamboo, 6);
+regionFloor(REGION.cave, 7);
+regionFloor(REGION.grave, 8);
+
+// 石窟的岩层：整片实心会变成迷宫，只撒几十块小岩体，通路靠后面的路去打通
+for (let c = 0; c < 46; c++) {
+  const cx = REGION.cave.x0 + 5 + (rng() * (REGION.cave.x1 - REGION.cave.x0 - 10)) | 0;
+  const cy = REGION.cave.y0 + 5 + (rng() * (REGION.cave.y1 - REGION.cave.y0 - 10)) | 0;
+  const r = 1 + (rng() * 2) | 0;
+  for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
+    if ((x - cx) ** 2 + (y - cy) ** 2 > r * r) continue;
+    if (x < 3 || y < 3 || x >= MAPW - 3 || y >= MAPH - 3) continue;
+    // 营地所在的地面不能被岩层吃掉，否则刷怪会直接卡在石头里
+    if (camps.some(c2 => Math.hypot(x * TILE + 8 - c2.x, y * TILE + 8 - c2.y) < 66)) continue;
+    solid[y * MAPW + x] = 1;
+  }
+}
+
+// 竹海的溪涧：从北缘蜿蜒到南缘。水是实心的，只在三处架竹桥 ——
+// 桥不铺满整条溪，玩家得自己找过河的地方，竹海才有点"迷"的意思。
+let wx = 38;
+for (let y = REGION.bamboo.y0 + 6; y < REGION.bamboo.y1 - 4; y++) {
+  wx += Math.round(Math.sin(y * 0.23) * 1.1);
+  if (wx < REGION.bamboo.x0 + 7) wx = REGION.bamboo.x0 + 7;
+  if (wx > REGION.bamboo.x1 - 11) wx = REGION.bamboo.x1 - 11;
+  for (let k = 0; k < 3; k++) {
+    const i = y * MAPW + (wx + k);
+    if (tiles[i] === 4) continue;
+    tiles[i] = 10; solid[i] = 1;
+  }
+}
+for (const by of [62, 76, 90]) {
+  for (let x = 0; x < MAPW; x++) {
+    if (tiles[by * MAPW + x] !== 10) continue;
+    for (const yy of [by, by + 1]) {
+      const i = yy * MAPW + x;
+      if (tiles[i] === 10) { tiles[i] = 9; solid[i] = 0; }
+    }
+  }
+}
+
+// 路网。先在 tile 空间里走，主方向多走、次方向偶尔拐 ——
+// 这样出来的是"人踩出来的路"，不是尺子画出来的 45° 斜线。
+function carveRoad(tx0, ty0, tx1, ty1, halfW) {
+  let x = tx0, y = ty0, guard = 0;
+  while ((x !== tx1 || y !== ty1) && guard++ < 8000) {
+    const dx = Math.sign(tx1 - x), dy = Math.sign(ty1 - y);
+    if (Math.abs(tx1 - x) >= Math.abs(ty1 - y)) {
+      if (rng() < 0.82 || !dy) x += dx; else y += dy;
+    } else {
+      if (rng() < 0.82 || !dx) y += dy; else x += dx;
+    }
+    for (let oy = -halfW; oy <= halfW; oy++) for (let ox = -halfW; ox <= halfW; ox++) {
+      const px = x + ox, py = y + oy;
+      if (px < 2 || py < 2 || px >= MAPW - 2 || py >= MAPH - 2) continue;
+      if (inDungeon(px * TILE + 8, py * TILE + 8, 10)) continue;
+      const i = py * MAPW + px;
+      if (tiles[i] === 4) continue;
+      tiles[i] = 2; solid[i] = 0;
+    }
+  }
+}
+const HUB = { x: 84, y: 60 };
+carveRoad(119, 91, HUB.x, HUB.y, 1);   // 村口 → 三岔口
+carveRoad(119, 91, 96, 96, 1);         // 村口 → 山贼哨营
+carveRoad(90, 74, 119, 91, 1);         // 演武场 → 村口
+carveRoad(HUB.x, HUB.y, 100, 12, 1);   // 三岔口 → 乱葬岗
+carveRoad(HUB.x, HUB.y, 72, 40, 1);    // 三岔口 → 古洞前
+carveRoad(72, 40, 12, 20, 1);          // 古洞前 → 石窟矿口
+carveRoad(HUB.x, HUB.y, 30, 58, 1);    // 三岔口 → 竹海
+carveRoad(30, 58, 46, 86, 1);          // 竹海 → 蛇窟
+carveRoad(46, 86, 56, 96, 1);          // 蛇窟 → 机关工坊
+carveRoad(30, 58, 16, 70, 1);          // 竹海 → 猎户棚
+carveRoad(100, 12, 122, 32, 1);        // 乱葬岗 → 守墓人小屋
+carveRoad(12, 20, 22, 10, 1);          // 矿口 → 火鸦巢
+carveRoad(12, 20, 36, 34, 1);          // 矿口 → 塌方矿道
+
 // —— 青云集：先把村址从野地里"清"出来 ——
 // 顺序很关键：必须在 nearClear / 物件生成之前改地块，否则竹子会照常长在街上。
 // 5 号地块 = 石板街（新加的类型，不参与土路的"啃碎边缘"那一步）。
@@ -264,8 +454,9 @@ for (let x = V_T0; x < V_T1; x++) {
   solid[(V_TY1 - 1) * MAPW + x] = 1;
 }
 // 官道：从牌坊一路铺到土地庙，玩家一出门就能看见村口
+const GATE_T = (VILLAGE.gateX / TILE) | 0;
 for (let y = V_TY1; y <= ((SPAWN.y / TILE) | 0) + 1; y++) {
-  for (let x = 46; x <= 51; x++) {
+  for (let x = GATE_T - 2; x <= GATE_T + 2; x++) {
     const i = y * MAPW + x;
     if (i > 0 && i < tiles.length) { tiles[i] = 2; solid[i] = 0; }
   }
@@ -279,7 +470,25 @@ function nearClear(x, y) {
   if (Math.hypot(x - TREANT_POS.x, y - TREANT_POS.y) < 60) return true;
   return camps.some(c => Math.hypot(x - c.x, y - c.y) < 58);
 }
-for (let c = 0; c < 150; c++) {
+// —— 分区撒风物 ——
+// 每个区只在自己那片地上长东西：竹海是密竹、石窟是石笋与火把、乱葬岗是坟与枯树。
+// 通用草地仍然撒桃树和竹子，保留"野地"的底子。
+function scatterOn(id, r, count, kinds) {
+  const w = r.x1 - r.x0, h = r.y1 - r.y0;
+  for (let c = 0; c < count; c++) {
+    const x = r.x0 + 2 + ((rng() * (w - 4)) | 0), y = r.y0 + 2 + ((rng() * (h - 4)) | 0);
+    const i = y * MAPW + x;
+    if (tiles[i] !== id || solid[i]) continue;
+    if (nearClear(x * TILE + 8, y * TILE + 16)) continue;
+    solid[i] = 1;
+    objects.push({ kind: kinds[(rng() * kinds.length) | 0], x: x * TILE + 8, y: y * TILE + 16 });
+  }
+}
+scatterOn(6, REGION.bamboo, 420, ['bamboo', 'bamboo', 'bamboo', 'peach']);
+scatterOn(7, REGION.cave, 150, ['stalag', 'stalag', 'stone', 'torch']);
+scatterOn(8, REGION.grave, 260, ['grave', 'grave', 'grave', 'deadtree']);
+
+for (let c = 0; c < 300; c++) {
   const cx = 4 + (rng() * (MAPW - 8)) | 0, cy = 4 + (rng() * (MAPH - 8)) | 0;
   const n = 2 + (rng() * 4) | 0;
   for (let k = 0; k < n; k++) {
@@ -290,13 +499,13 @@ for (let c = 0; c < 150; c++) {
     }
   }
 }
-for (let r = 0; r < 40; r++) {
+for (let r = 0; r < 87; r++) {
   const x = 3 + (rng() * (MAPW - 6)) | 0, y = 3 + (rng() * (MAPH - 6)) | 0, i = y * MAPW + x;
   if (tiles[i] < 2 && !solid[i] && !nearClear(x * TILE + 8, y * TILE + 12)) {
     solid[i] = 1; objects.push({ kind: 'lantern', x: x * TILE + 8, y: y * TILE + 12 });
   }
 }
-for (let r = 0; r < 18; r++) {
+for (let r = 0; r < 39; r++) {
   const x = 4 + (rng() * (MAPW - 8)) | 0, y = 4 + (rng() * (MAPH - 8)) | 0, i = y * MAPW + x;
   if (tiles[i] < 2 && !solid[i] && !nearClear(x * TILE + 8, y * TILE + 12)) {
     solid[i] = 1; objects.push({ kind: 'stone', x: x * TILE + 8, y: y * TILE + 10 });
@@ -310,7 +519,9 @@ const groundC = document.createElement('canvas');
 groundC.width = MAPW * TILE; groundC.height = MAPH * TILE;
 {
   const g = groundC.getContext('2d');
-  const cols = [C.jade1, C.jade1, C.paper1, C.jade1, C.ink1, '#8A8268'];
+  // 索引：0/1 草 2 土路 3 野花 4 边界 5 石板街 6 竹海 7 石窟 8 荒土 9 竹桥 10 溪水
+  const cols = [C.jade1, C.jade1, C.paper1, C.jade1, C.ink1, '#8A8268',
+    '#2A5B54', '#3B3C3D', '#59523F', '#6B4B2E', '#1D4A56'];
   for (let y = 0; y < MAPH; y++) for (let x = 0; x < MAPW; x++) {
     const t = tiles[y * MAPW + x];
     // 草地做低频色块：同一片草不必一个颜色，远看有起伏
@@ -365,9 +576,65 @@ groundC.width = MAPW * TILE; groundC.height = MAPH * TILE;
       }
     }
     if (t === 4) { g.fillStyle = C.jade2; g.fillRect(x * TILE + 2, y * TILE + 4 + ((rng() * 8) | 0), 6, 1); g.fillRect(x * TILE + 9, y * TILE + 2 + ((rng() * 10) | 0), 5, 1); }
+    if (t === 6) {
+      // 竹海：湿、暗、落叶多。不铺满，留 40% 干净的底，否则整片像地毯
+      const bx = x * TILE, by = y * TILE;
+      g.fillStyle = '#35706A';
+      for (let k = 0; k < 4; k++) g.fillRect(bx + ((rng() * 15) | 0), by + ((rng() * 15) | 0), 1, 2);
+      if (rng() < 0.45) {
+        g.fillStyle = '#8A7A3C';
+        g.fillRect(bx + ((rng() * 13) | 0), by + ((rng() * 13) | 0), 2, 1);
+      }
+      if (rng() < 0.18) {
+        g.fillStyle = '#244F49';
+        g.fillRect(bx + ((rng() * 12) | 0), by + ((rng() * 12) | 0), 4, 3);
+      }
+    }
+    if (t === 7) {
+      // 石窟：碎岩 + 一道裂缝。岩面比外面冷，靠裂纹读"石头"而不是靠颜色
+      const bx = x * TILE, by = y * TILE;
+      g.fillStyle = '#4A4B4C';
+      for (let k = 0; k < 3; k++) g.fillRect(bx + ((rng() * 14) | 0), by + ((rng() * 14) | 0), 2, 1);
+      if (rng() < 0.3) {
+        g.fillStyle = '#2A2B2C';
+        let cx2 = bx + ((rng() * 10) | 0) + 3, cy2 = by + ((rng() * 6) | 0) + 2;
+        for (let k = 0; k < 5; k++) { g.fillRect(cx2, cy2, 1, 1); cx2 += ((rng() * 3) | 0) - 1; cy2 += 1; }
+      }
+    }
+    if (t === 8) {
+      // 乱葬岗：干裂的土 + 零星白骨。刻意压低饱和，和竹海的湿绿正好相反
+      const bx = x * TILE, by = y * TILE;
+      g.fillStyle = '#6A6250';
+      for (let k = 0; k < 3; k++) g.fillRect(bx + ((rng() * 14) | 0), by + ((rng() * 14) | 0), 3, 1);
+      if (rng() < 0.12) {
+        g.fillStyle = C.paper1;
+        g.fillRect(bx + ((rng() * 13) | 0), by + ((rng() * 13) | 0), 2, 1);
+      }
+      if (rng() < 0.06) {
+        g.fillStyle = '#3A3529';
+        g.fillRect(bx + ((rng() * 10) | 0), by + ((rng() * 12) | 0), 1, 4);
+      }
+    }
+    if (t === 9) {
+      // 竹桥：横向铺板，两端各留一条暗边当"桥沿"
+      const bx = x * TILE, by = y * TILE;
+      g.fillStyle = '#7C5836';
+      for (let k = 0; k < 2; k++) g.fillRect(bx, by + k * 8 + 1, 16, 6);
+      g.fillStyle = '#4E3620';
+      g.fillRect(bx, by, 16, 1); g.fillRect(bx, by + 15, 16, 1);
+      g.fillRect(bx + 7, by, 1, 16);
+    }
+    if (t === 10) {
+      // 溪水：两道横纹 + 一处反光。不做动画，静态水面在俯视角下也够用
+      const bx = x * TILE, by = y * TILE;
+      g.fillStyle = '#2C6A78';
+      g.fillRect(bx, by + 3, 16, 1);
+      g.fillRect(bx + 2, by + 10, 12, 1);
+      if (rng() < 0.22) { g.fillStyle = '#5FA6AE'; g.fillRect(bx + ((rng() * 11) | 0), by + ((rng() * 14) | 0), 3, 1); }
+    }
   }
   // 大尺度明暗斑块：打散"一格一格"的棋盘感
-  for (let i = 0; i < 420; i++) {
+  for (let i = 0; i < 900; i++) {
     const cx = rng() * groundC.width, cy = rng() * groundC.height;
     const r = 40 + rng() * 110;
     g.save();
@@ -425,8 +692,14 @@ function grassN(x, y) { return Math.sin(x * 0.7 + y * 0.4) + Math.cos(y * 0.55 -
 const ground = quad(tex(groundC), MAPW * TILE, MAPH * TILE);
 ground.position.set(MAPW * TILE / 2, MAPH * TILE / 2, 0);
 ground.renderOrder = 0;
-const objTex = { bamboo: tex(BAMBOO), peach: tex(PEACH), lantern: tex(LANTERN), shrine: tex(SHRINE), stone: tex(STONE) };
-const objSize = { bamboo: [16, 20], peach: [16, 14], lantern: [10, 8], shrine: [16, 8], stone: [12, 7] };
+const objTex = {
+  bamboo: tex(BAMBOO), peach: tex(PEACH), lantern: tex(LANTERN), shrine: tex(SHRINE), stone: tex(STONE),
+  grave: tex(GRAVE), deadtree: tex(DEADTREE), stalag: tex(STALAG), torch: tex(TORCH),
+};
+const objSize = {
+  bamboo: [16, 20], peach: [16, 14], lantern: [10, 8], shrine: [16, 8], stone: [12, 7],
+  grave: [12, 10], deadtree: [16, 18], stalag: [10, 14], torch: [8, 12],
+};
 for (const o of objects) {
   const [w, h] = objSize[o.kind];
   o.mesh = quad(objTex[o.kind], w, h);
@@ -2397,6 +2670,14 @@ function load() {
     rested: !!s.rested, fame: s.fame || 0,
   });
   invalidateStats();
+  // 地脉变动：96×72 扩到 144×104 之后，旧存档的坐标可能落在岩层里或地图外。
+  // 与其让玩家一进游戏就卡在石头里，不如直接送回青云集门口。
+  if (!isFinite(player.x) || !isFinite(player.y) ||
+      player.x < 16 || player.y < 16 || player.x > MAPW * TILE - 16 || player.y > MAPH * TILE - 16 ||
+      !canStand(player.x, player.y)) {
+    player.x = SPAWN.x; player.y = SPAWN.y;
+    msg('地脉变动，已送回青云集', C.jade3);
+  }
   player.hp = Math.min(player.hp, maxHp());
   player.qi = Math.min(player.qi, maxQi());
   clock.restore(s.clock || { t: 0.40, day: 1 });   // 老档没有时辰字段，给回开局午后
@@ -3324,7 +3605,7 @@ function drawSkillBar() {
 }
 
 function drawMinimap() {
-  const mw = 78, mh = 58, mx = LW - mw - 8, my = 8;
+  const mw = 80, mh = 58, mx = LW - mw - 8, my = 8;
   octx.fillStyle = 'rgba(18,22,31,0.72)';
   octx.fillRect(mx - 2, my - 2, mw + 4, mh + 4);
   octx.strokeStyle = C.gold1; octx.lineWidth = 1;
@@ -4110,6 +4391,7 @@ window.__game = {
     drawArcFx(octx, 240, 135, a0 === undefined ? -2 : a0, a1 === undefined ? 1 : a1, R || 40, [C.red3, C.red2], 1, 1.5);
   },
   MAPW, MAPH, SPAWN, camps, WEAPONS, MONSTERS, NODES, SLOTS,
+  get solid() { return solid; }, REGION,
   spawnEnemy, save, load, startGame, attack, castQi, castWu, castThunder, dash, windStep,
   salvageBulk, equipItem, unequip, usePotion, renderInv, renderForge, forgeOpen, forgeClose,
   renderSkills, learnNode, toggleSkills,

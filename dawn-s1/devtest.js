@@ -60,7 +60,7 @@ export function setupScene(mode) {
   }
   if (mode === 'village') {
     g.setClock(0.30, 3);                     // 午时，四家全开
-    g.setPos(784, 866);
+    g.setPos(...vp(784, 866));
     g.setDir('down');
     for (let i = 0; i < 8; i++) g.tick(0.016);
     return 'village';
@@ -94,13 +94,17 @@ export function runDevTests() {
     g.attack();
   };
   const alive = () => g.enemies.filter(e => !e.dead);
+  // 大地图扩容后村庄整体挪到了东南角。测试里的村庄坐标统一走这个偏移，
+  // 以后再动村庄位置只改 game.js 的 V_SHIFT_*，这里不用跟着改。
+  const VX = g.village.x0 - 608, VY = g.village.y0 - 704;
+  const vp = (x, y) => [x + VX, y + VY];
 
   // --- T1 开局 ---
   g.startGame(false);
   T('开局进入 play', g.state === 'play', g.state);
   T('营地敌人成建制生成', g.enemies.length >= 26, g.enemies.length);
   T('章尾首领存在', !!g.boss, g.boss && Math.round(g.boss.hp));
-  T('地图扩大为 96×72', g.MAPW === 96 && g.MAPH === 72, g.MAPW + '×' + g.MAPH);
+  T('地图扩大为 144×104', g.MAPW === 144 && g.MAPH === 104, g.MAPW + '×' + g.MAPH);
 
   // --- T2 斩击命中 / 顿帧 / 连击 ---
   const e = alive().find(x => x.type === 'zhiren');
@@ -312,7 +316,7 @@ export function runDevTests() {
   T('读档还原银两', loaded && g.player.gold === savedGold, g.player.gold);
 
   // --- T21 御风 ---
-  g.setPos(200, 200);
+  g.setPos(1344, 960);            // 三岔口的路面上，保证站得住
   g.windStep();
   T('御风回土地庙', Math.hypot(g.player.x - g.SPAWN.x, g.player.y - g.SPAWN.y) < 20, Math.round(g.player.x) + ',' + Math.round(g.player.y));
 
@@ -500,16 +504,16 @@ export function runDevTests() {
   step(3);
 
   // 围墙 / 牌坊口
-  T('围墙挡人', !g.canStand(616, 800) && !g.canStand(952, 800), '两侧实心');
-  T('牌坊口能进村', g.canStand(784, 930) && g.canStand(784, 880), '南口可通行');
-  T('房屋墙脚挡人', !g.canStand(712, 782), '客栈不可穿');
+  T('围墙挡人', !g.canStand(...vp(616, 800)) && !g.canStand(...vp(952, 800)), '两侧实心');
+  T('牌坊口能进村', g.canStand(...vp(784, 930)) && g.canStand(...vp(784, 880)), '南口可通行');
+  T('房屋墙脚挡人', !g.canStand(...vp(712, 782)), '客栈不可穿');
   T('村内不刷怪', g.enemies.every(e => !g.inVillage(e.x, e.y, 0)), String(g.enemies.filter(e => g.inVillage(e.x, e.y, 0)).length) + ' 只在村内');
   // 安全区：进了城墙就没人追你。阴魂会瞬移到玩家身侧，是最容易钻进村子的那种。
   {
     const bl = g.enemies.find(e => e.type === 'yinhun' && !e.dead);
-    g.setPos(784, 860);                       // 街心，离南墙 68
+    g.setPos(...vp(784, 860));                // 街心，离南墙 68
     if (bl) {
-      bl.x = 784; bl.y = 972; bl.aggro = true; bl.blinkCd = 0;
+      const bp = vp(784, 972); bl.x = bp[0]; bl.y = bp[1]; bl.aggro = true; bl.blinkCd = 0;
       step(90);
       const pos = Math.round(bl.x) + ',' + Math.round(bl.y);
       T('进村就不被盯上', bl.aggro === false, '村外 ' + pos);
@@ -547,7 +551,7 @@ export function runDevTests() {
   g.setClock(0.30, 3); step(fade);
 
   // 对话：走近说书人，按 E 应该是"跟人说话"而不是"开铺子"
-  g.setPos(852, 906); step(2);
+  g.setPos(...vp(852, 906)); step(2);
   {
     const v = g.nearVillager();
     T('走近能认出是谁', v && v.id === 'shuo', v ? v.name : '没人');

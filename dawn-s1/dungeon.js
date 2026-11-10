@@ -17,9 +17,14 @@ import { C } from './pixel.js';
 export const DT = 16;   // 与世界 TILE 一致
 
 export const DG = {
-  tx0: 4, ty0: 39, tw: 30, th: 28,
-  x0: 4 * 16, y0: 39 * 16,
-  x1: 34 * 16, y1: 67 * 16,
+  // 大地图扩容后古洞挪到正北方：格 57..87 × 7..35。
+  // 西侧紧贴「西荒石窟」（x 4..52），中间只隔一道岩壁 —— 第三幕"矿道打通古洞侧壁"
+  // 那条线在地图上是真的成立的，不是文本硬编的。
+  tx0: 57, ty0: 10, tw: 30, th: 28,
+  get x0() { return this.tx0 * 16; },
+  get y0() { return this.ty0 * 16; },
+  get x1() { return (this.tx0 + this.tw) * 16; },
+  get y1() { return (this.ty0 + this.th) * 16; },
 };
 
 export const DGT = { FLOOR: 6, WALL: 7, DOOR: 8 };
