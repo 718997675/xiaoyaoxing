@@ -51,6 +51,8 @@ const BASES = {
     staff: [['竹棍', '木棍'], ['齐眉棍', '镔铁棍'], ['镔铁棍', '盘龙棍'], ['降魔杵', '伏魔杵'], ['定海神针', '混元杵']],
     dual: [['匕首', '短刀'], ['双股剑', '柳叶双刀'], ['鸳鸯钺', '双龙刃'], ['雌雄双股剑', '分水双刃'], ['干将莫邪', '日月双轮']],
     hammer: [['木锤', '石锤'], ['铁锤', '流星锤'], ['狼牙棒', '蒺藜锤'], ['混元锤', '震天锤'], ['开山钺', '番天印']],
+    mage: [['桃木杖', '竹节杖'], ['乌木杖', '引气杖'], ['太乙杖', '星纹杖'], ['紫霄杖', '九曜灵杖'], ['通天法杖', '太虚造化杖']],
+    dart: [['铁蒺藜', '竹镖'], ['柳叶镖', '袖箭'], ['透骨钉', '追魂镖'], ['子午梅花镖', '无影飞芒'], ['天罗星', '修罗七杀镖']],
   },
   armor: [['短褐', '布衣'], ['劲装', '皮甲'], ['软猬甲', '锁子甲'], ['玄铁甲', '云锦袍'], ['锦麟袍', '明光铠']],
   necklace: [['木珠串', '平安符'], ['长命锁', '铜铃铛'], ['紫玉坠', '璎珞'], ['太虚链', '九曜珠'], ['昆仑佩', '周天星斗']],
@@ -60,11 +62,16 @@ const BASES = {
 let uid = 1;
 export function nextUid() { return uid++; }
 
+// 权重直接读 WEAPONS[*].dropW，新增兵器不用再手工同步权重数组的长度/顺序。
+// 法杖与暗器各占约 1 成，普通小怪身上也刷得出来，不至于只在 Boss 掉落里见到。
 export function randomFam(rng = Math.random) {
-  const w = [26, 22, 16, 14, 12, 10];
-  let r = rng() * 100, acc = 0;
-  for (let i = 0; i < WEAPON_IDS.length; i++) { acc += w[i]; if (r <= acc) return WEAPON_IDS[i]; }
-  return 'sword';
+  const total = WEAPON_IDS.reduce((s, id) => s + (WEAPONS[id].dropW || 10), 0);
+  let r = rng() * total, acc = 0;
+  for (let i = 0; i < WEAPON_IDS.length; i++) {
+    acc += WEAPONS[WEAPON_IDS[i]].dropW || 10;
+    if (r <= acc) return WEAPON_IDS[i];
+  }
+  return WEAPON_IDS[0];
 }
 
 function affixRollVal(a, r, ilvl, rng) {
@@ -108,12 +115,16 @@ export function makeGear(kind, r, ilvl, rng = Math.random, fam) {
     affixes.push({ id: pick.id, name: pick.name, stat: pick.stat, val: affixRollVal(pick, r, ilvl, rng) });
   }
 
-  const pool2 = slot === 'weapon' ? BASES.weapon[family][r] : BASES[slot][r];
+  const pool2 = slot === 'weapon' ? (BASES.weapon[family] || BASES.weapon.sword)[r] : BASES[slot][r];
   let name = pool2[Math.floor(rng() * pool2.length)];
   if (r >= 2 && affixes.length) name = affixes[0].name + '·' + name;
   if (r >= 4) name = '传世·' + name;
 
-  return { uid: nextUid(), kind: slot, fam: family, name, r, ilvl, b, affixes, enh: 0 };
+  const id = nextUid();
+  // skin 决定宝石纹样：同类同品阶的兵器也会长得不一样，且随存档固定不变
+  const gear = { uid: id, kind: slot, fam: family, name, r, ilvl, b, affixes, enh: 0 };
+  if (slot === 'weapon') gear.skin = (id + r * 7) % 3;
+  return gear;
 }
 
 // 装备最终属性（含强化加成）

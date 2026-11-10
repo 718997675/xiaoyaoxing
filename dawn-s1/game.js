@@ -2,11 +2,12 @@ import * as THREE from './lib/three.module.js';
 import { AUDIO } from './audio.js';
 import { C, spriteCanvas, outlined, mirror, hexRgb, rgba } from './pixel.js';
 import {
-  RARITY, SLOTS, SLOT_LABEL, makeGear, gearStats, itemScore, rollRarity,
+  RARITY, SLOTS, SLOT_LABEL, makeGear, gearStats, itemScore, rollRarity, randomFam,
   salvageValue, enhanceCost, rerollCost, rerollAffixes, MAX_ENH, STAT_LABEL,
 } from './items.js';
 import {
-  WEAPONS, weaponCanvas, weaponIcon, drawWeaponAt, drawArcFx, drawThrustFx, drawRingFx, drawShockFx,
+  WEAPONS, WEAPON_IDS, weaponCanvas, weaponIcon, drawWeaponAt, drawArcFx, drawThrustFx, drawRingFx, drawShockFx,
+  drawRareAura, HELD_SCALE, SWING_SCALE, skinOf,
 } from './weapons.js';
 import { MONSTERS } from './monsters.js';
 import { BRANCHES, NODES, NODE_BY_ID, computeSkillStats, nodeLevel, canLearn, ACTIVES } from './skills.js';
@@ -20,6 +21,10 @@ import {
 const LW = 480, LH = 270, TILE = 16, MAPW = 96, MAPH = 72;
 const SAVE_KEY = 'xiaoyao-save-v5';
 const LEGACY_KEYS = ['xiaoyao-save-v4', 'xiaoyao-save-v3', 'xiaoyao-save-v2', 'xiaoyao-ch1-v1'];
+// 当前画布缩放倍率（resize 里算），面板自适应要用
+let viewScale = 1;
+// 需要跟随画布缩放的面板（开始菜单 / 侠陨 / 通关）
+const PANEL_SEL = ['#menu', '#dead', '#clear'];
 
 // ============ 点阵素材 ============
 function tex(c) {
@@ -88,6 +93,9 @@ const ARROW_TEX = tex(spriteCanvas(['.L..', 'LP..', '.P..', '.P..'], { L: C.pape
 const FIRE_TEX = tex(spriteCanvas(['.oo.', 'oOOo', 'oOOo', '.oo.'], { o: C.gold2, O: C.red2 }));
 const QI_C = spriteCanvas(['..jj..', '.jJJj.', 'jJLLJj', 'jJLLJj', '.jJJj.', '..jj..'], { j: C.jade1, J: C.jade2, L: C.jade3 });
 const QI_TEX = tex(QI_C);
+// 法杖气弹 / 暗器飞镖：与「剑气」共用投射物系统，但贴图、速度和散射都独立
+const DART_C = spriteCanvas(['..w..', '.wWw.', 'wWgWw', '.wWw.', '..w..'], { w: C.paper3, W: C.white, g: C.gold2 });
+const DART_TEX = tex(DART_C);
 const WU_C = spriteCanvas(['..gggg..', '.g....g.', 'g..yy..g', 'g.y..y.g', 'g.y..y.g', 'g..yy..g', '.g....g.', '..gggg..'], { g: C.gold2, y: C.gold3 });
 const THUNDER_C = spriteCanvas([
   '......gg', '.....g..', '....g...', '...ggg..', '.....g..', '....g...', '...g....', '..g.....', '.g......',
@@ -113,15 +121,20 @@ const wepIconURL = {};
 function iconFor(it) {
   if (!it) return '';
   if (it.kind === 'weapon') {
-    const fam = it.fam || 'sword';
-    if (!wepIconURL[fam]) wepIconURL[fam] = weaponIcon(fam).toDataURL();
-    return wepIconURL[fam];
+    // 图标也跟着稀有造型走：包里两把「剑」不该长得一模一样
+    const key = (it.fam || 'sword') + '@' + (it.r | 0) + '@' + skinOf(it.skin);
+    if (!wepIconURL[key]) {
+      wepIconURL[key] = weaponIcon(it.fam || 'sword', it.r | 0, it.skin, RARITY[it.r | 0].color).toDataURL();
+    }
+    return wepIconURL[key];
   }
   return iconURL[it.kind] || iconURL.armor;
 }
 // 地面掉落用的小图标（canvas 版，给 three 贴图）
 function dropIconCanvas(it) {
-  if (it.kind === 'weapon') return weaponIcon(it.fam || 'sword');
+  if (it.kind === 'weapon') {
+    return weaponIcon(it.fam || 'sword', it.r | 0, it.skin, RARITY[it.r | 0].color);
+  }
   return ICONS[it.kind] || ICONS.armor;
 }
 
@@ -763,6 +776,8 @@ let particles = [], sparks = [], ghosts = [], slashGhosts = [], bolts = [];
 let state = 'menu', shakeX = 0, shakeY = 0, time = 0, saveT = 0, cleared = false;
 let hitstop = 0, combo = 0, comboT = 0, comboPulse = 0, eliteT = 22, spawnT = 8;
 const keys = {};
+// 失焦 / 切模式时清干净方向键，避免「keyup 没送到 → 人朝一个方向一直走」
+function clearKeys() { for (const k in keys) keys[k] = false; }
 const skills = { qi: { cd: 0, max: 2.2 }, wu: { cd: 0, max: 6 }, thunder: { cd: 0, max: 5 } };
 let wuT = 0;
 const DIRV = { down: [0, 1], up: [0, -1], left: [-1, 0], right: [1, 0] };
@@ -778,40 +793,130 @@ const TITLES = ['初出茅庐', '三流好手', '二流高手', '一流高手', 
 function realm() { return TITLES[Math.min(player.level - 1, TITLES.length - 1)]; }
 
 // ============ 触屏操作（虚拟摇杆 + 动作键）============
-// 桌面调试用 ?touch=1 强制开、?touch=0 强制关；正常按设备能力自动判断。
-const TOUCH_FORCE = (location.search.match(/[?&]touch=(\d)/) || [])[1];
+// 判定标准是「这台设备当下主要用手指还是键鼠」，不是「它是否具备触摸能力」：
+// 桌面 Chrome、Windows 触屏本上 'ontouchstart' in window / maxTouchPoints > 0 都可能成立，
+// 但主输入仍是鼠标键盘，硬塞一个摇杆反而挡住画面、吃掉带键位的技能栏。
+// 所以：只有主指针是粗指针（手指）的手机 / 平板才默认出摇杆，PC 一律走键盘。
+// 调试与分享：?touch=1 强制触屏、?touch=0 强制键鼠；菜单里也可手动切并记住选择。
+const TOUCH_ARG = (location.search.match(/[?&]touch=([^&]+)/) || [])[1];
+const TOUCH_FORCE = TOUCH_ARG === '1' ? '1' : TOUCH_ARG === '0' ? '0' : null;
+const INPUT_KEY = 'xy_input_mode';
+const mq = q => { try { return matchMedia(q).matches; } catch (e) { return false; } };
+function isTouchFirstDevice() {
+  const ua = navigator.userAgent || '';
+  const mobileUA = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|Windows Phone|HarmonyOS|BlackBerry|Opera Mini/i.test(ua);
+  const canTouch = (navigator.maxTouchPoints || 0) > 0 || ('ontouchstart' in window);
+  if (!canTouch) return false;
+  // 主指针是手指（含 iPadOS 伪装成 Mac 的情况）
+  if (mq('(pointer: coarse)')) return true;
+  // 少数浏览器只报 hover / 不报 pointer，用移动端 UA 兜底
+  return mobileUA && (mq('(hover: none)') || !mq('(pointer: fine)'));
+}
+let savedMode = null;
+if (TOUCH_ARG === 'auto') {                 // ?touch=auto 抹掉手动偏好，回到自动识别
+  try { localStorage.removeItem(INPUT_KEY); } catch (e) { }
+} else {
+  try { savedMode = localStorage.getItem(INPUT_KEY); } catch (e) { }
+}
+// URL 强制或用户手动选过之后，就不再被「最后一次输入」来回切
+let inputLocked = TOUCH_FORCE === '1' || TOUCH_FORCE === '0'
+  || savedMode === 'touch' || savedMode === 'keyboard';
 const touch = {
-  enabled: TOUCH_FORCE === '0' ? false
-    : TOUCH_FORCE === '1' ? true
-      : (('ontouchstart' in window) || (navigator.maxTouchPoints || 0) > 0),
+  enabled: TOUCH_FORCE === '1' ? true
+    : TOUCH_FORCE === '0' ? false
+      : savedMode === 'touch' ? true
+        : savedMode === 'keyboard' ? false
+          : isTouchFirstDevice(),
   // 摇杆以「按下的位置」为圆心（不是死板固定在角落），手指落在左下热区任意处都能起杆
   stick: { on: false, id: -1, cx: 56, cy: 210, dx: 0, dy: 0, r: 30 },
 };
+
+const KEY_HINT = '天地任逍遥 · 第一章 青云野<br>'
+  + 'WASD/方向键 移动 · J/空格 斩击 · K 剑气 · L 剑舞 · H 天雷<br>'
+  + 'Shift 身法 · Q 回春丹 · T 道行 · Tab 行囊 · E 铁匠台 · R 御风';
+const TOUCH_HINT = '天地任逍遥 · 第一章 青云野<br>'
+  + '建议横屏 · 左下按住即出摇杆走位<br>'
+  + '右侧「斩/气/舞/雷」出招 · 「闪」身法 · 「丹」回春<br>'
+  + '「囊」「道」开面板 · 「谈」交互 · 「坐」打坐';
+function refreshInputUI() {
+  const hint = document.getElementById('ctrlHint');
+  if (hint) hint.innerHTML = touch.enabled ? TOUCH_HINT : KEY_HINT;
+  const sw = document.getElementById('btnCtrl');
+  if (sw) sw.textContent = touch.enabled
+    ? '当前：触屏摇杆 · 点此改用键鼠'
+    : '当前：键盘鼠标 · 点此改用触屏摇杆';
+  document.documentElement.classList.toggle('touch-mode', touch.enabled);
+  fitPanels();   // 键鼠/触屏两套提示文案行数不同，面板高度会变，得重新适配
+}
+function setInputMode(mode, manual) {
+  const next = mode === 'touch';
+  if (manual) {
+    inputLocked = true;
+    try { localStorage.setItem(INPUT_KEY, next ? 'touch' : 'keyboard'); } catch (e) { }
+  }
+  if (touch.enabled === next) return;
+  touch.enabled = next;
+  if (!next) stickEnd();               // 收杆，免得切完人还在自己跑
+  else clearKeys();                    // 切到摇杆时别留着没松开的键盘方向键
+  refreshInputUI();
+  resize();                           // 缩放策略 / 竖屏提示跟着换
+}
+function autoInput(kind) {
+  if (inputLocked) return;
+  setInputMode(kind === 'touch' ? 'touch' : 'keyboard', false);
+}
+// 混合设备兜底：最后用的是什么就切什么。
+// 触屏本接上键盘 → 回键鼠；PC 触屏上真伸手点屏 → 出摇杆。
+// capture 阶段先于画布的 pointerdown，所以「切模式的那一下」本身也能正常命中摇杆。
+document.addEventListener('pointerdown', e => {
+  if (e.target && e.target.id === 'btnCtrl') return;   // 手动切换按钮不参与自动判定
+  if (e.pointerType === 'touch') autoInput('touch');
+  else if (e.pointerType === 'mouse') autoInput('keyboard');
+}, { capture: true, passive: true });
+addEventListener('keydown', e => {
+  if (e.isTrusted && !e.repeat) autoInput('keyboard');
+}, { capture: true, passive: true });
+// 设备形态变化（平板插鼠标 / 切桌面模式）时重新评估自动判定
+try {
+  const pm = matchMedia('(pointer: coarse)');
+  const onPointerChange = () => { if (!inputLocked) setInputMode(isTouchFirstDevice() ? 'touch' : 'keyboard', false); };
+  if (pm.addEventListener) pm.addEventListener('change', onPointerChange);
+  else if (pm.addListener) pm.addListener(onPointerChange);
+} catch (e) { }
+refreshInputUI();
 const STICK_HOT = { x0: 0, y0: 166, x1: 148, y1: 270 };
 
-// 右侧动作键。位置按 480×270 逻辑坐标排，避开底部技能栏与右上小地图；
-// 相邻两个的圆心距都要 > 半径和 + 7（命中容错），否则手指会点串。
+// 右侧动作键。位置按 480×270 逻辑坐标排，避开底部技能栏与右上小地图。
+// 右下原先六个键挤在 380~462 / 158~238 的 82×80 方块里：按「半径 + 7 容错」算，
+// 斩/气、气/舞、舞/雷、斩/丹、斩/雷 的命中圈互相盖住，手指落在交界处必然点串。
+// 现在改成以「斩」为圆心的错落扇面：任意两键的容错圈都不相交（最小余量 4px），
+// 且所有键都留在底部 HUD 条（y≥262）之上，不会被底板压掉半截。
+const BTN_PAD = 6;
 const TOUCH_BTNS = [
-  { id: 'slash', label: '斩', x: 434, y: 196, r: 22, size: 14, run: () => attack(), cd: () => [player.atkCd, attackInterval()] },
-  { id: 'qi', label: '气', x: 386, y: 184, r: 15, size: 12, run: () => castQi(), cd: () => [skills.qi.cd, skills.qi.max] },
-  { id: 'wu', label: '舞', x: 380, y: 222, r: 15, size: 12, run: () => castWu(), cd: () => [skills.wu.cd, skills.wu.max] },
-  { id: 'thunder', label: '雷', x: 416, y: 238, r: 13, size: 11, run: () => castThunder(), cd: () => [skills.thunder.cd, skills.thunder.max] },
-  { id: 'dash', label: '闪', x: 462, y: 158, r: 13, size: 11, run: () => dash(), cd: () => [player.dashCd, ACTIVES.dash.cd] },
-  { id: 'pot', label: '丹', x: 462, y: 226, r: 12, size: 11, run: () => usePotion(), cd: () => [0, 0] },
-  // 手机上没法按 Tab / T，给两个面板入口（放在日晷下方，别压住时辰条）
-  { id: 'bag', label: '囊', x: LW - 66, y: 108, r: 13, size: 11, run: () => toggleInv(true), cd: () => [0, 0] },
-  { id: 'dao', label: '道', x: LW - 34, y: 108, r: 13, size: 11, run: () => toggleSkills(true), cd: () => [0, 0] },
-  // 打坐：只在土地庙旁出现（touchBtnVisible 控制），不常驻
-  { id: 'sit', label: '坐', x: LW - 98, y: 108, r: 13, size: 11, run: () => meditate(), cd: () => [meditateT, 0.9] },
-  // 交谈：走到铺子门口才浮出，代替键盘的 E
-  { id: 'talk', label: '谈', x: LW - 130, y: 108, r: 13, size: 11, run: () => interact(), cd: () => [0, 0] },
+  { id: 'slash', label: '斩', x: 432, y: 196, r: 23, size: 14, run: () => attack(), cd: () => [player.atkCd, attackInterval()] },
+  { id: 'qi', label: '气', x: 376, y: 168, r: 15, size: 12, run: () => castQi(), cd: () => [skills.qi.cd, skills.qi.max] },
+  { id: 'wu', label: '舞', x: 372, y: 216, r: 15, size: 12, run: () => castWu(), cd: () => [skills.wu.cd, skills.wu.max] },
+  { id: 'dash', label: '闪', x: 466, y: 146, r: 13, size: 11, run: () => dash(), cd: () => [player.dashCd, ACTIVES.dash.cd] },
+  { id: 'pot', label: '丹', x: 466, y: 238, r: 13, size: 11, run: () => usePotion(), cd: () => [0, 0] },
+  { id: 'thunder', label: '雷', x: 406, y: 244, r: 13, size: 11, run: () => castThunder(), cd: () => [skills.thunder.cd, skills.thunder.max] },
+  // 上排面板键拉开到 40px 间距（容错圈 19+19=38），不再四连贴
+  { id: 'talk', label: '谈', x: 336, y: 104, r: 13, size: 11, run: () => interact(), cd: () => [0, 0] },
+  { id: 'sit', label: '坐', x: 376, y: 104, r: 13, size: 11, run: () => meditate(), cd: () => [meditateT, 0.9] },
+  { id: 'bag', label: '囊', x: 416, y: 104, r: 13, size: 11, run: () => toggleInv(true), cd: () => [0, 0] },
+  { id: 'dao', label: '道', x: 456, y: 104, r: 13, size: 11, run: () => toggleSkills(true), cd: () => [0, 0] },
 ];
 function touchHit(p) {
+  // 取「离圆心最近」的键，而不是数组里第一个：即使容错圈偶然相交，
+  // 手指落在哪边就打哪边，主攻键不再把邻近小键全吃掉。
+  let best = null, bestPen = Infinity;
   for (const b of TOUCH_BTNS) {
     if (!touchBtnVisible(b)) continue;
-    if (Math.hypot(p.x - b.x, p.y - b.y) <= b.r + 7) return b;
+    const d = Math.hypot(p.x - b.x, p.y - b.y);
+    const pad = b.id === 'slash' ? BTN_PAD + 2 : BTN_PAD;
+    const pen = d - b.r;
+    if (d <= b.r + pad && pen < bestPen) { best = b; bestPen = pen; }
   }
-  return null;
+  return best;
 }
 // 土地庙（神龛）旁才能打坐，所以「坐」键平时不出现，走近才浮出来
 function nearTemple() { return Math.hypot(player.x - SPAWN.x, player.y - SPAWN.y) < 56; }
@@ -1186,6 +1291,31 @@ function hurtPlayer(d) {
   AUDIO.play('hurt');
   if (player.hp <= 0) { player.hp = 0; showDead(); }
 }
+// 法杖 / 暗器的普攻：把弹体塞进现有 projectiles，命中、飞行、穿怪都复用同一套。
+// 不消耗真气（那是「剑气」技能的定位），伤害走普攻倍率与连击加成。
+function fireWeaponProj(fam, cfg, sw) {
+  const W = WEAPONS[fam];
+  const [fx, fy] = DIRV[player.dir];
+  const a0 = Math.atan2(fy, fx);
+  const n = cfg.count || 1;
+  const baseDmg = rollDamage(sw.mul * (cfg.dmgMul || 1));
+  for (let i = 0; i < n; i++) {
+    const ang = a0 + (n === 1 ? 0 : (i / (n - 1) - 0.5) * (cfg.spread || 0));
+    const mesh = quad(cfg.kind === 'dart' ? DART_TEX : QI_TEX, cfg.size || 8, cfg.size || 8);
+    mesh.material.color.set(W.trail[0]);
+    if (cfg.kind !== 'dart') mesh.material.blending = THREE.AdditiveBlending;
+    projectiles.push({
+      x: player.x + Math.cos(ang) * 10, y: player.y - 8 + Math.sin(ang) * 10,
+      vx: Math.cos(ang) * (cfg.speed || 220), vy: Math.sin(ang) * (cfg.speed || 220),
+      t: cfg.life || 0.85, friendly: true,
+      dmg: baseDmg.dmg, crit: baseDmg.crit,
+      pierce: cfg.pierce || 1, mesh, hitSet: new Set(),
+      spin: cfg.kind === 'dart' ? 14 : 0,
+    });
+  }
+  burst(player.x + fx * 12, player.y - 8 + fy * 12, W.trail[0], n > 1 ? 6 : 3, 45);
+}
+
 function attack() {
   if (state !== 'play') return;
   if (player.atkCd > 0) { player.atkBuf = 0.26; return; }
@@ -1201,6 +1331,8 @@ function attack() {
   const base = DIRA[player.dir];
   player.swing = { fam, step: player.atkStep, base, sw, t: sw.dur, dur: sw.dur };
   AUDIO.play('slash', fam);
+
+  if (W.ranged && sw.proj) { fireWeaponProj(fam, sw.proj, sw); return; }
 
   const reach = (sw.reach || W.reach);
   const halfArc = sw.hitArc / 2;
@@ -1265,9 +1397,18 @@ function addDrop(kind, item, x, y) {
   if (kind === 'gear') {
     const rr = RARITY[item.r];
     d.beamColor = rr.color;
+    // 仙品 / 传世兵器：地面光柱更粗更高，overlay 里再补一圈品阶光环
+    d.epic = item.kind === 'weapon' && item.r >= 3;
   }
   drops.push(d);
   return d;
+}
+// 八类兵器后，四槽等概率会让「刷到新武器」变成稀罕事：兵器权重提到 40%。
+function rollDropSlot() {
+  const w = [40, 20, 20, 20];
+  let r = Math.random() * 100, acc = 0;
+  for (let i = 0; i < SLOTS.length; i++) { acc += w[i]; if (r <= acc) return SLOTS[i]; }
+  return 'weapon';
 }
 function dropLoot(e) {
   const luck = stats().luck;
@@ -1285,10 +1426,17 @@ function dropLoot(e) {
   for (let i = 0; i < count; i++) {
     let r = rollRarity(luck + nightLuck(), tier);
     if (tier === 2 && i === 0) r = Math.max(2, r);
-    const slot = SLOTS[(Math.random() * SLOTS.length) | 0];
+    // Boss 首件必为兵器，方便看见新的法杖 / 暗器与稀有造型
+    const slot = (tier === 2 && i === 0) ? 'weapon' : rollDropSlot();
     const it = makeGear(slot, r, ilvl);
     addDrop('gear', it);
     if (r >= 3) { AUDIO.play('rare'); msg('掉落 ' + RARITY[r].name + ' · ' + it.name, RARITY[r].color); }
+  }
+  // 精英 / Boss 追加一件兵器：八类兵器的掉落面铺开，不至于全靠铁匠台
+  if (tier >= 1 && (tier === 2 || Math.random() < 0.35)) {
+    const it = makeGear('weapon', Math.max(1, rollRarity(luck + nightLuck(), tier)), ilvl);
+    addDrop('gear', it, e.x + 10, e.y);
+    if (it.r >= 3) msg('掉落 ' + RARITY[it.r].name + ' · ' + it.name, RARITY[it.r].color);
   }
 }
 
@@ -2211,6 +2359,11 @@ addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('beforeunload', save);
 document.getElementById('btnNew').onclick = () => startGame(false);
 document.getElementById('btnCont').onclick = () => startGame(true);
+const btnCtrl = document.getElementById('btnCtrl');
+if (btnCtrl) {
+  btnCtrl.title = 'PC 默认用键鼠，手机默认出摇杆；点此手动切换（会记住选择，?touch=auto 可恢复自动）';
+  btnCtrl.onclick = () => setInputMode(touch.enabled ? 'keyboard' : 'touch', true);
+}
 function showDead() {
   state = 'dead';
   const el = document.getElementById('dead');
@@ -2263,10 +2416,13 @@ const ovEl = document.getElementById('ov');
 // 这样左手推杆的同时右手还能连点攻击。
 function stickStart(p, id) {
   const st = touch.stick;
+  if (st.on && st.id !== id) return;             // 第二根手指落进左半屏，不许抢走摇杆
   st.on = true; st.id = id; st.cx = p.x; st.cy = p.y; st.dx = 0; st.dy = 0;
+  st.cap = false;
 }
 function stickMove(p) {
   const st = touch.stick;
+  if (!st.on) return;
   let dx = p.x - st.cx, dy = p.y - st.cy;
   const d = Math.hypot(dx, dy);
   const dead = 6;                                   // 死区：手指微抖不出杆
@@ -2276,18 +2432,26 @@ function stickMove(p) {
 }
 function stickEnd() {
   const st = touch.stick;
-  st.on = false; st.id = -1; st.dx = 0; st.dy = 0;
+  st.on = false; st.id = -1; st.dx = 0; st.dy = 0; st.cap = false;
 }
 
 ovEl.addEventListener('pointerdown', e => {
-  if (state !== 'play') return;
+  if (state !== 'play') { stickEnd(); return; }
   const p = logicalPos(e);
   if (touch.enabled) {
     const b = touchHit(p);
     if (b) { b.run(); e.preventDefault(); return; }
     if (p.x >= STICK_HOT.x0 && p.x <= STICK_HOT.x1 && p.y >= STICK_HOT.y0 && p.y <= STICK_HOT.y1) {
-      stickStart(p, e.pointerId);
-      try { ovEl.setPointerCapture(e.pointerId); } catch (err) { }
+      const st = touch.stick;
+      // 只有「起杆的那根手指」才配拿捕获；第二根手指误落左半屏不能改写 st.cap
+      if (!st.on || st.id === e.pointerId) {
+        stickStart(p, e.pointerId);
+        // 捕获成功后记一笔：后面用它做「浏览器把捕获弄丢了」的自检
+        try {
+          ovEl.setPointerCapture(e.pointerId);
+          st.cap = !!(ovEl.hasPointerCapture && ovEl.hasPointerCapture(e.pointerId));
+        } catch (err) { st.cap = false; }
+      }
       e.preventDefault();
       return;
     }
@@ -2311,14 +2475,23 @@ ovEl.addEventListener('pointermove', e => {
   stickMove(logicalPos(e));
   e.preventDefault();
 });
-for (const evt of ['pointerup', 'pointercancel', 'pointerleave']) {
-  ovEl.addEventListener(evt, e => {
+// 关键修复：up / cancel 挂在 window 的 capture 阶段。
+// 手指滑出画布、被系统手势打断、或浏览器把 pointercancel 投给别的元素时，
+// 只监听 ovEl 会漏掉这一次抬起 —— 摇杆的 dx/dy 就永远停在最后一个方向，
+// 人物便会「不听使唤」地一直走。pointerleave 也一并去掉：带捕获时它在
+// 手指擦过画布边缘就会误触发，反而是另一种「突然不动」。
+for (const evt of ['pointerup', 'pointercancel']) {
+  window.addEventListener(evt, e => {
     if (e.pointerId === touch.stick.id) stickEnd();
-  });
+  }, { capture: true, passive: true });
 }
-// 页面切走 / 失焦时收杆，避免"手指抬起了人还在跑"
-addEventListener('blur', stickEnd);
-document.addEventListener('visibilitychange', () => { if (document.hidden) stickEnd(); });
+ovEl.addEventListener('lostpointercapture', e => {
+  if (e.pointerId === touch.stick.id && touch.stick.on) stickEnd();
+});
+// 页面切走 / 失焦时收杆 + 清空键盘方向键
+function releaseAllInput() { stickEnd(); clearKeys(); }
+addEventListener('blur', releaseAllInput);
+document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAllInput(); });
 
 // ============ 敌手行为 ============
 function enemyStrike(e) {
@@ -2368,6 +2541,9 @@ function tickSwing(dt) {
       slashGhosts.push({ x: player.x, y: player.y - 8, ring: true, R: 40, colors: W.trail, t: 0.3, max: 0.3 });
     } else if (sw.sw.mode === 'thrust') {
       slashGhosts.push({ x: player.x, y: player.y - 8, thrust: base, len: (sw.sw.reach || W.reach) * 1.05, colors: W.trail, t: 0.2, max: 0.2 });
+    } else if (sw.sw.mode === 'cast') {
+      // 法杖 / 暗器没有刀光，用一小圈灵气收招；段位越高圈越大
+      slashGhosts.push({ x: player.x, y: player.y - 8, ring: true, R: 9 + (sw.step || 0) * 3, colors: W.trail, t: 0.18, max: 0.18 });
     }
   }
   player.swing = null;
@@ -2462,6 +2638,9 @@ function update(dt) {
   let mx = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
   let my = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0);
   let stickAmp = 1;
+  // 兜底：浏览器若在没派发 pointerup / pointercancel 的情况下悄悄收回了指针捕获，
+  // 摇杆的 dx/dy 会永远停在最后一个方向。每帧核一次捕获状态即可自愈。
+  if (touch.stick.on && touch.stick.cap && ovEl.hasPointerCapture && !ovEl.hasPointerCapture(touch.stick.id)) stickEnd();
   if (touch.enabled && touch.stick.on) {
     mx = touch.stick.dx; my = touch.stick.dy;
     stickAmp = Math.min(1, Math.hypot(mx, my) * 1.5); // 轻推慢走，推到底全速
@@ -2731,6 +2910,7 @@ function update(dt) {
       const ns = Math.hypot(p.vx, p.vy); p.vx = p.vx / ns * sp; p.vy = p.vy / ns * sp;
     }
     p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.spin) p.mesh.rotation.z += p.spin * dt;
     // 村外射进来的东西在城墙处就被挡下
     if (!p.friendly && inVillage(p.x, p.y, 0)) {
       burst(p.x, p.y, C.jade3, 7, 60);
@@ -2744,7 +2924,8 @@ function update(dt) {
         if (Math.hypot(p.x - e.x, p.y - (e.y - e.h / 2)) < (e.h * 0.6 + 4)) {
           p.hitSet.add(e);
           const ang = Math.atan2(p.vy, p.vx);
-          hitEnemy(e, { dmg: p.dmg, crit: Math.random() * 100 < stats().crit }, ang, 8);
+          const crit = p.crit === undefined ? Math.random() * 100 < stats().crit : p.crit;
+          hitEnemy(e, { dmg: p.dmg, crit }, ang, 8);
           if (--p.pierce <= 0) { p.t = 0; break; }
         }
       }
@@ -2784,8 +2965,9 @@ function update(dt) {
       d.mesh = quad(tex(cv), sz, sz * (cv.height / cv.width));
     }
     if (d.kind === 'gear' && !d.beam && d.item.r >= 2) {
-      d.beam = quad(beamTexture(RARITY[d.item.r].color), 3, 40);
+      d.beam = quad(beamTexture(RARITY[d.item.r].color), d.epic ? 6 : 3, d.epic ? 56 : 40);
       d.beam.material.opacity = 0.9;
+      if (d.epic) d.beam.material.blending = THREE.AdditiveBlending;
     }
     d.mesh.position.set(d.x, d.y - 4 + Math.sin(d.t * 4) * 1.5, 0);
     d.mesh.renderOrder = 500 + Math.round(d.y);
@@ -2798,7 +2980,11 @@ function update(dt) {
   }
   drops = drops.filter(d => {
     if (d.taken) { scene.remove(d.mesh); if (d.beam) scene.remove(d.beam); return false; }
-    if (d.beam) { d.beam.position.set(d.x, d.y + 16, 0); d.beam.material.opacity = 0.55 + Math.sin(time * 5 + d.x) * 0.3; }
+    if (d.beam) {
+      d.beam.position.set(d.x, d.y + (d.epic ? 24 : 16), 0);
+      d.beam.material.opacity = 0.55 + Math.sin(time * 5 + d.x) * 0.3;
+      if (d.epic) d.beam.material.opacity += 0.18;
+    }
     return true;
   });
 
@@ -2849,14 +3035,23 @@ const ov = document.getElementById('ov');
 ov.width = LW; ov.height = LH;
 const octx = ov.getContext('2d');
 
+// 待机是否显示兵器：默认「小手拿」；?weapon=attack 切成「只有出招时才显形」。
+// 两种方案都保留，玩家按自己偏好选。
+const SHOW_IDLE_WEAPON = (location.search.match(/[?&]weapon=([^&]+)/) || [])[1] !== 'attack';
+
+// 手部锚点（相对 16×18 主角贴图中心）：让兵器从「手」上长出去，不是从胸口
+const HAND_OFF = { right: [4, 2], left: [-4, 2], up: [-3, 1], down: [3, 1] };
+
 function drawWeaponHeld(camX, camY) {
   const fam = weaponFam();
   const W = WEAPONS[fam];
   const it = player.equip.weapon;
-  const cv = weaponCanvas(fam, it ? RARITY[it.r].color : null);
-  const px = player.x - camX, py = player.y - 6 - camY;
+  const r = it ? (it.r | 0) : 0;
+  const color = it ? RARITY[r].color : null;
+  const cv = weaponCanvas(fam, color, r, it ? it.skin : 0);
+  const px = player.x - camX, py = player.y - 8 - camY;
   const base = DIRA[player.dir];
-  let ang, alpha = 1, off = 0;
+  let ang = 0, alpha = 1, off = 0, casting = false;
 
   if (player.swing) {
     const sw = player.swing.sw;
@@ -2865,39 +3060,53 @@ function drawWeaponHeld(camX, camY) {
     if (sw.mode === 'ring') {
       ang = base - Math.PI * 1.1 + e * Math.PI * 2.2;
     } else if (sw.mode === 'thrust') {
-      ang = base;
-      off = e * 9;
+      ang = base; off = e * 9;
+    } else if (sw.mode === 'cast') {
+      // 抬杖 / 抖腕：短促前点，不画近战刀光
+      ang = base - 0.62 + e * 0.42; off = e * 3; casting = true;
     } else {
       ang = base + sw.a0 + (sw.a1 - sw.a0) * e;
     }
     alpha = p > 0.88 ? 1 - (p - 0.88) / 0.12 * 0.4 : 1;
   } else {
-    // 待机：兵器垂在身侧（按朝向给固定角度，读起来像"手持"而不是"飘着"）
-    if (player.dir === 'left') ang = Math.PI - 0.95;
-    else if (player.dir === 'up') ang = -Math.PI + 1.15;
-    else if (player.dir === 'right') ang = 0.95;
-    else ang = Math.PI * 0.72;
+    // 待机：贴着手斜垂，缩小到掌中尺寸
+    if (player.dir === 'left') ang = Math.PI - 1.05;
+    else if (player.dir === 'up') ang = -Math.PI + 1.25;
+    else if (player.dir === 'right') ang = 1.05;
+    else ang = Math.PI * 0.78;
   }
-  const hx = px + Math.cos(ang) * (2 + off), hy = py + Math.sin(ang) * (2 + off) + 2;
+  const [hox, hoy] = HAND_OFF[player.dir] || HAND_OFF.down;
+  const hx = px + hox + Math.cos(ang) * (1 + off) * 0.4;
+  const hy = py + hoy + Math.sin(ang) * (1 + off) * 0.4;
+  const sc = player.swing ? SWING_SCALE : HELD_SCALE;
+  const tipLen = cv.height * sc * 0.85;
 
-  // 挥砍刀光（在当前帧补一层，让挥动过程本身清晰可见）
-  if (player.swing) {
+  // 挥砍刀光（攻距已整体收小，弧半径跟着缩）
+  if (player.swing && !casting) {
     const sw = player.swing.sw;
     const p = 1 - player.swing.t / player.swing.dur;
     if (sw.mode === 'swing') {
       const a0 = base + sw.a0;
       const cur = base + sw.a0 + (sw.a1 - sw.a0) * (1 - Math.pow(1 - p, 2.2));
-      drawArcFx(octx, px, py, a0, cur, (sw.reach || W.reach) * 0.82, W.trail, 0.6 + p * 0.4, 1.1);
+      drawArcFx(octx, px, py, a0, cur, (sw.reach || W.reach) * 0.78, W.trail, 0.6 + p * 0.4, 0.9);
     } else if (sw.mode === 'ring') {
-      drawRingFx(octx, px, py, (sw.reach || W.reach) * 0.72, W.trail, 0.55, 1);
+      drawRingFx(octx, px, py, (sw.reach || W.reach) * 0.70, W.trail, 0.55, 0.9);
     } else if (sw.mode === 'thrust') {
-      drawThrustFx(octx, px, py, base, (sw.reach || W.reach) * (0.35 + p * 0.75), W.trail, 0.55, 1);
+      drawThrustFx(octx, px, py, base, (sw.reach || W.reach) * (0.35 + p * 0.75), W.trail, 0.55, 0.9);
     }
   }
 
-  drawWeaponAt(octx, cv, hx, hy, ang, alpha, 1);
+  // 仙品 / 传世：刃身品阶辉光；法杖 / 暗器出招时杖尖 / 腕间也亮一下
+  if ((r >= 3 && SHOW_IDLE_WEAPON) || (r >= 3 && player.swing) || casting) {
+    const tx = hx + Math.cos(ang) * tipLen, ty = hy + Math.sin(ang) * tipLen;
+    if (r >= 3) drawRareAura(octx, tx, ty, r >= 4 ? 9 : 7, color, 0.9, time, r);
+    if (casting) drawRareAura(octx, tx, ty, 6, W.trail[0], 0.7, time, 0);
+  }
+
+  if (!player.swing && !SHOW_IDLE_WEAPON) return;   // 方案二：平时不显示兵器
+  drawWeaponAt(octx, cv, hx, hy, ang, alpha, sc);
   if (fam === 'dual') {
-    drawWeaponAt(octx, cv, px - Math.cos(ang) * 1.5, py + Math.sin(ang) * 1.5, ang + 0.55, alpha * 0.92, 0.86);
+    drawWeaponAt(octx, cv, px - hox, py + hoy, ang + 0.55, alpha * 0.92, sc * 0.86);
   }
 }
 
@@ -2906,8 +3115,9 @@ function drawSkillBar() {
   if (touch.enabled) { skillRects = []; return; }
   octx.imageSmoothingEnabled = false;
   const weaponIconC = it => iconFor(it);
+  const eqW = player.equip.weapon;
   const slots = [
-    { id: 'slash', key: 'J', icon: weaponIcon(weaponFam()), cd: player.atkCd, max: attackInterval(), cost: 0 },
+    { id: 'slash', key: 'J', icon: eqW ? weaponIcon(eqW.fam, eqW.r | 0, eqW.skin, RARITY[eqW.r | 0].color) : weaponIcon('sword'), cd: player.atkCd, max: attackInterval(), cost: 0 },
     { id: 'qi', key: 'K', icon: QI_C, cd: skills.qi.cd, max: skills.qi.max, cost: ACTIVES.qi.cost },
     { id: 'wu', key: 'L', icon: WU_C, cd: skills.wu.cd, max: skills.wu.max, cost: ACTIVES.wu.cost },
     {
@@ -3152,6 +3362,21 @@ function drawOverlay(camX, camY) {
     octx.globalAlpha = 1;
   }
 
+  // 仙品 / 传世兵器掉在地上：品阶辉光 + 脚下光环，远远就能认出来
+  for (const d of drops) {
+    if (d.taken || !d.epic || !d.mesh) continue;
+    const dx = d.x - camX, dy = d.y - 6 - camY;
+    const col = RARITY[d.item.r].color;
+    drawRareAura(octx, dx, dy, 13, col, 0.8, time, d.item.r);
+    octx.save();
+    octx.globalCompositeOperation = 'lighter';
+    octx.strokeStyle = rgba(col, 0.55); octx.lineWidth = 1;
+    octx.beginPath();
+    octx.ellipse(dx, dy + 5, 7 + Math.sin(time * 3 + d.x) * 1.5, 3.4, 0, 0, 6.28);
+    octx.stroke();
+    octx.restore();
+  }
+
   // 手中兵器
   if (state === 'play' || state === 'clear') drawWeaponHeld(camX, camY);
 
@@ -3214,8 +3439,8 @@ function drawOverlay(camX, camY) {
     octx.fillRect(cx - 34, 44, Math.round(68 * Math.min(1, comboT / 2.2)), 2);
   }
 
-  // 底部底板（触屏时收窄：摇杆与动作键占了这一带，留太多会挡视线）
-  const barH = touch.enabled ? 18 : 44;
+  // 底部底板（触屏时收窄成一条：摇杆与动作键占了这一带，留太多会挡视线）
+  const barH = touch.enabled ? 8 : 44;
   octx.fillStyle = 'rgba(18,22,31,0.8)';
   octx.fillRect(0, LH - barH, LW, barH);
   octx.fillStyle = C.gold1;
@@ -3489,9 +3714,47 @@ function resize() {
   // 桌面：放大取整数倍，像素最锐利。
   // 手机：屏幕本来就小，取整会让画面只占半个屏幕，所以按实际比例铺满（略糊但看得清、按得着）。
   const s = touch.enabled ? Math.min(raw, 2.4) : (raw >= 1 ? Math.floor(raw) : raw);
+  viewScale = s;
   wrap.style.width = LW * s + 'px'; wrap.style.height = LH * s + 'px';
   for (const c of [glCanvas, ov]) { c.style.width = LW * s + 'px'; c.style.height = LH * s + 'px'; }
+  fitPanels();
   checkRotateHint();
+}
+
+// ---- 面板自适应（开始菜单 / 侠陨 / 通关）----
+// 这三个面板是 DOM 覆盖层，画布会按 s 倍缩放，面板却不会 —— 于是小屏上
+// 固定像素的面板会糊住整个画面（竖屏时甚至溢出画布）。
+// 这里按「画布实际尺寸」反推面板宽度与字号：
+//   宽度取画布宽度的 42%（夹在 200~420px），字号随宽度等比缩（10~15px），
+// 保证面板在任何屏幕上都占画布的固定比例，且文字是实打实渲染的（不靠 transform 拉）。
+// 画布永远居中于视口（wrap 是 margin:auto + top:50% + translateY(-50%），
+// 所以竖屏时画布只有中间一条，面板可以溢出到上下黑边里，仍在视口内 —— 宁可溢出也不要缩到看不清。
+function fitPanels() {
+  const cw = LW * viewScale;              // 画布 CSS 宽度
+  let pw = Math.round(Math.max(200, Math.min(420, cw * 0.42)));
+  let pf = Math.round(Math.max(10, Math.min(15, pw * 13 / 340)) * 10) / 10;
+  const apply = () => {
+    for (const sel of PANEL_SEL) {
+      const el = document.querySelector(sel);
+      if (!el) continue;
+      el.style.setProperty('--pw', pw + 'px');
+      el.style.setProperty('--pf', pf + 'px');
+    }
+  };
+  apply();
+  // 纵向：只在「画布够高」时才收缩，且字号不跌破 10px（宁可溢出也别看不清）。
+  // 竖屏时画布只有 211px 高，但视口有 800+px，面板溢出画布落在黑边里反而更协调。
+  const maxH = LH * viewScale * 0.94;
+  const menu = document.getElementById('menu');
+  if (menu && !menu.classList.contains('hidden')) {
+    const h = menu.offsetHeight;          // 真实布局高度（不受 transform 影响）
+    if (h > maxH && h > 0) {
+      const k = Math.max(maxH / h, 10 / pf);   // 收缩比，但不把字号压到 10px 以下
+      pw = Math.round(pw * k);
+      pf = Math.round(pf * k * 10) / 10;
+      apply();
+    }
+  }
 }
 // 竖屏时游戏画面只有中间一条，给个一句话提示（横过来自动消失，不用手动关）
 function checkRotateHint() {
@@ -3541,7 +3804,15 @@ loadArt().then(ok => {
 window.__game = {
   get state() { return state; },
   get touch() { return touch; },
+  get inputMode() { return touch.enabled ? 'touch' : 'keyboard'; },
+  get inputLocked() { return inputLocked; },
+  setInputMode, isTouchFirstDevice,
+  get skillRects() { return skillRects; },
   get touchBtns() { return TOUCH_BTNS; },
+  touchHit, BTN_PAD, stickStart, stickMove, stickEnd,
+  get showIdleWeapon() { return SHOW_IDLE_WEAPON; },
+  WEAPON_IDS, weaponCanvas, weaponIcon, randomFam, makeGear, HELD_SCALE, SWING_SCALE,
+  get projectiles() { return projectiles; },
   LW, LH,
   clock,
   setClock(t, day) { clock.restore({ t, day: day === undefined ? clock.day : day }); clock.changed = 0; },

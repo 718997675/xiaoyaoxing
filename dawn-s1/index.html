@@ -24,12 +24,31 @@
     font:14px SimSun,monospace;letter-spacing:4px}
   .panel button:hover{background:#D9A441;color:#12161F}
   .panel button:disabled{opacity:.45;cursor:default}
+  /* 操作方式切换：低调的次要入口，别和「踏入江湖」抢视觉 */
+  .panel button.ctrl{margin:10px 0 0;padding:2px 0;font:10px SimSun,monospace;letter-spacing:1px;
+    background:transparent;border:0;box-shadow:none;color:#8A6520;text-decoration:underline dotted}
+  .panel button.ctrl:hover{background:transparent;color:#12161F}
   .hidden{display:none!important}
   /* 竖屏时的一句话提示（横过来自动消失） */
   #rot{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:50;display:none;
     background:rgba(232,223,200,.94);border:2px solid #8A6520;color:#12161F;
     padding:5px 12px;font:12px SimSun,monospace;letter-spacing:1px;white-space:nowrap;
     box-shadow:0 2px 10px rgba(0,0,0,.4)}
+
+  /* ---------- 开始菜单 / 侠陨 / 通关面板：自适应 ----------
+     这三个面板是 DOM 覆盖层，画布却会按 s 倍缩放（480×270 → 480s×270s），
+     面板若用固定像素，小屏上就会糊住整个画面（竖屏时甚至溢出画布）。
+     所以宽度和字号都不写死：由 JS 按画布实际尺寸算出 --pw / --pf，
+     下面全部用 em 表达，随 --pf 一起缩放（文字不会被 transform 拉糊）。 */
+  #menu,#dead,#clear{box-sizing:border-box;width:var(--pw,340px);
+    font-size:var(--pf,13px);padding:1.05em 1.35em}
+  #menu h1{font-size:1.6em;letter-spacing:.3em;margin:0 0 .1em}
+  #menu p{font-size:.85em;line-height:1.6;margin:.35em 0 .95em}
+  #menu button{font-size:1em;padding:.55em 0;letter-spacing:.28em;margin:.35em 0}
+  #menu button.ctrl{margin:.85em 0 0;padding:.25em 0;font-size:.75em;letter-spacing:.05em}
+  #dead h1,#clear h1{font-size:1.45em;letter-spacing:.3em;margin:0 0 .15em}
+  #dead p,#clear p{font-size:.85em;line-height:1.6;margin:.35em 0 .95em}
+  #dead button,#clear button{font-size:1em;padding:.55em 0;letter-spacing:.28em}
 
   /* ---------- 窄屏（手机竖屏）自适应 ---------- */
   @media (max-width:700px){
@@ -138,11 +157,12 @@
   <canvas id="ov"></canvas>
   <div id="menu" class="panel">
     <h1>逍遥行</h1>
-    <p>天地任逍遥 · 第一章 青云野<br>
+    <p id="ctrlHint">天地任逍遥 · 第一章 青云野<br>
       WASD/方向键 移动 · J/空格 斩击 · K 剑气 · L 剑舞 · H 天雷<br>
       Shift 身法 · Q 回春丹 · T 道行 · Tab 行囊 · E 铁匠台 · R 御风</p>
     <button id="btnNew">踏入江湖</button>
     <button id="btnCont">继续闯荡</button>
+    <button id="btnCtrl" class="ctrl">当前：键盘鼠标 · 点此改用触屏摇杆</button>
   </div>
   <div id="dead" class="panel hidden">
     <h1>侠陨</h1>
@@ -209,30 +229,39 @@
   // 双击打开（file://）时浏览器会用 origin 'null' 去取 ES module，被 CORS 直接拦掉，
   // game.js 一行都不会执行 —— 表现就是「只有菜单外壳，按钮点了没反应」。
   // 所以：http 下走原生 ES module（开发流程不变）；file:// 下改用同目录的打包版（经典脚本）。
-  if (location.protocol === 'file:') {
-    const boot = () => {
-      if (window.__xiaoyaoBooted) return; // 单文件版已内联，别重复加载
-      const s = document.createElement('script');
-      s.src = './xiaoyao-bundle.js';
-      s.onerror = () => {
-        const tip = document.createElement('div');
-        tip.style.cssText = 'position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:99999;' +
-          'background:#E8DFC8;color:#12161F;border:2px solid #8A6520;padding:10px 14px;' +
-          'font:13px/1.6 ui-monospace,monospace;box-shadow:0 4px 18px rgba(0,0,0,.35);max-width:80vw';
-        tip.innerHTML = '本地双击模式需要打包文件：请在该目录执行 <b>node build.js</b>，' +
-          '或执行 <b>node server.js</b> 后访问 http://127.0.0.1:8124/';
-        document.body.appendChild(tip);
-      };
-      document.head.appendChild(s);
+  const loadBundle = () => {
+    if (window.__xiaoyaoBooted) return;   // 单文件版已内联，别重复加载
+    if (window.__game) return;            // module 版已经起来了，别重复初始化
+    if (window.__xiaoyaoFallback) return;
+    window.__xiaoyaoFallback = true;
+    const s = document.createElement('script');
+    s.src = './xiaoyao-bundle.js';
+    s.onerror = () => {
+      const tip = document.createElement('div');
+      tip.style.cssText = 'position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:99999;' +
+        'background:#E8DFC8;color:#12161F;border:2px solid #8A6520;padding:10px 14px;' +
+        'font:13px/1.6 ui-monospace,monospace;box-shadow:0 4px 18px rgba(0,0,0,.35);max-width:80vw';
+      tip.innerHTML = '本地双击模式需要打包文件：请在该目录执行 <b>node build.js</b>，' +
+        '或执行 <b>node server.js</b> 后访问 http://127.0.0.1:8124/';
+      document.body.appendChild(tip);
     };
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-    else boot();
-  } else {
-    // 动态注入 module：等价于原来的 <script type="module" src>，但 file:// 下不会留下一条 CORS 红字
+    document.head.appendChild(s);
+  };
+  if (location.protocol === 'file:') {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadBundle);
+    else loadBundle();
+  } else if (location.hostname === '127.0.0.1' || location.hostname === 'localhost') {
+    // 本机开发：走原生 ES module（改完源码刷新即生效，不用打包）
     const m = document.createElement('script');
     m.type = 'module';
     m.src = './game.js';
+    m.onerror = () => { setTimeout(loadBundle, 60); };
     document.head.appendChild(m);
+  } else {
+    // 线上：不用 ES module 图。模块图会并行拉十几个文件，
+    // 而发布网关的会话 cookie 在并行请求下会失效（子资源随机 403），
+    // 表现就是「只有菜单外壳、点按钮没反应」。打包版是单个经典脚本，稳。
+    loadBundle();
   }
 </script>
 <script>

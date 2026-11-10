@@ -1,6 +1,7 @@
-// weapons.js · 六种兵器的造型、挥砍动作与刀光表现
+// weapons.js · 八种兵器的造型、招式与刀光表现
 // 走位规则：角度 0 = 角色朝向，+π/2 = 屏幕向下（y 轴向下）
 // 每种兵器有自己的「招式表」：挥砍弧度、速度、判定形状、刀光颜色、收招位移。
+// mode: swing 弧斩 / thrust 直刺 / ring 抡圆 / cast 远程（proj 描述弹体，不做近战判定）。
 
 import { C, spriteCanvas, outlined, rgba } from './pixel.js';
 import { ART } from './art.js';
@@ -51,11 +52,11 @@ const ROWS = {
     '...gGg.',
     '....h..',
   ],
-  // 枪：长杆，枪头束红缨
-  spear: ['...w...', '..wWS..', '..wWS..', '..wWS..', '...W...',
-    '..rRr..', '..gGg..', ...shaft(22), '..gGg..', '...h...', '...h...', '..gGg..'],
+  // 枪：短杆化，枪头束红缨（原先 30 行太长，拿在手里像根旗杆）
+  spear: ['...w...', '..wWS..', '..wWS..', '...W...',
+    '..rRr..', '..gGg..', ...shaft(11), '..gGg..', '...h...', '..gGg..'],
   // 棍：齐眉乌木棍，两端铜箍
-  staff: ['..gGg..', '...h...', ...shaft(24), '...h...', '..gGg..', '...h...', '..gGg..'],
+  staff: ['..gGg..', '...h...', ...shaft(13), '...h...', '..gGg..', '...h...', '..gGg..'],
   // 双刃：短匕，成对使用
   dual: ['..w..', '..W..', '.sWs.', '.sWs.', '.sWs.', '..W..', '.gGg.', '..h..', '..h..', '.gGg.'],
   // 锤：鎏金重锤，短柄
@@ -71,62 +72,115 @@ const ROWS = {
     '...ghg...',
     '..gGgGg..',
   ],
+  // 法杖：短柄托灵珠，挥动时放气弹
+  mage: [
+    '...p...',
+    '..pPp..',
+    '.pPWPp.',
+    '.pPWPp.',
+    '..pPp..',
+    '...p...',
+    '..gGg..',
+    '...h...',
+    '...h...',
+    '...h...',
+    '...h...',
+    '..gGg..',
+    '...h...',
+  ],
+  // 暗器：四棱飞镖，掌心大小
+  dart: [
+    'w..w..w',
+    '..wPw..',
+    '.wwPww.',
+    'wwPWPww',
+    '.wwPww.',
+    '..wPw..',
+    'w..w..w',
+  ],
 };
 
-// 每种兵器的定位：攻击倍率 / 攻击间隔 / 基础攻击距离 / 判定弧度
+// 每种兵器的定位：攻击倍率 / 攻击间隔 / 基础攻击距离 / 判定弧度 / 掉落权重
+// 五系招式重设计（攻距与判定弧度整体收小，挥舞不再扫半个屏幕）：
+//   刀 = 三式半圆（左右开阖 + 末段力劈）；剑 = 向前递剑两式 + 末段直刺；
+//   枪 = 试探刺 → 横扫 → 贯甲刺；法杖 / 暗器 = 远程弹体，不做近战判定。
 export const WEAPONS = {
   sword: {
-    id: 'sword', name: '剑', kindLabel: '长剑', atkMul: 1.00, spdMul: 1.00, reach: 32,
-    trail: [C.jade3, C.jade2], fx: 'crescent', desc: '轻灵三段，第三段突刺',
+    id: 'sword', name: '剑', kindLabel: '长剑', atkMul: 1.00, spdMul: 1.00, reach: 28, dropW: 18,
+    trail: [C.jade3, C.jade2], fx: 'crescent', desc: '向前递剑两式，末段一记直刺',
     swings: [
-      { mode: 'swing', a0: -1.35, a1: 1.15, dur: 0.20, mul: 0.95, kb: 5, lunge: 3, hitArc: 2.7 },
-      { mode: 'swing', a0: 1.35, a1: -1.25, dur: 0.20, mul: 1.10, kb: 6, lunge: 4, hitArc: 2.7 },
-      { mode: 'thrust', dur: 0.24, mul: 1.70, kb: 12, lunge: 11, reach: 40, hitArc: 1.1 },
+      { mode: 'swing', a0: -0.72, a1: 0.72, dur: 0.18, mul: 0.95, kb: 5, lunge: 3, hitArc: 1.5, reach: 28 },
+      { mode: 'swing', a0: 0.72, a1: -0.72, dur: 0.18, mul: 1.10, kb: 6, lunge: 4, hitArc: 1.5, reach: 29 },
+      { mode: 'thrust', dur: 0.24, mul: 1.70, kb: 12, lunge: 10, reach: 36, hitArc: 0.9 },
     ],
   },
   blade: {
-    id: 'blade', name: '刀', kindLabel: '长刀', atkMul: 1.16, spdMul: 1.18, reach: 34,
-    trail: [C.red3, C.red2], fx: 'crescent', desc: '大开大合，末段回旋斩',
+    id: 'blade', name: '刀', kindLabel: '长刀', atkMul: 1.16, spdMul: 1.18, reach: 30, dropW: 17,
+    trail: [C.red3, C.red2], fx: 'crescent', desc: '三式皆半圆，左右开阖、末段力劈',
     swings: [
-      { mode: 'swing', a0: -1.95, a1: 1.55, dur: 0.28, mul: 1.15, kb: 9, lunge: 4, hitArc: 3.3 },
-      { mode: 'swing', a0: 1.75, a1: -1.95, dur: 0.28, mul: 1.28, kb: 10, lunge: 4, hitArc: 3.3 },
-      { mode: 'swing', a0: -2.9, a1: 2.1, dur: 0.34, mul: 1.60, kb: 15, lunge: 3, hitArc: 5.0 },
+      { mode: 'swing', a0: -1.57, a1: 1.57, dur: 0.24, mul: 1.10, kb: 8, lunge: 3, hitArc: 3.14, reach: 30 },
+      { mode: 'swing', a0: 1.57, a1: -1.57, dur: 0.24, mul: 1.22, kb: 10, lunge: 3, hitArc: 3.14, reach: 30 },
+      { mode: 'swing', a0: -1.75, a1: 1.75, dur: 0.30, mul: 1.58, kb: 14, lunge: 4, hitArc: 3.5, reach: 32 },
     ],
   },
   spear: {
-    id: 'spear', name: '枪', kindLabel: '长枪', atkMul: 1.08, spdMul: 0.94, reach: 46,
-    trail: [C.paper3, C.gold2], fx: 'thrust', desc: '远距直刺，第三段横扫',
+    id: 'spear', name: '枪', kindLabel: '长枪', atkMul: 1.08, spdMul: 0.94, reach: 40, dropW: 13,
+    trail: [C.paper3, C.gold2], fx: 'thrust', desc: '一试探、二横扫、三贯甲',
     swings: [
-      { mode: 'thrust', dur: 0.22, mul: 1.05, kb: 8, lunge: 9, reach: 46, hitArc: 0.9 },
-      { mode: 'thrust', dur: 0.22, mul: 1.15, kb: 9, lunge: 10, reach: 48, hitArc: 0.9 },
-      { mode: 'swing', a0: -2.3, a1: 2.3, dur: 0.30, mul: 1.55, kb: 14, lunge: 3, hitArc: 4.6, reach: 44 },
+      { mode: 'thrust', dur: 0.18, mul: 1.00, kb: 7, lunge: 7, reach: 38, hitArc: 0.8 },
+      { mode: 'swing', a0: -1.0, a1: 1.0, dur: 0.22, mul: 1.18, kb: 9, lunge: 3, hitArc: 2.0, reach: 34 },
+      { mode: 'thrust', dur: 0.28, mul: 1.85, kb: 15, lunge: 12, reach: 50, hitArc: 0.85 },
     ],
   },
   staff: {
-    id: 'staff', name: '棍', kindLabel: '长棍', atkMul: 0.94, spdMul: 0.92, reach: 38,
+    id: 'staff', name: '棍', kindLabel: '长棍', atkMul: 0.94, spdMul: 0.92, reach: 34, dropW: 11,
     trail: [C.gold3, C.gold2], fx: 'crescent', desc: '横扫千军，末段抡圆',
     swings: [
-      { mode: 'swing', a0: -1.85, a1: 1.85, dur: 0.24, mul: 0.95, kb: 8, lunge: 2, hitArc: 3.8 },
-      { mode: 'swing', a0: 1.85, a1: -1.85, dur: 0.24, mul: 1.05, kb: 9, lunge: 2, hitArc: 3.8 },
-      { mode: 'ring', dur: 0.34, mul: 1.40, kb: 13, lunge: 0, hitArc: 6.28, reach: 36 },
+      { mode: 'swing', a0: -1.7, a1: 1.7, dur: 0.24, mul: 0.95, kb: 8, lunge: 2, hitArc: 3.8, reach: 34 },
+      { mode: 'swing', a0: 1.7, a1: -1.7, dur: 0.24, mul: 1.05, kb: 9, lunge: 2, hitArc: 3.8, reach: 34 },
+      { mode: 'ring', dur: 0.34, mul: 1.40, kb: 13, lunge: 0, hitArc: 6.28, reach: 32 },
     ],
   },
   dual: {
-    id: 'dual', name: '双刃', kindLabel: '双刀', atkMul: 0.80, spdMul: 0.74, reach: 26,
+    id: 'dual', name: '双刃', kindLabel: '双刀', atkMul: 0.80, spdMul: 0.74, reach: 24, dropW: 10,
     trail: [C.pur3, C.pur2], fx: 'cross', desc: '双刀合击，每段两次判定', hits: 2,
     swings: [
-      { mode: 'swing', a0: -1.15, a1: 1.25, dur: 0.16, mul: 0.62, kb: 4, lunge: 4, hitArc: 2.5 },
-      { mode: 'swing', a0: 1.25, a1: -1.15, dur: 0.16, mul: 0.66, kb: 4, lunge: 4, hitArc: 2.5 },
-      { mode: 'swing', a0: -1.7, a1: 1.7, dur: 0.22, mul: 1.00, kb: 8, lunge: 3, hitArc: 3.4 },
+      { mode: 'swing', a0: -1.05, a1: 1.05, dur: 0.16, mul: 0.62, kb: 4, lunge: 3, hitArc: 2.5, reach: 24 },
+      { mode: 'swing', a0: 1.05, a1: -1.05, dur: 0.16, mul: 0.66, kb: 4, lunge: 3, hitArc: 2.5, reach: 24 },
+      { mode: 'swing', a0: -1.45, a1: 1.45, dur: 0.22, mul: 1.00, kb: 8, lunge: 3, hitArc: 3.4, reach: 26 },
     ],
   },
   hammer: {
-    id: 'hammer', name: '锤', kindLabel: '重锤', atkMul: 1.42, spdMul: 1.30, reach: 32,
+    id: 'hammer', name: '锤', kindLabel: '重锤', atkMul: 1.42, spdMul: 1.30, reach: 29, dropW: 9,
     trail: [C.gold3, C.red2], fx: 'shock', desc: '开山一击，落点起冲击波',
     swings: [
-      { mode: 'swing', a0: -2.25, a1: 1.45, dur: 0.36, mul: 1.45, kb: 15, lunge: 3, hitArc: 4.1 },
-      { mode: 'swing', a0: 1.45, a1: -2.25, dur: 0.36, mul: 1.55, kb: 16, lunge: 3, hitArc: 4.1 },
-      { mode: 'swing', a0: -0.55, a1: 1.45, dur: 0.42, mul: 2.10, kb: 22, lunge: 5, hitArc: 4.6, shock: true },
+      { mode: 'swing', a0: -1.85, a1: 1.25, dur: 0.36, mul: 1.45, kb: 15, lunge: 3, hitArc: 3.7, reach: 29 },
+      { mode: 'swing', a0: 1.25, a1: -1.85, dur: 0.36, mul: 1.55, kb: 16, lunge: 3, hitArc: 3.7, reach: 29 },
+      { mode: 'swing', a0: -0.55, a1: 1.35, dur: 0.42, mul: 2.10, kb: 22, lunge: 5, hitArc: 4.0, reach: 30, shock: true },
+    ],
+  },
+  mage: {
+    id: 'mage', name: '法杖', kindLabel: '灵杖', atkMul: 0.88, spdMul: 1.05, reach: 26, dropW: 12,
+    ranged: true, trail: [C.pur3, C.pur2], fx: 'orb', desc: '一珠、二珠分袭、三珠连爆',
+    swings: [
+      { mode: 'cast', dur: 0.20, mul: 0.90, kb: 5, lunge: 0, hitArc: 0,
+        proj: { kind: 'orb', count: 1, speed: 205, size: 9, life: 0.95, dmgMul: 1.00, pierce: 1 } },
+      { mode: 'cast', dur: 0.22, mul: 0.82, kb: 5, lunge: 0, hitArc: 0,
+        proj: { kind: 'orb', count: 2, spread: 0.34, speed: 215, size: 8, life: 0.95, dmgMul: 0.82, pierce: 1 } },
+      { mode: 'cast', dur: 0.28, mul: 1.05, kb: 9, lunge: 0, hitArc: 0,
+        proj: { kind: 'orb', count: 3, spread: 0.62, speed: 230, size: 11, life: 1.10, dmgMul: 0.90, pierce: 2 } },
+    ],
+  },
+  dart: {
+    id: 'dart', name: '暗器', kindLabel: '飞镖', atkMul: 0.78, spdMul: 0.80, reach: 24, dropW: 10,
+    ranged: true, trail: [C.paper3, C.gold3], fx: 'dart', desc: '一镖、三镖扇射、五镖漫天',
+    swings: [
+      { mode: 'cast', dur: 0.16, mul: 0.85, kb: 4, lunge: 0, hitArc: 0,
+        proj: { kind: 'dart', count: 1, speed: 285, size: 7, life: 0.80, dmgMul: 1.00, pierce: 1 } },
+      { mode: 'cast', dur: 0.18, mul: 0.72, kb: 4, lunge: 0, hitArc: 0,
+        proj: { kind: 'dart', count: 3, spread: 0.46, speed: 290, size: 6, life: 0.80, dmgMul: 0.72, pierce: 1 } },
+      { mode: 'cast', dur: 0.24, mul: 0.68, kb: 6, lunge: 0, hitArc: 0,
+        proj: { kind: 'dart', count: 5, spread: 0.92, speed: 305, size: 6, life: 0.90, dmgMul: 0.68, pierce: 1 } },
     ],
   },
 };
@@ -140,15 +194,65 @@ for (const id of WEAPON_IDS) {
   baseCanvas[id] = c;
 }
 
-// 稀有度光晕：把柄头染成装备品阶色
+// ---------- 稀有造型：同一类兵器也不该长一个样 ----------
+// 品阶 2 起换剪影（护手镶珠、刃侧开锋、传世冠顶），再叠加 skin 决定的宝石配色。
+// 所以「剑」这一族至少能读出 凡/精 → 灵 → 仙 → 传世 × 3 种宝石纹样，而不是只染个色。
+const VARIANT_GEM = [
+  { core: 'P', edge: 'p' },   // 紫晶
+  { core: 'R', edge: 'r' },   // 赤玉
+  { core: 'G', edge: 'g' },   // 鎏金
+];
+export function skinOf(seed) { return ((seed | 0) % VARIANT_GEM.length + VARIANT_GEM.length) % VARIANT_GEM.length; }
+
+function variantRows(fam, r, skin) {
+  const src = ROWS[fam] || ROWS.sword;
+  if (r < 2) return src;
+  const pad = 2, w = src[0].length + pad * 2;
+  const rows = src.map(row => {
+    const a = Array(w).fill('.');
+    for (let i = 0; i < row.length; i++) a[i + pad] = row[i];
+    return a;
+  });
+  const G = VARIANT_GEM[skinOf(skin)];
+  const mid = w >> 1;
+  // 护手镶珠
+  const guard = rows.findIndex(a => a.indexOf('g') >= 0);
+  if (guard >= 0) {
+    for (let x = 0; x < w; x++) if (rows[guard][x] !== '.') rows[guard][x] = G.edge;
+    rows[guard][mid] = G.core;
+  }
+  // 刃侧开锋：仙品起向外探出侧刃，传世再多半寸
+  if (r >= 3) {
+    const n = r >= 4 ? 3 : 2;
+    for (let i = 0; i < n; i++) {
+      const y = 1 + i;
+      if (y >= rows.length) break;
+      rows[y][pad - 1] = G.edge;
+      rows[y][w - pad] = G.edge;
+      rows[y][mid] = G.core;
+    }
+  }
+  // 传世冠顶：多两行宝石尖冠，远远就能看出不是凡兵
+  if (r >= 4) {
+    const c0 = Array(w).fill('.'), c1 = Array(w).fill('.');
+    c0[mid] = 'w';
+    c1[mid - 1] = G.edge; c1[mid] = G.core; c1[mid + 1] = G.edge;
+    rows.unshift(c0, c1);
+  }
+  return rows.map(a => a.join(''));
+}
+
 const canvasCache = new Map();
-export function weaponCanvas(fam, rarityColor) {
+// rarityColor / r / skin 都由调用方给；不传就退回「凡品基础造型」，保持旧调用兼容。
+export function weaponCanvas(fam, rarityColor, r, skin) {
   const ext = ART.weapons && ART.weapons[fam];
   if (ext) return ext;
-  const key = fam + '|' + (rarityColor || '');
+  const tier = Math.max(0, Math.min(4, r | 0));
+  const look = tier >= 2 ? skinOf(skin) : 0;
+  const key = fam + '|' + (rarityColor || '') + '|' + tier + '|' + look;
   if (canvasCache.has(key)) return canvasCache.get(key);
-  let c = baseCanvas[fam];
-  if (!c) c = baseCanvas.sword;
+  let c = baseCanvas[fam] || baseCanvas.sword;
+  if (tier >= 2) c = outlined(spriteCanvas(variantRows(fam, tier, look), WPAL));
   if (rarityColor) {
     const o = document.createElement('canvas');
     o.width = c.width; o.height = c.height;
@@ -156,11 +260,11 @@ export function weaponCanvas(fam, rarityColor) {
     g.drawImage(c, 0, 0);
     g.globalCompositeOperation = 'source-atop';
     g.fillStyle = rarityColor;
-    g.globalAlpha = 0.16;
+    g.globalAlpha = 0.14 + tier * 0.03;
     g.fillRect(0, 0, o.width, o.height);
-    // 刃口高光条
+    // 刃口高光条：品阶越高越宽
     g.globalAlpha = 0.5;
-    g.fillRect(Math.round(o.width / 2) - 1, 2, 1, Math.round(o.height * 0.45));
+    g.fillRect(Math.round(o.width / 2) - 1, 2, tier >= 3 ? 2 : 1, Math.round(o.height * 0.45));
     c = o;
   }
   canvasCache.set(key, c);
@@ -169,11 +273,12 @@ export function weaponCanvas(fam, rarityColor) {
 
 // 行囊 / 装备栏图标：把兵器斜置 45° 装进 20×20
 const iconCache = {};
-export function weaponIcon(fam) {
+export function weaponIcon(fam, r, skin, rarityColor) {
   const base = fam || 'sword';
-  const key = base + '@' + ART.version;
+  const tier = r | 0, look = skinOf(skin);
+  const key = base + '@' + tier + '@' + look + '@' + (rarityColor || '') + '@' + ART.version;
   if (iconCache[key]) return iconCache[key];
-  const src = weaponCanvas(base, null);
+  const src = weaponCanvas(base, rarityColor || null, tier, look);
   const c = document.createElement('canvas');
   c.width = 20; c.height = 20;
   const g = c.getContext('2d');
@@ -190,9 +295,14 @@ export function weaponIcon(fam) {
 }
 
 // ---------- 绘制：手中兵器 ----------
+// 兵器整体缩到「掌中尺寸」：主角贴图才 16×18，原先 1:1 的兵器几乎和人一样高，
+// 柄端又落在身体正中，看起来就像从身上长出来的。
+export const HELD_SCALE = 0.56;
+export const SWING_SCALE = 0.68;
+
 // 把 canvas 以「柄端」为轴心旋转绘制
 export function drawWeaponAt(ctx, cv, x, y, ang, alpha, scale) {
-  const s = scale || 1;
+  const s = scale === undefined ? HELD_SCALE : scale;
   const w = cv.width * s;
   const h = cv.height * s;
   ctx.save();
@@ -201,6 +311,26 @@ export function drawWeaponAt(ctx, cv, x, y, ang, alpha, scale) {
   ctx.globalAlpha = alpha === undefined ? 1 : alpha;
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(cv, -Math.round(w / 2), -Math.round(h - s), w, h);
+  ctx.restore();
+}
+
+// 仙品 / 传世兵器：刃身周围的品阶辉光，传世再绕三粒游走的星点
+export function drawRareAura(ctx, x, y, rad, color, alpha, t, tier) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const gr = ctx.createRadialGradient(x, y, 0, x, y, rad);
+  gr.addColorStop(0, rgba(color, 0.40 * alpha));
+  gr.addColorStop(0.55, rgba(color, 0.13 * alpha));
+  gr.addColorStop(1, rgba(color, 0));
+  ctx.fillStyle = gr;
+  ctx.beginPath(); ctx.arc(x, y, rad, 0, 6.28); ctx.fill();
+  if (tier >= 4) {
+    for (let i = 0; i < 3; i++) {
+      const a = t * 2.6 + i * 2.09, rr = rad * 0.75;
+      ctx.fillStyle = rgba(C.white, (0.5 + 0.4 * Math.sin(t * 5 + i)) * alpha);
+      ctx.fillRect(Math.round(x + Math.cos(a) * rr), Math.round(y + Math.sin(a) * rr), 1, 1);
+    }
+  }
   ctx.restore();
 }
 

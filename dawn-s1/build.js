@@ -121,3 +121,10 @@ console.log('✓ xiaoyao-bundle.js  ' + kb + ' KB');
 const single = buildSingle(bundle);
 fs.writeFileSync(path.join(ROOT, '逍遥行.html'), single, 'utf8');
 console.log('✓ 逍遥行.html        ' + (single.length / 1024).toFixed(0) + ' KB（双击即玩 / 可直接外发）');
+
+// 发布用目录：把单文件版另存为 dist/index.html。
+// 线上发布走这个目录 —— 整页只有一次请求，不会被网关的会话 cookie / 并行请求问题坑到。
+const DIST = path.join(ROOT, 'dist');
+if (!fs.existsSync(DIST)) fs.mkdirSync(DIST);
+fs.writeFileSync(path.join(DIST, 'index.html'), single, 'utf8');
+console.log('✓ dist/index.html    ' + (single.length / 1024).toFixed(0) + ' KB（发布目录：整页单请求）');

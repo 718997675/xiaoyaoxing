@@ -1,0 +1,50 @@
+# 逍遥行 · GitHub Pages 发布
+#
+# 把 dawn-s1/dist/（单文件版，整页一次请求）发布到
+# https://718997675.github.io/xiaoyaoxing/
+#
+# 为什么发 dist 而不是源码目录：
+#   线上网关在并行加载十几个 ES module 时会话 cookie 会失效，
+#   表现为「只有菜单外壳、点按钮没反应」。单文件版只有 1 个请求，稳。
+#
+# 首次使用需要在仓库 Settings → Pages 里把 Source 选成「GitHub Actions」。
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'dawn-s1/dist/**'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 只保留最新一次部署，避免旧部署排队占资源
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dawn-s1/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

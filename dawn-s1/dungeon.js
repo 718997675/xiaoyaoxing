@@ -58,16 +58,21 @@ export function genFloor(seed, floor) {
   rooms.push({ x: entX, y: entY, w: entW, h: entH, entry: true });
 
   const want = 7 + floor;   // 8 / 9 / 10 间
-  for (let tries = 0; tries < 900 && rooms.length < want; tries++) {
-    const w = 5 + ((rnd() * 4) | 0);
-    const h = 4 + ((rnd() * 3) | 0);
-    // 从 2 开始：最外两圈必须留成实心岩。只留一圈的话，玩家贴着墙站时
-    // 视野会越过 16px 的岩层直接看到洞外的草地 —— 那一抹青绿会毁掉"在洞底"。
-    const x = 2 + ((rnd() * Math.max(1, W - w - 4)) | 0);
-    const y = 2 + ((rnd() * Math.max(1, H - h - 4)) | 0);
-    // 留 2 格缝：房间贴在一起会变成一大片空地，失去"洞窟"的层次
-    if (rooms.some(r => x < r.x + r.w + 2 && x + w + 2 > r.x && y < r.y + r.h + 2 && y + h + 2 > r.y)) continue;
-    rooms.push({ x, y, w, h });
+  // 房间间距逐级放宽：先用 2 格缝铺出层次，铺不满就退到 1 格、再退到 0 格，
+  // 保证每层的房间数达标 —— 之前固定 900 次尝试铺不满就收工，
+  // 有些种子只长出 6 间房，层与层的大小飘忽不定。
+  for (let gap = 2; gap >= 0 && rooms.length < want; gap--) {
+    for (let tries = 0; tries < 900 && rooms.length < want; tries++) {
+      const w = 5 + ((rnd() * 4) | 0);
+      const h = 4 + ((rnd() * 3) | 0);
+      // 从 2 开始：最外两圈必须留成实心岩。只留一圈的话，玩家贴着墙站时
+      // 视野会越过 16px 的岩层直接看到洞外的草地 —— 那一抹青绿会毁掉"在洞底"。
+      const x = 2 + ((rnd() * Math.max(1, W - w - 4)) | 0);
+      const y = 2 + ((rnd() * Math.max(1, H - h - 4)) | 0);
+      // 留 2 格缝：房间贴在一起会变成一大片空地，失去"洞窟"的层次
+      if (rooms.some(r => x < r.x + r.w + gap && x + w + gap > r.x && y < r.y + r.h + gap && y + h + gap > r.y)) continue;
+      rooms.push({ x, y, w, h });
+    }
   }
 
   for (const r of rooms) {
