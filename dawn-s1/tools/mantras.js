@@ -228,16 +228,29 @@
       const d = dummy(p.x + 24, p.y, 1e6);
       g.player.qi = g.stats.qiMax * 0.4;
       const q0 = g.player.qi;
-      g.hitEnemy(d, { dmg: 100 }, 0, 0);
+      // basic = 一次普攻挥击的编号：焚心按挥击收气（一次挥击只收一次），
+      // 招式命中不带这个编号 —— 招式不参与焚心的真气结算。
+      g.hitEnemy(d, { dmg: 100, basic: 1 }, 0, 0);
       T('焚心：命中挂灼烧', d.burnT > 0 && d.burn > 0,
         'burn ' + Math.round(d.burn) + '/s × ' + d.burnT.toFixed(1) + 's');
-      // 命中本身回 3 点真气，焚心扣 5 点 —— 净 -2。
+      // 命中本身回 3 点真气，焚心收 5 点 —— 净 -2。
       // 这里写成 -2 而不是"扣 5"，因为玩家体感的是"打一下掉两点气"。
-      T('焚心：每次命中净耗 2 真气', Math.abs((g.player.qi - q0) + 2) < 0.01,
+      T('焚心：每次普攻净耗 2 真气', Math.abs((g.player.qi - q0) + 2) < 0.01,
         q0.toFixed(0) + ' → ' + g.player.qi.toFixed(0));
+      // 同一次挥击命中第二只怪不再收气
+      const d2 = dummy(p.x + 30, p.y, 1e6);
+      const q1 = g.player.qi;
+      g.hitEnemy(d2, { dmg: 100, basic: 1 }, 0, 0);
+      T('焚心：同一次挥击只收一次气', Math.abs(g.player.qi - q1 - 3) < 0.01,
+        q1.toFixed(0) + ' → ' + g.player.qi.toFixed(0));
+      // 招式命中不收气：六招同开时，按命中收气会把整池真气抽干
+      const q2 = g.player.qi;
+      g.hitEnemy(d, { dmg: 100 }, 0, 0);
+      T('焚心：招式命中不收气', Math.abs(g.player.qi - q2 - 3) < 0.01,
+        q2.toFixed(0) + ' → ' + g.player.qi.toFixed(0));
       // 真气见底就点不着 —— 这是代价，不是 bug
       g.player.qi = 0; d.burnT = 0;
-      g.hitEnemy(d, { dmg: 100 }, 0, 0);
+      g.hitEnemy(d, { dmg: 100, basic: 100 }, 0, 0);
       T('焚心：真气不足时不触发', d.burnT === 0, String(d.burnT));
     })();
 

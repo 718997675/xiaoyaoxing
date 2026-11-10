@@ -22,8 +22,8 @@ import {
   DG, DGT, DG_FLOORS, FLOOR_MOBS, inDungeon, genFloor, paintDungeon, dungeonArt,
 } from './dungeon.js';
 import {
-  ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_SLOT_LABEL, PROF_MAX, PROF_WEIGHT,
-  artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief,
+  ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_SLOT_LABEL, ART_FX, PROF_MAX, PROF_WEIGHT,
+  artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower,
 } from './arts.js';
 import {
   MAIN, SUB, MANTRAS, MAIN_IDS, SUB_IDS, MANTRA_IDS, MANTRA_MAX_LV, SUB_SLOTS,
@@ -1262,6 +1262,14 @@ const player = {
   // 招式槽 6 格，存 art id。换兵器时只清掉"不属于当前兵器"的格子，
   // 同一件兵器内部的手动编排保留。
   loadout: new Array(ART_SLOTS).fill(null),
+  // 玩家是否手动排过装配格：手动过就不再被 autoLoadout 自动补位
+  loadoutManual: false,
+  // 招式的临时状态：增益列表 / 下一击必暴 / 下一击增伤。
+  // 全是"这一趟"的东西，不进存档 —— 读档时带一身 buff 会比存档强一截。
+  artBuffs: [], forceCrit: 0, nextDmg: 0,
+  // 焚心：每一次普攻挥击的编号。mFxPaid 记着"哪一次挥击已经收过气"，
+  // 一次挥击命中三只怪也只收一次 —— 代价按"出一次招"算，不按命中次数算。
+  mFxSeq: 0, mFxPaid: 0,
   // 心法：一主二辅。主心法互斥（装第二条顶掉第一条），这是整个系统成立的关键 ——
   // 允许叠两条的话，玩家一定会去找"哪两条乘起来最爆"，最后收敛成一个答案。
   mantras: { main: null, sub: [null, null] },
@@ -1273,6 +1281,11 @@ const pShadow = quad(SHADOW_TEX, 13, 4.5);
 pShadow.visible = false;
 let enemies = [], drops = [], projectiles = [], dmgNums = [], messages = [];
 let particles = [], sparks = [], ghosts = [], slashGhosts = [], bolts = [];
+// 招式留下的地面区域（火雨 / 地裂 / 定军 / 千刃 / 铁蒺藜）。
+// 跟首领的 hazards 分开：hazards 是敌人放的，zones 是玩家放的，结算与配色都不同。
+let zones = [];
+// 侧身位移左右交替：连放两次「游龙步」不会每次都往同一边倒
+let dashSide = 1;
 let state = 'menu', shakeX = 0, shakeY = 0, time = 0, saveT = 0, cleared = false;
 let hitstop = 0, combo = 0, comboT = 0, comboPulse = 0, eliteT = 22, spawnT = 8;
 const keys = {};
@@ -1674,7 +1687,8 @@ function weaponFam() {
 }
 function attackInterval() {
   const W = WEAPONS[weaponFam()];
-  return Math.max(0.13, 0.30 * W.spdMul / (1 + Math.min(70, stats().atkSpd) / 100));
+  return Math.max(0.13, 0.30 * W.spdMul /
+    (1 + Math.min(70, stats().atkSpd + artBuff('atkSpd')) / 100));
 }
 
 // ============ 敌手 ============
@@ -1855,12 +1869,17 @@ function afterimage(x, y, texRef, w, h) {
 function rollDamage(mul, opt) {
   const s = stats();
   const comboCrit = Math.min(14, combo * 0.14);
-  const crit = Math.random() * 100 < Math.min(80, s.crit + comboCrit + ((opt && opt.critAdd) || 0));
+  // 招式增益的暴击 / 暴伤：走加法区，跟心法一样不叠乘算。
+  // forceCrit 不走 Math.min(80, ...) —— 被截到 80 就不是"必暴"了。
+  const critAdd = ((opt && opt.critAdd) || 0) + artBuff('crit');
+  const crit = player.forceCrit > 0 || (opt && opt.forceCrit) ||
+    Math.random() * 100 < Math.min(80, s.crit + comboCrit + critAdd);
   let dmg = s.atk * (0.9 + Math.random() * 0.2) * mul * comboMult();
   // 酒不是回血道具，是"敢不敢现在出门"的赌注：伤害上去了，判断力没上去
   if (player.drunkT > 0 && player.drunk) dmg *= 1 + player.drunk;
   if (opt && opt.skill) dmg *= 1 + s.skillDmg / 100 + ((opt.skillDmg) || 0);
-  if (crit) dmg *= s.critDmg / 100;
+  dmg *= 1 + artBuff('atkPct') / 100;
+  if (crit) dmg *= (s.critDmg + artBuff('critDmg')) / 100;
   return { dmg: Math.max(1, Math.round(dmg)), crit };
 }
 // ============ 心法运行时 ============
@@ -1872,6 +1891,7 @@ function mantraResetCombat() {
   player.mCang = 0; player.mCangT = 0; player.mCangBonus = 0;
   player.mTieyiN = 0; player.mTieyiT = 0;
   player.mJiFengT = 0; player.mIdleT = 0;
+  player.mFxSeq = 0; player.mFxPaid = 0;
 }
 
 // 乘区：破军 / 追命 / 寒潭 / 藏锋 / 疾风。
@@ -1945,8 +1965,15 @@ function mantraOnHit(e, dmg, info) {
     player.mChainT = MAIN.zhuiming.params.window;
   } else if (id === 'fenxin') {
     const p = MAIN.fenxin.params;
+    // 代价只从"普攻"里出，而且一次挥击只收一次（info.basic 是这一次挥击的编号）。
+    // P6 之前按命中收气没问题：那时候只有两招，命中次数少。
+    // 六招同开之后，招式的多段命中把按命中收的气放大到把整池真气抽干 ——
+    // 实测焚心 + 六招满配的 DPS 只有裸装的 33%（招式放不出来，只剩普攻在砍）。
+    // 改成按挥击收气：代价还是"吃真气"（命中回 3，净 -2），但不会跟招式抢气。
     // 真气不够就点不着 —— 这就是"焚心"的代价，不是 bug
-    if (player.qi >= p.qi) {
+    if (info && info.basic && info.basic !== player.mFxPaid
+      && player.qi >= p.qi) {
+      player.mFxPaid = info.basic;
       player.qi -= p.qi;
       const dps = Math.max(1, stats().atk * p.pct);
       // 复用已有的 burn 状态机（dotTick 里结算），不新增状态
@@ -2075,6 +2102,10 @@ function upgradeMantra(id) {
 
 function hitEnemy(e, info, ang, kb) {
   const s = stats();
+  // 「下一击」的一次性标记在这里消费，而不是在 castArt / rollDamage 里 ——
+  // 一记横扫扫三只怪，只有第一只吃到加成，这才叫"下一击"而不是"这一整招"。
+  if (player.nextDmg) { info.dmg *= 1 + player.nextDmg; player.nextDmg = 0; }
+  if (player.forceCrit) player.forceCrit = 0;
   // 破防 / 贯甲：招式可以按比例无视防御。放在这里而不是各自算一遍，
   // 是为了让"普攻 / 弹体 / 落雷 / 持续伤害"四条路径共用同一套减伤规则。
   // 锐金（辅心法）的破防也折进同一项，不另开一条减伤公式。
@@ -2119,6 +2150,8 @@ function hitEnemy(e, info, ang, kb) {
   // 心法的"命中后"效果（焚心灼烧 / 寒潭减速 / 追命递增 / 无常重置 CD）
   // 放在死亡判定之前：这一下打死人也该把状态挂上去（毒镖传染就是这么做的）
   mantraOnHit(e, dmg, info);
+  // 淬毒：增益期间每一击都带毒，普攻 / 招式 / 弹体一视同仁（都汇到 hitEnemy）。
+  if (artBuff('poisonOnHit') > 0) applyStatus(e, { kind: 'poison', dur: 4, pct: 0.06 }, dmg);
   if (e.hp <= 0) killEnemy(e);
   return dmg;   // 返回实际伤害：自动化测试要拿它验证偷袭/减伤，运行时不依赖
 }
@@ -2131,8 +2164,10 @@ function hurtPlayer(d) {
   }
   const s = stats();
   let real = d * 22 / (22 + s.def);
-  real *= 1 - Math.min(60, s.dmgReduce) / 100;
+  // 铁布衫的减伤与狂怒的"受伤 +15%"都走加法区，跟装备 / 道行 / 心法同一个口径
+  real *= 1 - Math.min(60, s.dmgReduce + artBuff('dmgReduce')) / 100;
   real *= mantraHurtMul();   // 铁衣：按**当前**层数减伤，这一下不算新层
+  real *= 1 + artBuff('hurtPct') / 100;
   real = Math.max(1, Math.round(real));
   // 卸力：转气放在护盾之前 —— 罡气挡下来的那部分也是"受力"
   mantraOnHurt(real);
@@ -2152,11 +2187,23 @@ function hurtPlayer(d) {
   burst(player.x, player.y - 8, C.red2, 8, 70);
   AUDIO.play('hurt');
   mantraAfterHurt();
+  // 铁壁：近身来打的还三成回去。走 dealDot，别再走一遍 hitEnemy ——
+  // 挨一次打触发一次顿帧 + 火花就够了，反弹那下不该把屏幕再抖一次。
+  const rf = artBuff('hurtReflect');
+  if (rf > 0) {
+    let best = null, bd = 64;
+    for (const e of enemies) {
+      if (e.dead) continue;
+      const d = Math.hypot(e.x - player.x, e.y - player.y);
+      if (d < bd) { bd = d; best = e; }
+    }
+    if (best) dealDot(best, real * rf / 100, C.gold3);
+  }
   if (player.hp <= 0) { player.hp = 0; showDead(); }
 }
 // 法杖 / 暗器的普攻：把弹体塞进现有 projectiles，命中、飞行、穿怪都复用同一套。
 // 不消耗真气（那是「剑气」技能的定位），伤害走普攻倍率与连击加成。
-function fireWeaponProj(fam, cfg, sw) {
+function fireWeaponProj(fam, cfg, sw, fxTok) {
   const W = WEAPONS[fam];
   const [fx, fy] = DIRV[player.dir];
   const a0 = Math.atan2(fy, fx);
@@ -2174,6 +2221,7 @@ function fireWeaponProj(fam, cfg, sw) {
       dmg: baseDmg.dmg, crit: baseDmg.crit,
       pierce: cfg.pierce || 1, mesh, hitSet: new Set(),
       spin: cfg.kind === 'dart' ? 14 : 0,
+      basic: fxTok,   // 普攻弹体：焚心按挥击收气，这一梭命中几个都算同一次挥击
     });
   }
   burst(player.x + fx * 12, player.y - 8 + fy * 12, W.trail[0], n > 1 ? 6 : 3, 45);
@@ -2189,6 +2237,8 @@ function attack() {
   else player.atkStep = 0;
   const sw = list[player.atkStep];
   player.lastAtkT = time;
+  // 这一次挥击的编号：焚心按挥击收气（一次挥击只收一次），招式不带这个编号
+  const fxTok = ++player.mFxSeq;
   mantraOnCast();   // 藏锋：把攒的层换成这一击的加成（顺手刷新出招计时）
   player.atkCd = attackInterval();
   player.atkBuf = 0;
@@ -2197,7 +2247,7 @@ function attack() {
   player.swing = { fam, step: player.atkStep, base, sw, t: sw.dur, dur: sw.dur };
   AUDIO.play('slash', fam);
 
-  if (W.ranged && sw.proj) { fireWeaponProj(fam, sw.proj, sw); return; }
+  if (W.ranged && sw.proj) { fireWeaponProj(fam, sw.proj, sw, fxTok); return; }
 
   const reach = (sw.reach || W.reach);
   const halfArc = sw.hitArc / 2;
@@ -2209,7 +2259,13 @@ function attack() {
     if (d > reach + e.h * 0.4) continue;
     const diff = Math.abs(((Math.atan2(dy, dx) - base + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
     if (halfArc < Math.PI - 0.05 && diff > halfArc && d > 15) continue;
-    for (let k = 0; k < hits; k++) hitEnemy(e, rollDamage(sw.mul), Math.atan2(dy, dx), sw.kb);
+    // basic = 这一次挥击的编号：焚心按挥击收气（一次挥击只收一次），
+    // 招式命中不带这个字段，所以招式不参与焚心的真气结算。
+    for (let k = 0; k < hits; k++) {
+      const r = rollDamage(sw.mul);
+      r.basic = fxTok;
+      hitEnemy(e, r, Math.atan2(dy, dx), sw.kb);
+    }
   }
   if (sw.shock) {
     shakeX += 2; shakeY += 3;
@@ -2501,6 +2557,34 @@ function profKills(fam) { return (player.prof && player.prof[fam]) || 0; }
 function artCdOf(id) { return artCds[id] || 0; }
 function artMaxOf(a) { return a.cd * (1 - Math.min(45, stats().cdr) / 100); }
 
+// 增益类招式（剑心通明 / 狂怒 / 枪势 / 铁布衫 / 杀意 / 铁壁 / 灵护 / 淬毒）
+// 统一从这里读。刻意不折进 stats()：_stats 是带缓存的常驻属性，限时增益塞进去
+// 每帧都要 invalidate，还会让面板上的数字说谎（面板写的是装备+道行，不含临时 buff）。
+// 这里按 key 求和，多个增益同时开着就叠加；同 id 重放只刷新时长，不叠第二条。
+function artBuff(key) {
+  if (!player.artBuffs || !player.artBuffs.length) return 0;
+  let v = 0;
+  for (const b of player.artBuffs) if (b.t > 0) v += (b.def[key] || 0);
+  return v;
+}
+function artBuffActive() { return !!(player.artBuffs && player.artBuffs.length); }
+
+// 地面区域 / 反伤走这一条，不经过 hitEnemy —— 每 0.2 秒走一次顿帧、连击、
+// 火花和击退的话，站在火雨里的怪会让整块屏幕抖个不停（DoT 当初就是这么改的）。
+function dealDot(e, dmg, col) {
+  if (!e || e.dead || dmg <= 0) return;
+  dmg = Math.max(1, Math.round(dmg));
+  e.hp -= dmg;
+  e.dotAcc = (e.dotAcc || 0) + dmg;
+  e.dotShow = (e.dotShow || 0) - 0.016;
+  if (e.dotShow <= 0 && e.dotAcc >= 1) {
+    e.dotShow = 0.4;
+    dmgNum(e.x + (Math.random() * 8 - 4), e.y - e.h * 0.9, '-' + Math.round(e.dotAcc), col || C.red3);
+    e.dotAcc = 0;
+  }
+  if (e.hp <= 0 && !e.dead) killEnemy(e);
+}
+
 function addProf(fam, n) {
   if (!fam || !WEAPONS[fam] || !n) return;
   if (!player.prof) player.prof = {};
@@ -2514,13 +2598,35 @@ function addProf(fam, n) {
   // 升级时顺手把刚悟到的招式自动上阵 —— 否则玩家悟了招却不知道该去哪个页面装，
   // 这套系统在第一次接触时就断线了。
   const got = artsOfWeapon(fam).filter(a => a.prof > before && a.prof <= after);
-  for (const a of got) msg('悟得「' + a.name + '」· 已上阵', C.gold3);
-  autoLoadout();
+  autoLoadout();   // 先用空位接住新招
+  for (const a of got) {
+    const put = player.loadout.indexOf(a.id) >= 0 || autoEquipNew(a);
+    msg('悟得「' + a.name + '」' + (put ? ' · 已上阵' : ' · 招式页可换装'), C.gold3);
+  }
   renderArts();
+}
+
+// 六格满了、刚悟到的招装不进去时：顶掉专精最低的那一格。
+// 专精越高招式越强，自动往上换是玩家预期的方向；
+// 但玩家手动排过装配（loadoutManual）就不再替他决定。
+function autoEquipNew(a) {
+  const L = player.loadout;
+  if (!L || L.indexOf(a.id) >= 0) return true;
+  if (player.loadoutManual) return false;
+  let worst = -1, worstProf = Infinity;
+  for (let i = 0; i < L.length; i++) {
+    const o = artById(L[i]);
+    if (!o) continue;
+    if (o.prof < worstProf) { worstProf = o.prof; worst = i; }
+  }
+  if (worst >= 0 && worstProf < a.prof) { L[worst] = a.id; return true; }
+  return false;
 }
 
 // 换兵器时：清掉不属于当前兵器的格子，再把已悟没上阵的补进空格。
 // 同一件兵器内部的手动编排要保留 —— 每次换刀都重排一遍，玩家会以为界面坏了。
+// loadoutManual：玩家自己动过装配格就不再自动补位 ——
+// 否则"手动卸下一招"会在下一次专精升级时被悄悄塞回来。
 function autoLoadout() {
   const fam = weaponFam();
   const L = player.loadout;
@@ -2528,14 +2634,16 @@ function autoLoadout() {
   const A = player.loadout;
   for (let i = 0; i < ART_SLOTS; i++) {
     const a = A[i] ? artById(A[i]) : null;
-    if (a && a.fam !== fam) A[i] = null;
+    if (a && a.fam !== fam) { A[i] = null; player.loadoutManual = false; }
   }
-  const have = new Set(A.filter(Boolean));
-  for (const a of unlockedArts(fam, player.prof)) {
-    if (have.has(a.id)) continue;
-    const i = A.indexOf(null);
-    if (i < 0) break;
-    A[i] = a.id; have.add(a.id);
+  if (!player.loadoutManual) {
+    const have = new Set(A.filter(Boolean));
+    for (const a of unlockedArts(fam, player.prof)) {
+      if (have.has(a.id)) continue;
+      const i = A.indexOf(null);
+      if (i < 0) break;
+      A[i] = a.id; have.add(a.id);
+    }
   }
 }
 
@@ -2643,45 +2751,97 @@ function artSwingFx(a, base, reach, arc) {
   }
 }
 
+// 弹体命中（或撞墙）后的溅射 —— 三珠连爆用。
+// 走 hitEnemy 而不是 dealDot：溅射是"打击"，该有顿帧、连击和火花；
+// dealDot 是给持续区域用的（低频伤害走顿帧会把屏幕抖个不停）。
+function projSplash(p, skip) {
+  const a = p.art;
+  if (!a || !a.splash) return;
+  burst(p.x, p.y, C.red3, 8, 70);
+  for (const o of enemies) {
+    if (o.dead || o === skip) continue;
+    if (p.hitSet && p.hitSet.has(o)) continue;
+    if (Math.hypot(o.x - p.x, o.y - o.h * 0.5 - p.y) > a.splash) continue;
+    if (p.hitSet) p.hitSet.add(o);
+    const ang = Math.atan2(o.y - o.h * 0.5 - p.y, o.x - p.x);
+    const dealt = hitEnemy(o, {
+      dmg: Math.max(1, Math.round(p.dmg * 0.4)), crit: false,
+      pierceDef: a.pierceDef || 0,
+    }, ang, 4);
+    afterArtHit(o, a, dealt, ang);
+  }
+}
+
 // ---------- 主分派 ----------
+// P6 之后一共十种原语。每一支只读 arts.js 里的字段，不认招式 id ——
+// 加一招仍然只要写数据。
+// 角度约定：base 是面朝方向的弧度，aim 是这一招真正打出去的方向
+// （回马枪这类反手招要转 180 度）。
 function execArt(a) {
   const fam = a.fam;
   const W = WEAPONS[fam];
   const base = DIRA[player.dir];
+  const aim = base + (a.back ? Math.PI : 0);
   const [fx, fy] = DIRV[player.dir];
   player.lastHitFam = fam;
   player.swing = {
-    fam, base, cast: true,
+    fam, base: aim, cast: true,
     sw: { mode: a.fx === 'proj' ? 'thrust' : 'swing', a0: 0, a1: 0, dur: 0.22 },
     t: 0.22, dur: 0.22,
   };
-  AUDIO.play(a.fx === 'bolt' ? 'thunder' : a.fx === 'proj' ? 'qi' : 'slash', fam);
+  AUDIO.play(a.fx === 'bolt' ? 'thunder' : a.fx === 'proj' ? 'qi' :
+    a.fx === 'buff' ? 'levelup' :
+    a.fx === 'dash' || a.fx === 'pull' ? 'dash' : 'slash', fam);
 
   if (a.fx === 'melee') {
-    const reach = a.reach || 40, arc = a.arc || 1.6, hits = a.hits || 1;
-    artSwingFx(a, base, reach, arc);
+    const reach = (a.reach || 40) * (1 + artBuff('reachPct') / 100);
+    const arc = a.arc || 1.6;
+    const hits = a.hits || 1;
+    artSwingFx(a, aim, reach, arc);
+    // 候选只筛一次，多段判定都吃同一份名单 —— 免得同一只怪被算两遍位置
+    const cand = [];
     for (const e of enemies) {
       if (e.dead) continue;
       const px = player.x, py = player.y - 8;
       const dx = e.x - px, dy = (e.y - e.h * 0.5) - py, d = Math.hypot(dx, dy);
       if (d > reach + e.h * 0.4) continue;
-      const diff = Math.abs(((Math.atan2(dy, dx) - base + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+      const diff = Math.abs(((Math.atan2(dy, dx) - aim + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
       // 半径给到 130 的环身技（开天辟地）不做角度筛；小范围扇面才筛
       if (arc < Math.PI * 1.9 && diff > arc / 2 && d > 15) continue;
-      const ang = Math.atan2(dy, dx);
-      for (let k = 0; k < hits; k++) {
-        const r = rollDamage(a.mul, { skill: true });
-        const cb = a.centerBonus && d < (a.centerR || 46) ? a.centerBonus : 1;
-        const dealt = hitEnemy(e, { dmg: Math.round(r.dmg * cb), crit: r.crit, pierceDef: a.pierceDef || 0 }, ang, a.kb || 8);
-        afterArtHit(e, a, dealt, ang);
+      cand.push({ e, d, ang: Math.atan2(dy, dx) });
+    }
+    const bb = a.backBonus || 1;   // 回身反打：反手一记格外狠
+    const strike = (t, k) => {
+      const ramp = a.ramp ? 1 + a.ramp * k : 1;
+      const r = rollDamage(a.mul * ramp, {
+        skill: true, critAdd: a.critAdd || 0,
+        forceCrit: !!(a.critLast && k === hits - 1),
+      });
+      const cb = a.centerBonus && t.d < (a.centerR || 46) ? a.centerBonus : 1;
+      const kb = (a.kb || 8) + (a.kbLast && k === hits - 1 ? a.kbLast : 0);
+      const dealt = hitEnemy(t.e, {
+        dmg: Math.round(r.dmg * cb * bb), crit: r.crit,
+        pierceDef: a.pierceDef || 0,
+      }, t.ang, kb);
+      afterArtHit(t.e, a, dealt, t.ang);
+    };
+    if (a.randomTargets) {
+      // 乱舞：每一段换一个目标，不把六段全堆在同一只怪身上
+      for (let k = 0; k < hits && cand.length; k++) {
+        strike(cand[(Math.random() * cand.length) | 0], k);
       }
+    } else {
+      for (const t of cand) for (let k = 0; k < hits; k++) strike(t, k);
     }
     if (a.centerBonus) { shakeX += 6; shakeY += 6; hitstop = Math.max(hitstop, 0.09); }
 
   } else if (a.fx === 'proj') {
     const n = a.count || 1;
+    const life = (a.life || 0.8) * (1 + artBuff('reachPct') / 100);
     for (let i = 0; i < n; i++) {
-      const ang = base + (n === 1 ? 0 : (i / (n - 1) - 0.5) * (a.spread || 0.4));
+      // ring：360° 齐射（万箭穿心），否则是扇面
+      const ang = a.ring ? base + i / n * Math.PI * 2
+        : base + (n === 1 ? 0 : (i / (n - 1) - 0.5) * (a.spread || 0.4));
       const r = rollDamage(a.mul, { skill: true });
       const mesh = quad(a.kind === 'dart' ? DART_TEX : QI_TEX, a.size || 9, a.size || 9);
       mesh.material.color.set(W.trail[0]);
@@ -2689,8 +2849,9 @@ function execArt(a) {
       projectiles.push({
         x: player.x + Math.cos(ang) * 12, y: player.y - 8 + Math.sin(ang) * 12,
         vx: Math.cos(ang) * (a.speed || 260), vy: Math.sin(ang) * (a.speed || 260),
-        t: a.life || 0.8, friendly: true, dmg: r.dmg, crit: r.crit,
-        pierce: a.pierce || 1, mesh, hitSet: new Set(),
+        t: life, friendly: true, dmg: r.dmg, crit: r.crit,
+        pierce: (a.pierce || 1) + artBuff('pierce'),
+        mesh, hitSet: new Set(),
         spin: a.kind === 'dart' ? 16 : 0,
         art: a,
       });
@@ -2698,7 +2859,10 @@ function execArt(a) {
     burst(player.x + fx * 12, player.y - 8 + fy * 12, W.trail[0], 6, 55);
 
   } else if (a.fx === 'spin') {
-    player.artSpin = { a, t: a.dur, tick: 0, radius: a.radius || 46 };
+    player.artSpin = {
+      a, t: a.dur, tick: 0,
+      radius: (a.radius || 46) * (1 + artBuff('reachPct') / 100),
+    };
 
   } else if (a.fx === 'orbit') {
     const n = a.count || 12;
@@ -2723,9 +2887,14 @@ function execArt(a) {
     const pool = enemies.filter(e => !e.dead &&
       Math.hypot(e.x - player.x, e.y - player.y) < (a.range || 200));
     for (let i = 0; i < n; i++) {
-      const r = rollDamage(a.mul, { skill: true });
+      // 雷链：每一跳弱两成，落点跟着不同的敌人走
+      const decay = a.chain ? Math.pow(0.8, i) : 1;
+      const r = rollDamage(a.mul * decay, { skill: true });
       let tx, ty;
-      if (pool.length && i < pool.length) {
+      if (a.chain && pool.length) {
+        const e = pool[i % pool.length];
+        tx = e.x + (Math.random() * 16 - 8); ty = e.y - e.h * 0.4 + (Math.random() * 12 - 6);
+      } else if (pool.length && i < pool.length) {
         // 前几道优先劈已经站在附近的，剩下的随机落 —— 全随机会让大招经常劈空地
         const e = pool[i];
         tx = e.x + (Math.random() * 20 - 10); ty = e.y - 6 + (Math.random() * 16 - 8);
@@ -2733,8 +2902,155 @@ function execArt(a) {
         const ang = Math.random() * Math.PI * 2, dd = 30 + Math.random() * (a.range || 200) * 0.7;
         tx = player.x + Math.cos(ang) * dd; ty = player.y + Math.sin(ang) * dd;
       }
-      bolts.push({ x: tx, y: ty, t: 0.2 + i * 0.1, dmg: r.dmg, r: a.radius || 30, done: false });
+      bolts.push({
+        x: tx, y: ty, t: 0.2 + i * (a.fall || 0.1),
+        dmg: r.dmg, r: a.radius || 30, done: false, art: a,
+      });
     }
+
+  } else if (a.fx === 'dash') {
+    const d = a.dash || {};
+    let ang = base;
+    if (d.dir === 'back') ang = base + Math.PI;
+    else if (d.dir === 'side') ang = base + (dashSide > 0 ? Math.PI / 2 : -Math.PI / 2);
+    else if (d.dir === 'target') {
+      // 影袭：闪到最近的敌手背后
+      let best = null, bd = 1e9;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        const dd = Math.hypot(e.x - player.x, e.y - player.y);
+        if (dd < bd) { bd = dd; best = e; }
+      }
+      if (best) ang = Math.atan2(best.y - player.y, best.x - player.x);
+    }
+    dashSide = -dashSide;   // 侧身左右交替，连放两次不会每次都往同一边
+    const ox = player.x, oy = player.y;
+    const dist = d.dist || 60;
+    // 分小步挪：一步跨过去会穿墙，也会把走廊判定算错
+    let nx = ox, ny = oy;
+    for (let i = 1; i <= 8; i++) {
+      const sx = ox + Math.cos(ang) * dist * i / 8;
+      const sy = oy + Math.sin(ang) * dist * i / 8;
+      if (!canStand(sx, sy)) break;
+      nx = sx; ny = sy;
+    }
+    afterimage(ox, oy - 8, playerTex[player.dir][0], 16, 18);
+    player.x = nx; player.y = ny;
+    if (d.iframe) player.iframe = Math.max(player.iframe, d.iframe);
+    if (d.shieldPct) player.shield = Math.max(player.shield, Math.round(maxHp() * d.shieldPct / 100));
+    if (d.forceCrit) player.forceCrit = 1;      // 疾风步：掠步之后下一击必取要害
+    if (d.nextDmg) player.nextDmg = d.nextDmg;
+    if (d.stealth) {
+      // 缩地：追兵一时失了你的踪迹
+      for (const e of enemies) {
+        if (e.dead || e.boss || e.elite) continue;
+        if (Math.hypot(e.x - player.x, e.y - player.y) > 160) continue;
+        e.aggro = false; e.combatT = 0; e.hunt = null;
+      }
+    }
+    // 走廊判定用"意图终点"而不是实际落点：贴墙放招时人挪不动，
+    // 但招式还是该在身前留下一道 —— 否则玩家只看到人没动、也没伤害。
+    const tx = ox + Math.cos(ang) * dist, ty = oy + Math.sin(ang) * dist;
+    const vx = tx - ox, vy = ty - oy;
+    const len2 = vx * vx + vy * vy || 1;
+    const R = a.radius || 26;
+    for (const e of enemies) {
+      if (e.dead) continue;
+      const ex = e.x, ey = e.y - e.h * 0.4;
+      let t = ((ex - ox) * vx + (ey - oy) * vy) / len2;
+      t = Math.max(0, Math.min(1, t));
+      const cx = ox + vx * t, cy = oy + vy * t;
+      if (Math.hypot(ex - cx, ey - cy) > R + e.h * 0.3) continue;
+      const r = rollDamage(a.mul, { skill: true });
+      const da = Math.atan2(ey - cy, ex - cx);
+      const dealt = hitEnemy(e, { dmg: r.dmg, crit: r.crit, pierceDef: a.pierceDef || 0 }, da, a.kb || 6);
+      afterArtHit(e, a, dealt, da);
+    }
+    slashGhosts.push({
+      x: (ox + tx) / 2, y: (oy + ty) / 2 - 8, thrust: ang,
+      len: dist * 0.95, colors: W.trail, t: 0.3, max: 0.3,
+    });
+    burst(player.x, player.y - 8, W.trail[0], 8, 70);
+    AUDIO.play('dash');
+
+  } else if (a.fx === 'buff') {
+    // 增益类招式：给自己挂一段限时状态。同 id 重放只刷新时长，不叠第二条
+    // —— 叠两条的话"狂怒"会变成唯一答案。
+    const def = a.buff || {};
+    const dur = def.dur || 6;
+    if (!player.artBuffs) player.artBuffs = [];
+    const prev = player.artBuffs.find(b => b.id === a.id);
+    if (prev) { prev.t = dur; prev.def = def; }
+    else player.artBuffs.push({ id: a.id, name: a.name, t: dur, def });
+    if (def.shieldPct) {
+      player.shield = Math.max(player.shield, Math.round(maxHp() * def.shieldPct / 100));
+    }
+    slashGhosts.push({
+      x: player.x, y: player.y - 8, ring: true, R: 26,
+      colors: W.trail, t: 0.42, max: 0.42,
+    });
+    burst(player.x, player.y - 8, C.gold3, 14, 70);
+    msg(a.name + ' · ' + dur + ' 息', C.gold3);
+
+  } else if (a.fx === 'zone') {
+    // 地面区域：火雨 / 地裂 / 定军 / 千刃 / 铁蒺藜
+    const z = a.zone || {};
+    const n = z.count || 1;
+    const kind = a.status && a.status.kind;
+    const col = kind === 'burn' || kind === 'poison' ? C.red3 : kind === 'stun' ? C.gold3 : C.jade3;
+    // 一片区域的伤害要摊到每个分片上，否则"四道地裂"就是四倍伤害
+    const per = z.once ? 1 : (n > 1 ? n : 1);
+    for (let i = 0; i < n; i++) {
+      let x = player.x, y = player.y;
+      if (z.shape === 'line') {
+        const step = (z.radius || 30) * 0.8;
+        x += Math.cos(base) * step * (i + 1);
+        y += Math.sin(base) * step * (i + 1);
+      } else if (n > 1) {
+        const a2 = i / n * Math.PI * 2 + Math.random() * 0.5;
+        const rr = 10 + Math.random() * 16;
+        x += Math.cos(a2) * rr; y += Math.sin(a2) * rr;
+      } else {
+        x += fx * 18; y += fy * 18;
+      }
+      zones.push({
+        x, y, r: z.radius || 40,
+        t: z.dur || 3, max: z.dur || 3,
+        tick: z.tick || 0.4, tickGap: z.tick || 0.4,
+        art: a, once: !!z.once, color: col,
+        mul: (a.mul || 1) / per,
+      });
+    }
+    burst(player.x, player.y - 8, col, 10, 60);
+
+  } else if (a.fx === 'pull') {
+    // 缠棍：把最近的一个敌手拽到面前
+    let best = null, bd = a.radius || 80;
+    for (const e of enemies) {
+      if (e.dead) continue;
+      const d = Math.hypot(e.x - player.x, e.y - player.y);
+      if (d < bd) { bd = d; best = e; }
+    }
+    slashGhosts.push({
+      x: player.x, y: player.y - 8, ring: true, R: (a.radius || 80) * 0.9,
+      colors: W.trail, t: 0.32, max: 0.32,
+    });
+    if (best) {
+      const tx = player.x + fx * 26, ty = player.y + fy * 26;
+      if (canStand(tx, ty)) { best.x = tx; best.y = ty; }
+      else {
+        // 落点站不住（墙 / 地形）：把人拽到半路，别硬塞进石头里
+        best.x = player.x + (best.x - player.x) * 0.35;
+        best.y = player.y + (best.y - player.y) * 0.35;
+      }
+      best.aggro = true; best.combatT = 4;
+      const r = rollDamage(a.mul, { skill: true });
+      const da = Math.atan2(best.y - player.y, best.x - player.x);
+      const dealt = hitEnemy(best, { dmg: r.dmg, crit: r.crit, pierceDef: a.pierceDef || 0 }, da, a.kb || 4);
+      afterArtHit(best, a, dealt, da);
+      burst(best.x, best.y - 6, W.trail[0], 10, 75);
+    }
+    AUDIO.play('dash');
   }
   return true;
 }
@@ -2762,6 +3078,10 @@ function clearArts() {
   if (player.orbs) for (const o of player.orbs) scene.remove(o.mesh);
   player.orbs = null; player.orbArt = null; player.orbT = 0;
   player.artSpin = null; player.blinkQ = null;
+  // 地面区域、增益、一次性标记都是"这一趟"的东西：跨局残留会让玩家一进游戏
+  // 就白捡一层增益，或者脚底下踩着上一局点下的火雨。
+  zones.length = 0;
+  player.artBuffs = []; player.forceCrit = 0; player.nextDmg = 0;
   for (const k in artCds) delete artCds[k];
 }
 function updateArts(dt) {
@@ -2868,6 +3188,62 @@ function updateArts(dt) {
       AUDIO.play('dash');
       if (bq.n <= 0) player.blinkQ = null;
     }
+  }
+
+  // ---- 增益计时（剑心通明 / 狂怒 / 铁布衫 / 灵护 / 淬毒 …）----
+  if (player.artBuffs && player.artBuffs.length) {
+    for (let i = player.artBuffs.length - 1; i >= 0; i--) {
+      const b = player.artBuffs[i];
+      b.t -= dt;
+      if (b.t <= 0) {
+        player.artBuffs.splice(i, 1);
+        msg(b.name + ' · 散', C.paper2);
+      }
+    }
+  }
+
+  // ---- 玩家留下的地面区域（火雨 / 地裂 / 定军 / 千刃 / 铁蒺藜）----
+  for (let i = zones.length - 1; i >= 0; i--) {
+    const z = zones[i];
+    z.t -= dt;
+    if (z.once) {
+      // 陷阱：敌人踩进来才响，响过就没了 —— 所以它不是"持续区域"
+      let hit = false;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (Math.hypot(e.x - z.x, e.y - z.y) > z.r + e.h * 0.25) continue;
+        const r = rollDamage(z.art.mul, { skill: true });
+        const dmg = Math.max(1, Math.round(r.dmg));
+        const ang = Math.atan2(e.y - z.y, e.x - z.x);
+        const dealt = hitEnemy(e, {
+          dmg, crit: r.crit, pierceDef: z.art.pierceDef || 0,
+        }, ang, z.art.kb || 3);
+        afterArtHit(e, z.art, dealt, ang);
+        burst(z.x, z.y, z.color, 10, 80);
+        shakeX += 2; shakeY += 2;
+        hit = true;
+      }
+      if (hit || z.t <= 0) zones.splice(i, 1);
+      continue;
+    }
+    z.tick -= dt;
+    if (z.tick <= 0) {
+      z.tick = z.tickGap;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (Math.hypot(e.x - z.x, e.y - z.y) > z.r + e.h * 0.25) continue;
+        const r = rollDamage(z.mul, { skill: true });
+        const dmg = Math.max(1, Math.round(r.dmg));
+        // 区域伤害走 dealDot，不走 hitEnemy —— 每 0.4 秒一次顿帧的话，
+        // 站在火雨里的怪会让整块屏幕抖个不停（DoT 当初就是这么改的）。
+        dealDot(e, dmg, z.color);
+        if (z.art.status) applyStatus(e, z.art.status, dmg);
+      }
+      // 一点呼吸感：每 tick 在区域边缘撒两粒火星，别让整片色块是死的
+      burst(z.x + (Math.random() * 2 - 1) * z.r * 0.6,
+        z.y + (Math.random() * 2 - 1) * z.r * 0.6, z.color, 2, 25);
+    }
+    if (z.t <= 0) zones.splice(i, 1);
   }
 }
 
@@ -4025,6 +4401,43 @@ document.querySelectorAll('#skills .tabs button').forEach(b => {
   b.onclick = () => showArtPage(b.dataset.page === 'art');
 });
 
+// 装配交互：八招只能上阵六招，所以"装哪一格"必须由玩家说了算。
+// 模型：先点上方格子选中它（artPick），再点下方招式装进去；
+// 没选格子就点招式 → 装进第一个空格；六格全满 → 提示先选格子。
+// 早期版本是"槽满就顶掉第 0 格"，玩家排好的顺序会被无声打乱。
+let artPick = -1;
+function pickArtSlot(i) {
+  artPick = (artPick === i) ? -1 : i;
+  renderArts();
+}
+function artPlace(id) {
+  const a = artById(id);
+  if (!a) return false;
+  player.loadoutManual = true;   // 玩家动过装配，之后不再自动补位
+  const cur = player.loadout.indexOf(id);
+  if (cur >= 0) {
+    if (artPick >= 0 && artPick !== cur) {
+      // 换位：把这一招挪到选中的格子上，原格子空出来
+      player.loadout[artPick] = id;
+      player.loadout[cur] = null;
+    } else {
+      player.loadout[cur] = null;
+    }
+    artPick = -1;
+    renderArts();
+    return true;
+  }
+  const tgt = artPick >= 0 ? artPick : player.loadout.indexOf(null);
+  if (tgt < 0) {
+    msg('招式槽已满 · 先点上方一格，再点招式装入', C.paper1);
+    return false;
+  }
+  player.loadout[tgt] = id;
+  artPick = -1;
+  renderArts();
+  return true;
+}
+
 function renderArts() {
   const sub = document.getElementById('artSub');
   if (!sub) return;
@@ -4032,21 +4445,24 @@ function renderArts() {
   const k = profKills(fam), lv = profLevel(k), left = profLeft(k);
   sub.innerHTML = '当前持 <b>' + W.name + '</b> · 专精 <b>' + lv + '/' + PROF_MAX + '</b>'
     + (left ? ' · 再斩 ' + left + ' 名可至 ' + (lv + 1) + ' 级' : ' · 已至圆满')
-    + '<br><span style="font-size:10px;color:#8A8268">专精只长手上这件兵器；招式也只能用对应兵器放</span>';
+    + '<br><span style="font-size:10px;color:#8A8268">专精只长手上这件兵器；招式也只能用对应兵器放</span>'
+    + (artPick >= 0
+      ? '<br><span style="font-size:10px;color:#C8453B">已选第 ' + (artPick + 1) + ' 格 · 点下方招式装入（再点该格取消）</span>'
+      : '');
 
   const lo = document.getElementById('artLoadout');
   if (lo) {
     lo.innerHTML = player.loadout.map((id, i) => {
       const a = id ? artById(id) : null;
-      return '<div class="as' + (a ? '' : ' empty') + '" data-slot="' + i + '" title="' +
-        (a ? '点一下卸下' : '空位') + '">' +
+      return '<div class="as' + (a ? '' : ' empty') + (artPick === i ? ' pick' : '') + '" data-slot="' + i + '" title="' +
+        (a ? '点一下选中这一格，再点招式就能替换' : '空位 · 点一下选中') + '">' +
         '<span class="k">' + ART_KEYS[i] + '</span>' +
         '<span class="n">' + (a ? a.name : '空') + '</span>' +
         '<span class="s">' + (a ? (ART_SLOT_LABEL[a.slot] || '') : '未装配') + '</span>' +
         '</div>';
     }).join('');
     lo.querySelectorAll('.as').forEach(el => {
-      el.onclick = () => { player.loadout[+el.dataset.slot] = null; renderArts(); };
+      el.onclick = () => pickArtSlot(+el.dataset.slot);
     });
   }
 
@@ -4074,16 +4490,7 @@ function renderArts() {
   }
   body.innerHTML = html;
   body.querySelectorAll('button[data-art]').forEach(b => {
-    b.onclick = () => {
-      const id = b.dataset.art;
-      const i = player.loadout.indexOf(id);
-      if (i >= 0) player.loadout[i] = null;
-      else {
-        const j = player.loadout.indexOf(null);
-        player.loadout[j >= 0 ? j : 0] = id;
-      }
-      renderArts();
-    };
+    b.onclick = () => { artPlace(b.dataset.art); };
   });
 }
 
@@ -4171,6 +4578,8 @@ function save() {
     bossKills: player.bossKills || {},
     quests: player.quests, relics: player.relics, track: player.track,
     prof: player.prof || {}, loadout: player.loadout || [],
+    // 玩家手动排过装配格：读档后别再被 autoLoadout 自动补位
+    loadoutManual: !!player.loadoutManual,
     mantras: player.mantras, mantrasOwned: player.mantrasOwned || {},
     clock: clock.serialize(),
   }));
@@ -4238,6 +4647,9 @@ function load() {
     // 不能直接 undefined —— 后面 castArt 会读 player.loadout[slot]。
     loadout: Array.isArray(s.loadout) && s.loadout.length === ART_SLOTS
       ? s.loadout : new Array(ART_SLOTS).fill(null),
+    loadoutManual: !!s.loadoutManual,
+    // 招式的临时状态不进存档：读档时带着一身增益，等于白送一段超模时间。
+    artBuffs: [], forceCrit: 0, nextDmg: 0,
     // 心法：先按"已学"过滤一遍再校验装配 —— 顺序反了的话，
     // 存档里装着的某条心法只要在 ARTS 里被删过，sanitize 会连槽一起清掉。
     mantrasOwned: (() => {
@@ -4295,6 +4707,8 @@ function startGame(cont) {
       poisonImmuneT: 0, drunkT: 0, drunk: 0, rested: false, fame: 0,
       rootT: 0, bossKills: {}, quests: {}, relics: {}, track: null,
       prof: {}, loadout: new Array(ART_SLOTS).fill(null),
+      loadoutManual: false,
+      artBuffs: [], forceCrit: 0, nextDmg: 0,
       mantras: { main: null, sub: [null, null] }, mantrasOwned: {},
     });
     invalidateStats();
@@ -4861,7 +5275,8 @@ function update(dt) {
     if (Math.abs(mx) >= Math.abs(my)) player.dir = mx > 0 ? 'right' : 'left';
     else player.dir = my > 0 ? 'down' : 'up';
     const len = Math.hypot(mx, my); mx /= len; my /= len;
-    const sp = 76 * (1 + Math.min(40, stats().spd) / 100) * (player.dashT > 0 ? 2.7 : 1) * stickAmp;
+    const sp = 76 * (1 + Math.min(40, stats().spd + artBuff('spd')) / 100) *
+      (player.dashT > 0 ? 2.7 : 1) * stickAmp;
     const nx = player.x + mx * sp * dt, ny = player.y + my * sp * dt;
     if (canStand(nx, player.y)) player.x = nx;
     if (canStand(player.x, ny)) player.y = ny;
@@ -5203,6 +5618,8 @@ function update(dt) {
     // 隔着一堵墙也能磨死 boss —— 远程兵器因此强得离谱。
     if (!canStand(p.x, p.y)) {
       burst(p.x, p.y, p.friendly ? C.paper3 : C.red3, 5, 45);
+      // 撞墙也炸：三珠连爆的"触地各炸一小片"含这一种
+      if (p.friendly) projSplash(p, null);
       p.t = 0;
       continue;
     }
@@ -5220,10 +5637,15 @@ function update(dt) {
           p.hitSet.add(e);
           const ang = Math.atan2(p.vy, p.vx);
           const crit = p.crit === undefined ? Math.random() * 100 < stats().crit : p.crit;
-          const dealt = hitEnemy(e, { dmg: p.dmg, crit, pierceDef: (p.art && p.art.pierceDef) || 0 }, ang, 8);
+          const dealt = hitEnemy(e, {
+            dmg: p.dmg, crit, pierceDef: (p.art && p.art.pierceDef) || 0,
+            basic: p.basic,   // 普攻弹体带挥击编号；招式弹体没有
+          }, ang, 8);
           // 弹体挂的状态（毒镖）在命中那一刻才生效 —— 不能一出手就撒毒，
           // 那样打空也中毒，读不出"这一镖中了"。
           if (p.art) afterArtHit(e, p.art, dealt, ang);
+          // 溅射：命中点周围炸一小片（次要目标不再重复吃主目标的伤害）
+          if (p.art && p.art.splash) projSplash(p, e);
           if (--p.pierce <= 0) { p.t = 0; break; }
         }
       }
@@ -5248,7 +5670,13 @@ function update(dt) {
         // 于是 e.y - undefined/2 = NaN，NaN < r 恒为 false，天雷诀一发都打不中人。
         // 这个 bug 从 S1 就存在，直到 P5 给天雷引写自检才被抓出来。
         if (Math.hypot(e.x - b.x, e.y - e.h / 2 - b.y) < b.r + e.h * 0.3) {
-          hitEnemy(e, { dmg: b.dmg, crit: Math.random() * 100 < stats().crit }, Math.PI / 2, 10);
+          const ang = Math.atan2(e.y - e.h / 2 - b.y, e.x - b.x);
+          const dealt = hitEnemy(e, {
+            dmg: b.dmg, crit: Math.random() * 100 < stats().crit,
+            pierceDef: (b.art && b.art.pierceDef) || 0,
+          }, ang, 10);
+          // 招式落雷挂状态 / 击飞（雷链、剑雨这类）
+          if (b.art) afterArtHit(e, b.art, dealt, ang);
         }
       }
       AUDIO.play('thunder2');
@@ -5446,6 +5874,27 @@ function drawWeaponHeld(camX, camY) {
     const hy2 = py + hoy + Math.sin(dualAng) * 3;
     drawWeaponAt(octx, cv, hx2, hy2, dualAng, alpha * 0.95, scDual * 0.9);
   }
+}
+
+// 招式增益条：名字 + 剩余息数。
+// 限时增益不写出来，玩家会以为"没生效"—— 尤其「淬毒」「铁壁」这种
+// 改变的是"手感"的，玩家更难察觉少了它。
+function drawBuffHud() {
+  if (touch.enabled) return;
+  if (!player.artBuffs || !player.artBuffs.length) return;
+  octx.font = 'bold 9px SimSun';
+  octx.textAlign = 'right';
+  octx.textBaseline = 'top';
+  let y = LH - 82;
+  for (const b of player.artBuffs) {
+    const txt = b.name + ' ' + Math.ceil(b.t);
+    octx.fillStyle = 'rgba(10,12,18,0.5)';
+    octx.fillRect(LW - 6 - octx.measureText(txt).width - 3, y - 1, octx.measureText(txt).width + 6, 11);
+    octx.fillStyle = C.gold3;
+    octx.fillText(txt, LW - 6, y);
+    y += 11;
+  }
+  octx.textAlign = 'left';
 }
 
 // 招式栏：独立一排，画在主技能栏上方。
@@ -5800,6 +6249,30 @@ function drawOverlay(camX, camY) {
     octx.restore();
   }
 
+  // 玩家招式留下的地面区域：青玉 / 金色，和首领的红色预警圈一眼分得开。
+  // 收圈 = 快结束了；陷阱（once）画成一圈小三角钉。
+  for (const z of zones) {
+    const x = Math.round(z.x - camX), y = Math.round(z.y - camY);
+    const k = Math.min(1, z.t / Math.max(0.1, z.max));
+    octx.save();
+    if (z.once) {
+      octx.globalAlpha = 0.45 + Math.sin(time * 10) * 0.25;
+      octx.strokeStyle = z.color; octx.lineWidth = 1;
+      octx.beginPath(); octx.arc(x, y, z.r, 0, Math.PI * 2); octx.stroke();
+      octx.globalAlpha = 0.55;
+      octx.fillStyle = z.color;
+      octx.fillRect(x - 1, y - 1, 2, 2);
+    } else {
+      octx.globalAlpha = 0.13 + Math.sin(time * 7) * 0.04;
+      octx.fillStyle = z.color;
+      octx.beginPath(); octx.arc(x, y, z.r, 0, Math.PI * 2); octx.fill();
+      octx.globalAlpha = 0.40 + k * 0.35;
+      octx.strokeStyle = z.color; octx.lineWidth = 1.5;
+      octx.beginPath(); octx.arc(x, y, z.r * (0.72 + 0.28 * k), 0, Math.PI * 2); octx.stroke();
+    }
+    octx.restore();
+  }
+
   // 仙品 / 传世兵器掉在地上：品阶辉光 + 脚下光环，远远就能认出来
   for (const d of drops) {
     if (d.taken || !d.epic || !d.mesh) continue;
@@ -5885,6 +6358,7 @@ function drawOverlay(camX, camY) {
   octx.fillStyle = C.gold1;
   octx.fillRect(0, LH - barH, LW, 1);
   drawArtBar();
+  drawBuffHud();
   drawMantraHud();
   drawSkillBar();
 
@@ -6396,13 +6870,25 @@ window.__game = {
   get sealOn() { return sealOn; },
   get talkers() { return ALL_TALKERS; },
   // 招式 / 专精
-  ARTS, ART_IDS, ART_SLOTS, ART_KEYS, PROF_MAX,
-  artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief,
+  ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_FX, ART_SLOT_LABEL, PROF_MAX,
+  artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower,
   castArt, execArt, updateArts, clearArts, autoLoadout, addProf, applyStatus, afterArtHit,
   renderArts, showArtPage, artMaxOf, artCdOf,
   get artCds() { return artCds; },
   get artPageOn() { return artPageOn; },
+  get artPick() { return artPick; },
+  pickArtSlot, artPlace,
   profKills,
+  // 增益 / 地面区域：自检要能直接看状态，P6 的十种原语全靠它们
+  artBuff, artBuffActive, dealDot,
+  get artBuffs() { return player.artBuffs; },
+  get zones() { return zones; },
+  setLoadout(ids) {
+    player.loadout = new Array(ART_SLOTS).fill(null);
+    (ids || []).slice(0, ART_SLOTS).forEach((id, i) => { player.loadout[i] = id; });
+    player.loadoutManual = true;
+    return player.loadout.slice();
+  },
   // 心法
   MAIN, SUB, MANTRAS, MAIN_IDS, SUB_IDS, MANTRA_IDS, MANTRA_MAX_LV, SUB_SLOTS,
   mantraById, isMain, mantraMod, mainOf, lvOf, mantraBrief, mantraCondMet,
@@ -6437,6 +6923,7 @@ window.__game = {
     projectiles.length = 0; drops.length = 0; dmgNums.length = 0;
     particles.length = 0; sparks.length = 0; ghosts.length = 0;
     slashGhosts.length = 0; bolts.length = 0; messages.length = 0;
+    zones.length = 0;
     clearArts(); mantraResetCombat();
     for (const k in skills) skills[k].cd = 0;
     // 把野怪刷新推远：平衡脚本一组要跑 8 秒，200 组就是 26 分钟的游戏时间，

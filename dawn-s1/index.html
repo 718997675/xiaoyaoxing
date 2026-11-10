@@ -204,6 +204,10 @@
   #artLoadout .as .n{font:bold 11px SimSun;color:#12161F;letter-spacing:1px}
   #artLoadout .as .s{font:9px SimSun;color:#8A8268}
   #artLoadout .as:hover{border-color:#C8453B}
+  /* 选中的目标格：朱红描边 + 微微抬起。八招只能上阵六招，
+     不标出"装哪一格"的话，玩家点招式就只能看着第 0 格被顶掉 */
+  #artLoadout .as.pick{border-color:#C8453B;background:#F3E3C0;transform:translateY(-1px)}
+  #artLoadout .as.pick .n{color:#8C2F26}
   #artPage .artCard{
     background:#E8DFC8;border:1px solid #8A6520;padding:5px 7px 6px;margin-bottom:5px;
     display:flex;gap:8px;align-items:flex-start;

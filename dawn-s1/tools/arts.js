@@ -1,12 +1,15 @@
-// tools/arts.js · 招式与专精自检（P5 验收）
-// 数据完整性 / 专精曲线 / 解锁门槛 / 装配换兵器 / 16 招都能放且真的打到人 /
-// 冷却与真气 / 状态系统 / 平衡校验 / 存读档
+// tools/arts.js · 招式与专精自检（P6 验收）
+// 八兵器 × 八招 = 64 招，装配槽 6 个。
+// 覆盖：数据完整性 / 专精曲线 / 解锁门槛 / 装配换兵器 / 64 招都能放且真的有效果 /
+//       四种新原语（位移·增益·地面区域·拉拽）专项 / 冷却与真气 / 状态系统 /
+//       平衡校验 / 存读档 / 面板与 HUD
 (() => {
   const g = window.__game;
   const R = { ok: false, checks: [] };
   const T = (n, c, d) => { R.checks.push((c ? 'PASS' : 'FAIL') + ' | ' + n + (d !== undefined ? ' | ' + d : '')); return !!c; };
-  const step = (n, dt) => { for (let i = 0; i < n; i++) g.tick(dt || 0.016); };
+  const step = (n, dt) => { for (let i = 0; i < n; i++) g.tickLogic(dt || 0.016); };
   const FAMS = g.WEAPON_IDS;
+  const FX = g.ART_FX;
 
   // 试招场地：必须挪到村外。
   // spawnEnemy 有一条"青云集界内不落敌"的规则，会把刷在村里的怪直接搬回营地，
@@ -35,48 +38,69 @@
     g.clearEnemies();
   }
 
-  // 招式总伤估算（平衡校验用）：多段 / 多发 / 持续都要乘进去
-  function artTotal(a) {
-    let total = 0;
-    if (a.fx === 'spin') total = a.mul * Math.round(a.dur / (a.tick || 0.25));
-    else if (a.fx === 'orbit') total = a.mul * (a.count || 1);
-    else if (a.fx === 'bolt') total = a.mul * (a.count || 1);
-    else if (a.fx === 'proj') total = a.mul * (a.count || 1);
-    else if (a.fx === 'blink') total = a.mul * (a.times || 1);
-    else total = a.mul * (a.hits || 1);
-    if (a.centerBonus) total *= 1.2;              // 环身技有一块中心双倍，取个保守折算
-    if (a.status && a.status.pct) total += total * a.status.pct * a.status.dur;
-    if (a.launch) total += total * 1.5;
-    return total;
+  // 一招要跑多少帧才结算完：持续类按 dur 算，其余给 2 秒足够弹体飞到、
+  // 连闪闪完、落雷落尽。
+  function framesFor(a) {
+    const dur = a.dur || (a.zone && a.zone.dur) || 0;
+    return Math.ceil((dur + 1.6) / 0.016) + 24;
   }
 
   // ---------- 1. 数据完整性 ----------
   try {
   {
     const ids = g.ART_IDS;
-    T('招式共 16 个', ids.length === 16, ids.length);
+    T('招式共 64 个', ids.length === 64, ids.length);
     const per = {};
     for (const id of ids) per[g.ARTS[id].fam] = (per[g.ARTS[id].fam] || 0) + 1;
-    T('八种兵器各 2 招', FAMS.every(f => per[f] === 2), FAMS.map(f => g.WEAPONS[f].name + per[f]).join(' '));
+    T('八种兵器各 8 招', FAMS.every(f => per[f] === 8), FAMS.map(f => g.WEAPONS[f].name + per[f]).join(' '));
+
     const bad = [];
     for (const id of ids) {
       const a = g.ARTS[id];
       if (a.id !== id) bad.push(id + ':id不符');
       if (!a.name || !a.desc) bad.push(id + ':缺名/缺描述');
       if (!(a.cd > 0) || !(a.cost > 0)) bad.push(id + ':cd/cost');
-      if (!(a.mul > 0)) bad.push(id + ':mul');
-      if (['melee', 'proj', 'spin', 'orbit', 'blink', 'bolt'].indexOf(a.fx) < 0) bad.push(id + ':fx未知');
-      if (!(a.prof >= 1)) bad.push(id + ':解锁等级');
-      if (['dmg', 'special'].indexOf(a.slot) < 0) bad.push(id + ':slot');
+      if (!(a.mul > 0) && !(a.power > 0)) bad.push(id + ':mul/power');
+      if (FX.indexOf(a.fx) < 0) bad.push(id + ':fx未知');
+      if (!(a.prof >= 1 && a.prof <= 10)) bad.push(id + ':解锁等级');
+      if (!g.ART_SLOT_LABEL[a.slot]) bad.push(id + ':slot');
+      // 每招都要能说清自己是什么：buff 必须带 buff 表，zone 必须带区域表，
+      // dash 必须带位移表 —— 少了这些，运行时会走进一个什么都不做的分支。
+      if (a.fx === 'buff' && !a.buff) bad.push(id + ':缺buff表');
+      if (a.fx === 'zone' && !a.zone) bad.push(id + ':缺zone表');
+      if (a.fx === 'dash' && !a.dash) bad.push(id + ':缺dash表');
     }
-    T('每招字段齐全且 fx 在六种原语内', bad.length === 0, bad.join(' / ') || 'OK');
+    T('每招字段齐全且 fx 在十种原语内', bad.length === 0, bad.join(' / ') || 'OK');
+
     const fxs = new Set(ids.map(id => g.ARTS[id].fx));
-    T('覆盖 6 种效果原语', fxs.size === 6, [...fxs].join('/'));
+    T('覆盖 10 种效果原语', fxs.size === 10, [...fxs].join('/'));
     const slots = new Set(ids.map(id => g.ARTS[id].slot));
-    T('输出位与特色位都有', slots.has('dmg') && slots.has('special'), [...slots].join('/'));
+    T('六种功能位齐全', ['dmg', 'aoe', 'move', 'ctrl', 'buff', 'special'].every(s => slots.has(s)),
+      [...slots].join('/'));
     const cds = ids.map(id => g.ARTS[id].cd);
     T('冷却跨度 ≥ 10 倍（快慢都有）', Math.max(...cds) / Math.min(...cds) >= 10,
       Math.min(...cds) + '~' + Math.max(...cds));
+
+    // 专精门槛必须错开：八招分在 1/2/3/4/5/6/8/10 八级上，
+    // 不能全挤在前四级（那样前期一次给完、后面六级空着）。
+    const want = [1, 2, 3, 4, 5, 6, 8, 10];
+    const offProf = [];
+    for (const f of FAMS) {
+      const lv = g.artsOfWeapon(f).map(a => a.prof).sort((x, y) => x - y);
+      if (JSON.stringify(lv) !== JSON.stringify(want)) offProf.push(g.WEAPONS[f].name + ':' + lv.join(','));
+    }
+    T('每把兵器的解锁门槛都是 1/2/3/4/5/6/8/10', offProf.length === 0, offProf.join(' ') || 'OK');
+
+    // 功能位分工：输出×2 清场×2 位移×1 控制×1 增益×1 特色×1
+    const badSlot = [];
+    for (const f of FAMS) {
+      const c = {};
+      for (const a of g.artsOfWeapon(f)) c[a.slot] = (c[a.slot] || 0) + 1;
+      const want2 = { dmg: 2, aoe: 2, move: 1, ctrl: 1, buff: 1, special: 1 };
+      for (const s in want2) if (c[s] !== want2[s]) badSlot.push(g.WEAPONS[f].name + '.' + s + '=' + (c[s] || 0));
+    }
+    T('功能位分工一致（输出×2 清场×2 位移×1 控制×1 增益×1 特色×1）',
+      badSlot.length === 0, badSlot.join(' ') || 'OK');
   }
 
   // ---------- 2. 专精曲线 ----------
@@ -96,10 +120,11 @@
     const arts = g.artsOfWeapon(fam);
     const at = k => g.unlockedArts(fam, { sword: k }).length;
     T('专精 0 级一招都不会', at(0) === 0, at(0));
-    T('专精 1 级解锁第一招', at(g.ART_IDS && 2) === 1, at(2));
-    T('专精 4 级（26 杀）解锁第二招', at(26) === 2, at(26));
-    T('第一招门槛 1 级、第二招 4 级',
-      arts[0].prof === 1 && arts[1].prof === 4, arts.map(a => a.name + '@' + a.prof).join(' '));
+    T('专精 1 级解锁第一招', at(2) === 1, at(2));
+    T('专精 2 级解锁第二招', at(6) === 2, at(6));
+    T('专精 10 级八招全开', at(9999) === 8, at(9999));
+    T('第一招门槛 1 级、第二招 2 级',
+      arts[0].prof === 1 && arts[1].prof === 2, arts.map(a => a.name + '@' + a.prof).join(' '));
   }
 
   // ---------- 4. 装配与换兵器 ----------
@@ -108,17 +133,43 @@
     g.player.prof = { sword: 30, blade: 30 };
     g.equipFam('sword');
     g.autoLoadout();
-    T('持剑自动装上两招', g.player.loadout.filter(Boolean).length === 2,
+    T('持剑自动装上已悟的剑招', g.player.loadout.filter(Boolean).length >= 2,
       g.player.loadout.map(x => x || '-').join(','));
     T('装上的都是剑招', g.player.loadout.filter(Boolean).every(id => g.artById(id).fam === 'sword'), 'OK');
+    T('装配不超过 6 格', g.player.loadout.length === 6, g.player.loadout.length);
     g.equipFam('blade');
     const left = g.player.loadout.filter(Boolean);
     T('换刀后剑招被清掉', left.every(id => g.artById(id).fam === 'blade'),
       left.map(id => g.artById(id).name).join('/'));
-    T('换刀后自动补上刀招', left.length === 2, left.length);
-    // 手动卸下后不该被 autoLoadout 悄悄补回来（否则玩家永远删不掉不想带的招）
+    T('换刀后自动补上刀招', left.length >= 2, left.length);
+  }
+
+  // ---------- 4.1 装配交互：八招选六格 ----------
+  {
+    g.startGame(false);
+    g.player.prof = { sword: 999 };
+    g.equipFam('sword');
+    g.setLoadout(['sword_1', 'sword_2', 'sword_3', 'sword_4', 'sword_5', 'sword_6']);
+    // 满槽时点一招没装上的：不能悄悄顶掉第 0 格
+    const before = g.player.loadout.slice();
+    const put = g.artPlace('sword_7');
+    T('满槽且未选格时装不上', put === false, 'loadout=' + g.player.loadout.join(','));
+    T('满槽时不该被悄悄顶掉第 0 格', JSON.stringify(g.player.loadout) === JSON.stringify(before), 'OK');
+    // 选中一格再装：装进选中的那一格
+    g.pickArtSlot(3);
+    T('点格子能选中目标格', g.artPick === 3, g.artPick);
+    const ok = g.artPlace('sword_7');
+    T('选中后能装进指定格', ok === true && g.player.loadout[3] === 'sword_7',
+      g.player.loadout.map(x => x || '-').join(','));
+    T('装完原来的格被换掉', g.player.loadout[3] === 'sword_7', 'slot3=' + g.player.loadout[3]);
+    // 卸下
+    g.artPlace('sword_7');
+    T('再点一次能卸下', g.player.loadout[3] === null, g.player.loadout.map(x => x || '-').join(','));
+    // 手动排过之后，autoLoadout 不再偷偷补位
     g.player.loadout[0] = null;
-    T('手动卸下的格子保持空着', g.player.loadout[0] === null, 'OK');
+    g.autoLoadout();
+    T('手动卸下的格子不会被自动补回', g.player.loadout[0] === null,
+      g.player.loadout.map(x => x || '-').join(','));
   }
 
   // ---------- 4.5 专精从击杀里长出来 ----------
@@ -158,15 +209,14 @@
       '剑' + g.profKills('sword') + ' 刀' + g.profKills('blade'));
   }
 
+  // ---------- 5. 64 招全部可释放且真的有效果 ----------
   {
-    const bad = [], noHit = [];
+    const bad = [], noHit = [], noBuff = [];
     for (const fam of FAMS) {
       arena(14);
       g.equipFam(fam);
-      g.autoLoadout();
-      const arts = g.artsOfWeapon(fam);
-      for (let ai = 0; ai < arts.length; ai++) {
-        const a = arts[ai];
+      g.setDir('down');
+      for (const a of g.artsOfWeapon(fam)) {
         g.clearEnemies();
         // 一圈木桩：近战扇面、弹体直线、落雷、连闪都能找到目标
         const ds = [];
@@ -175,23 +225,95 @@
           const e = g.spawnDummy(g.player.x + Math.cos(ang) * 34, g.player.y + Math.sin(ang) * 34, 99999);
           if (e) ds.push(e);
         }
-        const before = ds.reduce((s, e) => s + e.hp, 0);
+        // 伤害基线必须在施法前取：近战 / 位移 / 拉拽是瞬间结算的，
+        // 放到施法后取，基准已经把伤害算进去了，永远量出 0。
+        const before0 = ds.reduce((s, e) => s + e.hp, 0);
         g.player.qi = 999;
-        const slot = g.player.loadout.indexOf(a.id);
+        g.setLoadout([a.id]);
         let ok = false;
-        try { ok = g.castArt(slot) === true; } catch (err) { bad.push(a.name + ':' + err.message); }
+        try { ok = g.castArt(0) === true; } catch (err) { bad.push(a.name + ':' + err.message); }
         if (!ok) bad.push(a.name + ':放不出');
-        // 400 帧 = 6.4 秒：飞剑环绕要跑满 6 秒，天雷引最后一发在 0.6 秒才落
-        step(400);
+        // 增益类不造成伤害，验的是"挂上了"
+        if (a.fx === 'buff') {
+          const has = g.artBuffs.some(b => b.id === a.id);
+          if (!has) noBuff.push(a.name);
+        }
+        // 地面区域：把一只木桩挪到区域中心，保证区域真的结算到人
+        let extra = 0;
+        if (a.fx === 'zone' && g.zones.length) {
+          const z = g.zones[0];
+          const e = g.spawnDummy(z.x, z.y, 99999);
+          if (e) { ds.push(e); extra = e.hp; }
+        }
+        const before = before0 + extra;
+        step(framesFor(a));
+        if (a.fx === 'buff') continue;
         const after = ds.reduce((s, e) => s + e.hp, 0);
         if (before - after <= 0) noHit.push(a.name);
       }
     }
-    T('16 招全部可释放且不报错', bad.length === 0, bad.join(' / ') || 'OK');
-    T('16 招都真的打到了木桩', noHit.length === 0, noHit.join('/') || 'OK');
+    T('64 招全部可释放且不报错', bad.length === 0, bad.join(' / ') || 'OK');
+    T('所有伤害招都真的打到了木桩', noHit.length === 0, noHit.join('/') || 'OK');
+    T('所有增益招都真的挂上了增益', noBuff.length === 0, noBuff.join('/') || 'OK');
   }
 
-  // ---------- 6. 冷却与真气 ----------
+  // ---------- 6. 四种新原语专项 ----------
+  {
+    // 位移：御剑突进 —— 人确实挪了，而且路过的怪挨了打
+    arena(14);
+    g.equipFam('sword');
+    g.setLoadout(['sword_5']);
+    g.setDir('down');          // 朝下突进，木桩也放在正下方
+    g.player.qi = 999;
+    const x0 = g.player.x, y0 = g.player.y;
+    const e0 = g.spawnDummy(g.player.x, g.player.y + 30, 99999);
+    g.castArt(0);
+    const moved = Math.hypot(g.player.x - x0, g.player.y - y0);
+    T('御剑突进真的把人挪走了', moved > 10, '位移 ' + moved.toFixed(1) + 'px');
+    T('位移路径上的怪挨了打', e0.hp < e0.maxHp, (e0.maxHp - e0.hp).toFixed(0));
+    T('位移带半息无敌', g.player.iframe > 0, g.player.iframe.toFixed(2));
+
+    // 增益：剑心通明 —— 会心提高，到期自动散掉
+    arena(14);
+    g.equipFam('sword');
+    g.setLoadout(['sword_7']);
+    g.player.qi = 999;
+    g.castArt(0);
+    T('剑心通明挂上了会心加成', g.artBuff('crit') === 25, g.artBuff('crit'));
+    step(120);
+    T('增益有时限', g.artBuff('crit') === 25 && g.artBuffs.length === 1, g.artBuffs.length);
+    step(400);
+    T('增益到期自动散掉', g.artBuff('crit') === 0 && g.artBuffs.length === 0, g.artBuffs.length);
+
+    // 地面区域：火雨 —— 区域存在、持续掉血、到期消失
+    arena(14);
+    g.equipFam('mage');
+    g.setLoadout(['mage_3']);
+    g.player.qi = 999;
+    g.castArt(0);
+    T('火雨在场上留了区域', g.zones.length > 0, g.zones.length);
+    const z = g.zones[0];
+    const e = g.spawnDummy(z.x, z.y, 99999);
+    const hp0 = e.hp;
+    step(80);
+    T('火雨里的怪在持续掉血', e.hp < hp0, (hp0 - e.hp).toFixed(1));
+    step(400);
+    T('火雨到期消失', g.zones.length === 0, g.zones.length);
+
+    // 拉拽：缠棍 —— 远处的怪被拽到面前
+    arena(14);
+    g.equipFam('staff');
+    g.setLoadout(['staff_6']);
+    g.player.qi = 999;
+    const far = g.spawnDummy(g.player.x + 70, g.player.y, 99999);
+    const d0 = Math.hypot(far.x - g.player.x, far.y - g.player.y);
+    g.castArt(0);
+    const d1 = Math.hypot(far.x - g.player.x, far.y - g.player.y);
+    T('缠棍把远处的怪拽近了', d1 < d0 - 20, d0.toFixed(0) + ' → ' + d1.toFixed(0));
+    T('被拽的怪也吃了伤害', far.hp < far.maxHp, (far.maxHp - far.hp).toFixed(0));
+  }
+
+  // ---------- 7. 冷却与真气 ----------
   {
     g.startGame(false);
     g.player.prof = { sword: 30 };
@@ -213,7 +335,7 @@
     T('空槽放招只提示不报错', g.castArt(5) === false, 'OK');
   }
 
-  // ---------- 7. 状态系统 ----------
+  // ---------- 8. 状态系统 ----------
   {
     arena(14);
 
@@ -275,30 +397,38 @@
     T('中毒者倒下会传染给周围', d2.poisonT > 0, 'p2=' + d2.poisonT.toFixed(1));
   }
 
-  // ---------- 8. 平衡校验 ----------
+  // ---------- 9. 平衡校验 ----------
   {
     g.startGame(false);
     g.setLevel(20);
-    const rows = [];
-    let worst = 0, worstFam = '';
+    const rows = [], rows6 = [];
+    let worst = 0, worstFam = '', worst6 = 0, worst6Fam = '';
     for (const fam of FAMS) {
       const W = g.WEAPONS[fam];
       // 普攻 DPS：三式平均倍率（双刀每段两次判定）× 每秒出手次数
       const avgMul = W.swings.reduce((s, x) => s + x.mul, 0) / W.swings.length * (W.hits || 1);
       const normalDps = avgMul / Math.max(0.13, 0.30 * W.spdMul);
       const arts = g.artsOfWeapon(fam);
-      const artDps = arts.reduce((s, a) => s + artTotal(a) / a.cd, 0);
-      const ratio = artDps / normalDps;
+      // 口径统一走 artPower()：多段 / 多发 / 持续 / 环身中心都折进去了
+      const dpsOf = a => g.artPower(a) / a.cd;
+      const all = arts.reduce((s, a) => s + dpsOf(a), 0);
+      // 实际只能装 6 格，取最强的 6 招才是真正的上限
+      const best6 = arts.map(dpsOf).sort((x, y) => y - x).slice(0, 6).reduce((s, x) => s + x, 0);
+      const ratio = all / normalDps;
+      const ratio6 = best6 / normalDps;
       rows.push(W.name + ' ' + ratio.toFixed(2) + 'x');
+      rows6.push(W.name + ' ' + ratio6.toFixed(2) + 'x');
       if (ratio > worst) { worst = ratio; worstFam = W.name; }
+      if (ratio6 > worst6) { worst6 = ratio6; worst6Fam = W.name; }
     }
-    T('两招全开的 DPS 不超过普攻 2.8 倍', worst <= 2.8, rows.join(' · '));
-    T('最吃紧的是哪一个', true, worstFam + ' ' + worst.toFixed(2) + 'x');
+    T('八招全开的 DPS 不超过普攻 2.8 倍', worst <= 2.8, rows.join(' · '));
+    T('满配六格的 DPS 不超过普攻 2.8 倍', worst6 <= 2.8, rows6.join(' · '));
+    T('最吃紧的是哪一个', true, worstFam + ' ' + worst.toFixed(2) + 'x · 满配 ' + worst6Fam + ' ' + worst6.toFixed(2) + 'x');
     // 反向校验：也不能弱到"带了跟没带一样"
     T('招式确实有存在感（至少 0.2 倍普攻）', worst >= 0.2, '最低 ' + rows.join(' · '));
   }
 
-  // ---------- 9. 存读档 ----------
+  // ---------- 10. 存读档 ----------
   {
     g.startGame(false);
     g.player.prof = { sword: 42, hammer: 7 };
@@ -313,14 +443,18 @@
       JSON.stringify(g.player.prof));
     T('装配存住了', JSON.stringify(g.player.loadout) === JSON.stringify(before),
       g.player.loadout.map(x => x || '-').join(','));
-    // 老存档没有这两个字段时不能崩
+    // 老存档没有这几个字段时不能崩
     g.player.prof = undefined; g.player.loadout = undefined;
     g.autoLoadout();
     T('缺字段时 autoLoadout 能自愈',
       Array.isArray(g.player.loadout) && g.player.loadout.length === g.ART_SLOTS, 'OK');
+    // 增益不进存档
+    g.player.artBuffs = [{ id: 'sword_7', name: '剑心通明', t: 8, def: { crit: 25 } }];
+    g.save(); g.load();
+    T('增益不随存档带进来', g.artBuffs.length === 0, g.artBuffs.length);
   }
 
-  // ---------- 10. 面板与 HUD 不崩 ----------
+  // ---------- 11. 面板与 HUD 不崩 ----------
   {
     g.startGame(false);
     let err = null;
@@ -329,6 +463,7 @@
       g.showArtPage(true);
       g.showArtPage(false);
       step(3);
+      g.tick(0.016);
     } catch (e) { err = e.message; }
     T('招式面板与 HUD 渲染不报错', err === null, err || 'OK');
     T('招式页能切回道行页', g.artPageOn === false, String(g.artPageOn));
