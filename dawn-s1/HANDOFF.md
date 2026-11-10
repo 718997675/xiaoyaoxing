@@ -204,8 +204,20 @@ dawn-s1/
 
 - 本机访问要 `--no-proxy-server --proxy-bypass-list=*`；
   访问**线上**不能加，会绕过网关会话 → 403。
-- `github.com:443` 偶尔完全不通。应急可以走 Git Data API
-  （`POST /git/blobs` → `/git/trees` → `/git/commits` → `PATCH /git/refs/heads/main`）。
+- **`github.com:443` 会被干扰，`api.github.com` 却是通的**。表现是 `git push` 直接
+  `Connection reset` / `Failed to connect to github.com:443`，但
+  `curl https://api.github.com/rate_limit` 正常返回。这时候别反复重试，走 API：
+  ```bash
+  node dawn-s1/tools/push-api.js          # 把 HEAD 推到 origin，SHA 与本地逐字节一致
+  node dawn-s1/tools/push-api.js --dry    # 只看要传什么
+  ```
+  原理是 blob → tree → commit → ref 四步。**关键是 author / committer（含时区）
+  和原始消息必须逐字节还原**，否则 GitHub 生成的是另一个提交：内容一样、SHA 不同，
+  本地就多出一次 `reset --hard origin/main`。工具会把两个 SHA 打出来对比。
+- 注意 `~/.gitconfig` 里 `http.proxy` / `https.proxy` 是**空值**（显式置空，
+  会盖掉环境变量里的代理），所以 git 一直是直连。直连不通时也别指望环境变量能救。
+- `ssh.github.com:443` 的 TCP 是通的（能完成密钥交换，只是没配公钥）。
+  真要长期解决，配一把 SSH key 走 443 比 API 稳。
 
 ### 打包（最坑的一条）
 
