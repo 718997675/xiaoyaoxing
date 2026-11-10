@@ -140,7 +140,17 @@ async function waitFor(fn, timeout, label) {
       const out = process.argv[3] || 'shot.png';
       const w = +(process.argv[4] || 1440), h = +(process.argv[5] || 900);
       await api.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
-      await sleep(600);
+      // POS=x,y 可以先把角色挪到指定位置再截，省得为了看一眼营地专门写个 scene 模式
+      if (process.env.POS) {
+        const [px, py] = process.env.POS.split(',').map(Number);
+        const clk = process.env.CLOCK ? `g.setClock(${process.env.CLOCK},3);` : '';
+        await api.send('Runtime.evaluate', {
+          expression: `(()=>{const g=window.__game;g.startGame(false);${clk}g.setPos(${px},${py});`
+            + `for(let i=0;i<30;i++)g.tick(0.016);return 1})()`,
+          returnByValue: true,
+        });
+      }
+      await sleep(700);
       const r = await api.send('Page.captureScreenshot', { format: 'png' });
       fs.writeFileSync(path.resolve(ROOT, out), Buffer.from(r.data, 'base64'));
       console.log('saved ' + out);

@@ -127,7 +127,8 @@ node tools/shot.js                # CDP 截图（SHOT_W/SHOT_H/MOBILE/DPR/WAIT �
 - [ ] **第一章扩容**：地图 ×2（四区）、营地 6→12 带生态、首领 3→8、NPC 5→9、任务线 0→10
       → 施工图见 [`dawn-s1/CHAPTER-1-EXPANSION.md`](dawn-s1/CHAPTER-1-EXPANSION.md)
   - [x] P1 地图骨架：144×104、四区地貌（竹海 / 石窟 / 乱葬岗）、12 营地、路网、溪涧竹桥
-  - [ ] P2 营地生态 · P3 首领 3→8 · P4 NPC 与任务
+  - [x] P2 营地生态：巡逻 / 吹哨叫援 / 食物链 / 昼夜作息 / 篝火帐篷哨塔 / 3 个营地首领
+  - [ ] P3 首领 3→8 · P4 NPC 与任务
 - [ ] **技能与剧情**：八兵器 × 八技能（64）+ 心法（22）+ 剧情三幕
       → 设计见 [`dawn-s1/SKILLS-STORY-PLAN.md`](dawn-s1/SKILLS-STORY-PLAN.md)
 - [ ] 洞内专属词缀（地宫掉落带标记，可交易 / 献祭）

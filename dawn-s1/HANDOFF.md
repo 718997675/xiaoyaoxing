@@ -33,6 +33,7 @@ cd dawn-s1
 node tools/run.js devtest        # 全量断言，当前基线 137 pass / 0 fail
 node tools/run.js eval tools/weapons.js   # 八兵器 / 触屏专项，当前 32 pass / 0 fail
 node tools/run.js eval tools/map.js       # 大地图连通性与地貌，当前 12 pass / 0 fail
+node tools/run.js eval tools/camps.js     # 营地生态（巡逻/吹哨/食物链/作息），当前 17 pass / 0 fail
 node tools/run.js shot out.png 1440 900   # 截图
 ```
 
@@ -57,14 +58,14 @@ node tools/run.js shot out.png 1440 900   # 截图
 | 飞镖削弱（撞墙即碎、射程 228→157px） | ✅ |
 | 双刀三段镜像动作 | ✅ |
 | **P1 大地图 144×104 + 四区地貌 + 12 营地 + 路网** | ✅ 2026-11-10 |
+| **P2 营地生态：巡逻 / 吹哨 / 食物链 / 作息 / 营地道具 / 3 个营地首领** | ✅ 2026-11-10 |
 | 双渠道发布（GitHub Pages + workbuddy） | ✅ |
 
 ### 未完成（按顺序）
 
 | 批次 | 内容 | 文档 |
 |---|---|---|
-| **P2** | 营地生态：巡逻 / 吹哨警戒 / 食物链 / 昼夜阵容 | `CHAPTER-1-EXPANSION.md` §4 · P2 |
-| **P3** | 首领 3 → 8（青鳞蟒 / 机关傀儡 / 石母 / 火鸦王 / 无面剑客） | 同上 |
+| **P3** | 首领 3 → 8（青鳞蟒 / 机关傀儡 / 石母 / 火鸦王 / 无面剑客） | `CHAPTER-1-EXPANSION.md` §4 · P3 |
 | **P4** | NPC 与任务：店主 5→9、街面 8→16、任务系统从零建、10 条任务 | 同上 |
 | **P5** | 技能框架 + 兵器专精 + 16 个技能 | `SKILLS-STORY-PLAN.md` §二 |
 | **P5.5** | 心法系统（22 条 + 一主二辅 + 心法页 UI） | `SKILLS-STORY-PLAN.md` §三 |
@@ -159,11 +160,17 @@ dawn-s1/
 
 ## 7. 下次开工的第一件事
 
-按 `CHAPTER-1-EXPANSION.md` §4 的 **P2 营地生态** 往下做。P1 已经把地基铺好了：
+按 `CHAPTER-1-EXPANSION.md` §4 的 **P3 首领 3→8** 往下做。
 
-- 12 个营地已经在 `game.js` 的 `camps` 数组里，带 `name` / `tier` / `types`
-- 每个营地脚下都是空的、可达的（`tools/map.js` 已验证）
-- 营地空地在地面图上已经画好了踩秃的土圈
+P1 + P2 已经把地基铺好了：
 
-P2 要加的是"活起来"的部分：巡逻路线、发现玩家后吹哨叫援、怪之间的食物链、昼夜换阵容。
-具体施工单在 `CHAPTER-1-EXPANSION.md` §4 · P2。
+- 12 个营地，带 `name` / `tier` / `types` / `night` / `patrol` / `alert` / `lord`
+- 每个营地都可达，都有篝火 / 帐篷 / 哨塔，夜里篝火会发光
+- 怪会巡逻、会吹哨叫援、会追猎物、按时辰睡觉
+- 3 个营地首领（教头 / 蛇母 / 守墓人）已就位，走的是 `lord` 字段
+
+P3 要加的是**真正的首领**：青鳞蟒（竹海）/ 机关傀儡（竹海）/ 石母（石窟）/ 火鸦王（石窟）/
+无面剑客（古洞终章）。它们不该是"血厚的普通怪"，每个得有自己的出招套路 ——
+现有 `MONSTERS` 里 `boss` / `treant` 的 `spinCd` / `spinWind` / `phase2` 那套是模板，照着扩就行。
+
+**动手前先读**：`CHAPTER-1-EXPANSION.md` §4 · P3，里面有每个首领的定位与机制草稿。

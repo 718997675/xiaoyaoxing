@@ -242,6 +242,53 @@ const TORCH = spriteCanvas([
   '...s....',
   '..sss...',
 ], { y: C.gold2, r: C.red2, s: C.ink3 });
+// 营地道具三件套：篝火 / 帐篷 / 哨塔。
+// 它们不是装饰 —— 玩家从远处一眼认出"那片地方有人住"，才知道该绕路还是该打。
+const CAMPFIRE = spriteCanvas([
+  '............',
+  '.....yy.....',
+  '....yrry....',
+  '...yrrrry...',
+  '...rrrrrr...',
+  '....rrrr....',
+  '.....rr.....',
+  '..k..k..k...',
+  '...k.k.k....',
+], { y: C.gold2, r: C.red2, k: C.ink3 });
+const TENT = spriteCanvas([
+  '................',
+  '.......kk.......',
+  '......kKKk......',
+  '.....kKKKKk.....',
+  '....kKKKKKKk....',
+  '...kKKKKKKKKk...',
+  '..kKKKKKKKKKKk..',
+  '.kKKKKKKKKKKKKk.',
+  'kKKKKKKKKKKKKKKk',
+  'kkkkkkkkkkkkkkkk',
+  '.k............k.',
+  '................',
+], { k: C.ink2, K: '#9C8663' });
+const TOWER = spriteCanvas([
+  '..kkkkkkkkkk..',
+  '.kKKKKKKKKKKk.',
+  '.kKKKKKKKKKKk.',
+  '..kkkkkkkkkk..',
+  '...k......k...',
+  '...k......k...',
+  '..k........k..',
+  '..k........k..',
+  '...k......k...',
+  '...k......k...',
+  '..k........k..',
+  '..k........k..',
+  '...k......k...',
+  '...k......k...',
+  '..k........k..',
+  '..k........k..',
+  '...k......k...',
+  '..kkk....kkk..',
+], { k: C.ink2, K: '#8A7551' });
 
 // ============ three.js ============
 const glCanvas = document.getElementById('gl');
@@ -311,24 +358,56 @@ const REGION = {
   bamboo: { x0: 4,  y0: 52, x1: 62,  y1: 100, label: '南岭竹海' },
 };
 
+// ============ 营地 ============
+// 一个营地要"像个活的地方"，光有一堆怪站着是不够的。这里给每个营地配四样东西：
+//   patrol  巡逻路线。数字 = 自动生成 n 点环形；数组 = 手写 [dx,dy] 格偏移
+//   alert   吹哨半径。一只发现你，这个半径内的同伴一起上（"哨营"就该比"巢穴"吹得远）
+//   night   夜里额外冒出来的东西。它们是"夜行"的，白天在睡觉 —— 可以摸过去偷袭
+//   lord    营地首领。精英，打死额外掉宝，是这批怪的"为什么聚在这"
 const camps = [
-  // —— 青云集周边 ——
-  { x: 96 * TILE, y: 96 * TILE, tier: 1, types: ['zhiren', 'zhiren', 'fox', 'snake'], name: '山贼哨营' },
-  { x: 78 * TILE, y: 92 * TILE, tier: 1, types: ['zhiren', 'ghost', 'fukui'], name: '黑风前哨' },
-  { x: 90 * TILE, y: 74 * TILE, tier: 2, types: ['brute', 'shadow', 'shigan'], name: '演武场' },
-  // —— 南岭竹海 ——
-  { x: 30 * TILE, y: 58 * TILE, tier: 1, types: ['fox', 'snake', 'shanxiao'], name: '妖兽巢穴' },
-  { x: 16 * TILE, y: 70 * TILE, tier: 1, types: ['shanxiao', 'fox', 'snake'], name: '猎户棚' },
-  { x: 46 * TILE, y: 86 * TILE, tier: 2, types: ['snake', 'snake', 'brute'], name: '蛇窟' },
-  { x: 56 * TILE, y: 96 * TILE, tier: 2, types: ['shigan', 'brute', 'shadow'], name: '机关工坊' },
-  // —— 西荒石窟 ——
-  { x: 12 * TILE, y: 20 * TILE, tier: 1, types: ['zhiren', 'brute', 'ghost'], name: '矿口哨卡' },
-  { x: 36 * TILE, y: 34 * TILE, tier: 2, types: ['shigan', 'shadow', 'brute'], name: '塌方矿道' },
-  { x: 22 * TILE, y: 10 * TILE, tier: 2, types: ['crow', 'crow', 'fukui'], name: '火鸦巢' },
-  // —— 北坡乱葬岗 ——
-  { x: 100 * TILE, y: 12 * TILE, tier: 1, types: ['crow', 'fukui', 'yinhun'], name: '乱葬岗' },
-  { x: 122 * TILE, y: 32 * TILE, tier: 2, types: ['yinhun', 'shadow', 'yinhun'], name: '守墓人小屋' },
+  // —— 青云集周边：山贼，有纪律，吹哨传得远 ——
+  { x: 96 * TILE, y: 96 * TILE, tier: 1, name: '山贼哨营',
+    types: ['zhiren', 'zhiren', 'fox', 'snake'], night: ['ghost'],
+    alert: 165, patrol: [[-3, 2], [2, 3], [4, -1], [1, -3], [-3, -1]] },
+  { x: 78 * TILE, y: 92 * TILE, tier: 1, name: '黑风前哨',
+    types: ['zhiren', 'ghost', 'fukui'], night: ['ghost', 'fukui'],
+    alert: 205, patrol: 4 },
+  { x: 90 * TILE, y: 74 * TILE, tier: 2, name: '演武场',
+    types: ['brute', 'shadow', 'shigan'], night: ['shadow'],
+    alert: 125, patrol: 3, lord: { type: 'brute', name: '教头' } },
+  // —— 南岭竹海：野兽的地盘，食物链在这里最明显 ——
+  { x: 30 * TILE, y: 58 * TILE, tier: 1, name: '妖兽巢穴',
+    types: ['fox', 'snake', 'shanxiao'], alert: 105, patrol: 5 },
+  { x: 16 * TILE, y: 70 * TILE, tier: 1, name: '猎户棚',
+    types: ['shanxiao', 'fox', 'snake'], alert: 90, patrol: 3 },
+  { x: 46 * TILE, y: 86 * TILE, tier: 2, name: '蛇窟',
+    types: ['snake', 'snake', 'brute'], night: ['snake'],
+    alert: 140, patrol: 4, lord: { type: 'shigan', name: '蛇母' } },
+  { x: 56 * TILE, y: 96 * TILE, tier: 2, name: '机关工坊',
+    types: ['shigan', 'brute', 'shadow'], alert: 130, patrol: 4 },
+  // —— 西荒石窟：矿道里，视线短，靠火把 ——
+  { x: 12 * TILE, y: 20 * TILE, tier: 1, name: '矿口哨卡',
+    types: ['zhiren', 'brute', 'ghost'], night: ['ghost'], alert: 180, patrol: 4 },
+  { x: 36 * TILE, y: 34 * TILE, tier: 2, name: '塌方矿道',
+    types: ['shigan', 'shadow', 'brute'], alert: 120, patrol: 3 },
+  { x: 22 * TILE, y: 10 * TILE, tier: 2, name: '火鸦巢',
+    types: ['crow', 'crow', 'fukui'], night: ['crow'], alert: 110, patrol: 4 },
+  // —— 北坡乱葬岗：白天只剩几个守墓的，夜里全是阴物 ——
+  { x: 100 * TILE, y: 12 * TILE, tier: 1, name: '乱葬岗',
+    types: ['crow', 'fukui', 'yinhun'], night: ['yinhun', 'yinhun', 'fukui'],
+    alert: 120, patrol: 5 },
+  { x: 122 * TILE, y: 32 * TILE, tier: 2, name: '守墓人小屋',
+    types: ['yinhun', 'shadow', 'yinhun'], night: ['yinhun'],
+    alert: 150, patrol: 3, lord: { type: 'yinhun', name: '守墓人' } },
 ];
+
+// 夜行的：白天在睡，可以摸过去偷袭
+const NOCTURNAL = { ghost: 1, fukui: 1, yinhun: 1, shadow: 1, crow: 1 };
+// 昼行的：子时在睡，夜里营地就变成阴物的地盘
+const DIURNAL = { zhiren: 1, brute: 1, shigan: 1, fox: 1, snake: 1, shanxiao: 1 };
+// 食物链：谁追谁。做成"追与逃"而不是真的互相残杀 ——
+// 真打起来营地会被自己吃空，玩家回来只看到一地尸体，反而更没生气。
+const PREY_OF = { shanxiao: ['fox', 'snake'], brute: ['fox', 'snake'], treant: [] };
 for (let y = 0; y < MAPH; y++) for (let x = 0; x < MAPW; x++) {
   const i = y * MAPW + x;
   tiles[i] = rng() < 0.22 ? 1 : 0;
@@ -511,6 +590,21 @@ for (let r = 0; r < 39; r++) {
     solid[i] = 1; objects.push({ kind: 'stone', x: x * TILE + 8, y: y * TILE + 10 });
   }
 }
+// —— 营地道具 ——
+// 篝火在正中（怪围着它站），帐篷与哨塔放在外圈。位置如果已经被树占了就跳过，
+// 宁可少一件道具，也不要把帐篷插进竹林里。
+for (const c of camps) {
+  const spots = [['campfire', 0, 0], ['tent', -58, 34], ['tower', 64, -30]];
+  for (const sp of spots) {
+    const kind = sp[0], px = c.x + sp[1], py = c.y + sp[2];
+    const tx = (px / TILE) | 0, ty = (py / TILE) | 0;
+    if (tx < 3 || ty < 3 || tx >= MAPW - 3 || ty >= MAPH - 3) continue;
+    const i = ty * MAPW + tx;
+    if (tiles[i] === 4 || solid[i]) continue;
+    solid[i] = 1;
+    objects.push({ kind, x: px, y: py });
+  }
+}
 objects.push({ kind: 'shrine', x: SPAWN.x, y: SPAWN.y - 16 });
 objects.push({ kind: 'lantern', x: ALTAR.x - 26, y: ALTAR.y + 10 });
 objects.push({ kind: 'lantern', x: ALTAR.x + 26, y: ALTAR.y + 10 });
@@ -679,6 +773,15 @@ groundC.width = MAPW * TILE; groundC.height = MAPH * TILE;
     g.globalAlpha = 0.5;
     g.strokeStyle = C.ink2; g.lineWidth = 1;
     g.beginPath(); g.arc(c.x, c.y, 11, 0, 6.28); g.stroke();
+    // 篝火余烬：一圈焦土 + 中间一层暖色。
+    // 光靠帐篷和哨塔，"这是个营地"要靠玩家凑近了才看得出；
+    // 地上这块暖色从半个屏幕外就能认出来，而且夜里正好和 campfire 的光源对齐。
+    g.globalAlpha = 0.42;
+    g.fillStyle = '#8A6A44';
+    g.beginPath(); g.ellipse(c.x, c.y + 2, 13, 9, 0, 0, 6.28); g.fill();
+    g.globalAlpha = 0.5;
+    g.fillStyle = '#C88A4A';
+    g.beginPath(); g.ellipse(c.x, c.y + 1, 6, 4, 0, 0, 6.28); g.fill();
     g.restore();
   }
   // 土地庙 / 树妖 前的空地也给一点人气
@@ -695,10 +798,12 @@ ground.renderOrder = 0;
 const objTex = {
   bamboo: tex(BAMBOO), peach: tex(PEACH), lantern: tex(LANTERN), shrine: tex(SHRINE), stone: tex(STONE),
   grave: tex(GRAVE), deadtree: tex(DEADTREE), stalag: tex(STALAG), torch: tex(TORCH),
+  campfire: tex(CAMPFIRE), tent: tex(TENT), tower: tex(TOWER),
 };
 const objSize = {
   bamboo: [16, 20], peach: [16, 14], lantern: [10, 8], shrine: [16, 8], stone: [12, 7],
   grave: [12, 10], deadtree: [16, 18], stalag: [10, 14], torch: [8, 12],
+  campfire: [12, 9], tent: [16, 12], tower: [14, 18],
 };
 for (const o of objects) {
   const [w, h] = objSize[o.kind];
@@ -1424,6 +1529,21 @@ function spawnEnemy(type, x, y, camp, eliteMod) {
     spd *= eliteMod.spdMul || 1;
   }
   const art = monTex[type] || monTex.zhiren;
+  // 巡逻路线：手写的用 [dx,dy] 格偏移，数字的自动摊一个椭圆环。
+  // 环用 54×42 而不是正圆 —— 正圆一眼就看得出是"程序画的"。
+  let route = null;
+  if (camp && camp.patrol) {
+    if (Array.isArray(camp.patrol)) {
+      route = camp.patrol.map(p => ({ x: camp.x + p[0] * TILE, y: camp.y + p[1] * TILE }));
+    } else {
+      const n = camp.patrol | 0, a0 = (camps.indexOf(camp) + 1) * 0.9;
+      route = [];
+      for (let k = 0; k < n; k++) {
+        const a = k / n * Math.PI * 2 + a0;
+        route.push({ x: camp.x + Math.cos(a) * 54, y: camp.y + Math.sin(a) * 42 });
+      }
+    }
+  }
   const e = {
     type, x, y, hp, maxHp: hp, dmg, def, ls, cd, cdMax: cd, speed: spd,
     flash: 0, aggro: false, wanderT: 0, wx: 0, wy: 0, camp, dead: false,
@@ -1435,6 +1555,9 @@ function spawnEnemy(type, x, y, camp, eliteMod) {
     anim: Math.random() * 2, windup: 0, strike: false, elite: eliteMod || null,
     blinkCd: 1 + Math.random() * 2, spinCd: 6, spinWind: 0, phase2: false, hitJit: 0,
     stagger: 0, kvx: 0, kvy: 0, charge: 0, chx: 0, chy: 0, h: art.size[1],
+    // —— 生态字段 ——
+    route: route, ri: route ? (Math.random() * route.length) | 0 : 0, pauseT: 0,
+    sleep: false, alertT: 0, hunt: null, panicT: 0, huntCd: 0, wakeT: 0,
   };
   e.mesh = quad(art.frames[0], art.size[0], art.size[1]);
   e.shadow = quad(SHADOW_TEX, art.size[0] * 0.95, art.size[1] * 0.3);
@@ -1455,11 +1578,45 @@ function seedCamps() {
       const a = i / n * Math.PI * 2;
       spawnEnemy(t, c.x + Math.cos(a) * 36, c.y + Math.sin(a) * 36, c);
     }
+    // 夜行的那批一起生成，白天只是"睡着"。
+    // 不做"到点重新刷一批"—— 那会出现打到一半怪凭空消失的情况。
+    if (c.night) {
+      for (let i = 0; i < c.night.length; i++) {
+        const a = i / c.night.length * Math.PI * 2 + 0.7;
+        spawnEnemy(c.night[i], c.x + Math.cos(a) * 62, c.y + Math.sin(a) * 48, c);
+      }
+    }
+    if (c.lord) {
+      const lord = spawnEnemy(c.lord.type, c.x, c.y - 22, c, {
+        name: c.lord.name, hp: 2.4, dmg: 1.3, cd: 0.8, color: C.gold3, lord: true,
+      });
+      if (lord) lord.lord = c.lord.name;
+    }
   }
   spawnEnemy('treant', TREANT_POS.x, TREANT_POS.y, { x: TREANT_POS.x, y: TREANT_POS.y });
   if (!cleared) spawnEnemy('boss', ALTAR.x, ALTAR.y, ALTAR);
 }
 function msg(txt, color) { messages.push({ txt, color: color || C.paper3, t: 2.4 }); if (messages.length > 3) messages.shift(); }
+// 吹哨：一只发现你，同营地、alert 半径内的同伴一起上。
+// 只传一层 —— 被叫醒的不再继续叫，否则整片野地会连锁反应，玩家永远在打一个营。
+function shout(e) {
+  const c = e.camp;
+  if (!c || !c.alert) return;
+  let n = 0;
+  for (const o of enemies) {
+    if (o === e || o.dead || o.aggro || o.sleep) continue;
+    if (o.camp !== c) continue;
+    if (Math.hypot(o.x - e.x, o.y - e.y) > c.alert) continue;
+    o.aggro = true; o.pauseT = 0; o.hunt = null; o.wakeT = 20;
+    n++;
+  }
+  if (n > 0) {
+    e.alertT = 0.6;
+    burst(e.x, e.y - 16, C.gold2, 7, 34);
+    dmgNum(e.x, e.y - 26, '！', C.gold3, false);
+    AUDIO.play('windup');
+  }
+}
 function dmgNum(x, y, txt, color, big) {
   dmgNums.push({ x, y, txt, color, t: big ? 0.95 : 0.72, max: big ? 0.95 : 0.72, big: !!big, vx: (Math.random() - 0.5) * 14 });
 }
@@ -1517,11 +1674,13 @@ function rollDamage(mul, opt) {
 function hitEnemy(e, info, ang, kb) {
   const s = stats();
   const def = Math.min(0.7, e.def || 0);
-  // 晨雾偷袭：还没察觉你的怪，第一下 ×1.5 —— 卯时是清营地最划算的时候
-  const sneak = clock.isDawn && !e.aggro;
+  // 晨雾偷袭 / 摸睡：还没察觉你的怪，第一下 ×1.5 —— 卯时与深夜清营地最划算
+  const sneak = (clock.isDawn || e.sleep) && !e.aggro;
   const mul = sneak ? dawnStrike() : 1;
   const dmg = Math.max(1, Math.round(info.dmg * mul * (1 - def)));
   e.hp -= dmg;
+  // 打醒：睡着了挨一下必然醒，而且立刻叫人
+  if (e.sleep) { e.sleep = false; e.wakeT = 25; e.aggro = true; shout(e); }
   e.combatT = 4;   // 挨了打就算在交战，首领血条要亮着
   e.flash = 0.16; e.hitJit = 0.2; e.stagger = Math.max(e.stagger, info.crit ? 0.16 : 0.09);
   const kbm = (e.elite ? 0.55 : 1) * (e.type === 'boss' ? 0.1 : e.type === 'treant' ? 0.25 : 1) * (e.type === 'shigan' ? 0.25 : 1);
@@ -1641,6 +1800,18 @@ function killEnemy(e) {
   if (e.elite) burst(e.x, e.y - e.h / 2, e.elite.color, 16, 110);
   AUDIO.play('die');
   dropLoot(e);
+  // 营地首领：多掉一轮。不另做宝箱系统 —— 玩家要的是"这一下值钱"，
+  // 而不是"再去点一个箱子"，多两次掉落读起来一样，还少一个交互。
+  if (e.lord) {
+    msg(e.lord + ' 伏诛 · 营地溃散', C.gold3);
+    addFame(4);
+    for (let i = 0; i < 2; i++) {
+      const dx2 = i ? 18 : -18;
+      addDrop('coin', 40 + ((Math.random() * 40) | 0), e.x + dx2, e.y + 4);
+      const r = Math.max(2, rollRarity(stats().luck + nightLuck(), 2));
+      addDrop('gear', makeGear(i ? 'armor' : 'weapon', r, Math.max(1, player.level + 2)), e.x + dx2, e.y + 10);
+    }
+  }
   // 侠名只用"值得说的事"来加：杀十只野狗不会让人记住你，斩一个寨主会。
   if (e.type === 'boss' || e.type === 'treant') addFame(8);
   else if (e.elite) addFame(2);
@@ -3142,19 +3313,37 @@ function update(dt) {
     const dx = player.x - e.x, dy = player.y - e.y, d = Math.hypot(dx, dy);
     const campPos = e.camp || { x: SPAWN.x, y: SPAWN.y };
     const dc = Math.hypot(e.x - campPos.x, e.y - campPos.y);
+    // —— 作息 ——
+    // 夜行的正午睡（一天里只有"白昼"这一档算白天），昼行的子时睡。
+    // 睡着的不动、不主动咬人，但打它算偷袭（×1.5）—— 玩家可以专门挑时辰摸营。
+    const phaseId = clock.phase.id;
+    let asleep = NOCTURNAL[e.type] ? (phaseId === 'wu')
+      : (DIURNAL[e.type] ? (phaseId === 'zi') : false);
+    // 被打醒之后要清醒一阵子 —— 否则下一帧按时辰又睡回去，
+    // 玩家会看到"刚砍了一刀，它倒头又睡了"，偷袭变成无限连。
+    if (e.wakeT > 0) { e.wakeT -= dt; asleep = false; }
+    if (asleep !== e.sleep) {
+      e.sleep = asleep;
+      if (!asleep) e.pauseT = 0.3 + Math.random() * 0.5;
+    }
     // 青云集是安全区：踏进城墙便不再被盯上，追到墙根的也会散去
     if (playerSafe) e.aggro = false;
-    else if (d < m.aggro) e.aggro = true;
+    else if (!e.sleep && d < m.aggro && !e.aggro) { e.aggro = true; shout(e); }
+    // 追丢了就回营：以前只有"离营地 190px"一个条件，被吹哨叫醒的怪会永远挂着 aggro，
+    // 玩家跑出半张地图它还站在原地待机，等他一回来立刻又扑上来。
+    if (!e.dg && d > 200) e.aggro = false;
     if (dc > 190 && !e.dg) e.aggro = false;   // 洞里的怪没有后方可退
     // 万一有东西已经落在村里（老存档／瞬移残留），送回它的营地
     if (inVillage(e.x, e.y, 0)) {
       burst(e.x, e.y - 6, C.pur2, 12, 80);
       e.x = campPos.x; e.y = campPos.y; e.aggro = false;
     }
-    if (e.stagger > 0) {
-      // 受击僵直：不移动不出手
-      e.mesh.material.map = monTex[e.type].frames[0];
+    if (e.stagger > 0 || e.sleep) {
+      // 受击僵直 / 睡着的：不移动不出手，但呼吸还是要有的
+      e.mesh.material.map = monTex[e.type].frames[e.sleep ? 0 : 0];
       e.mesh.position.set(e.x, e.y - e.h / 2, 0);
+      if (e.sleep) e.mesh.material.color.setRGB(0.62, 0.66, 0.78);
+      else e.mesh.material.color.setRGB(1, 1, 1);
       continue;
     }
     let vx = 0, vy = 0, speed = m.speed * (e.aggro ? 1 : 0.45);
@@ -3178,15 +3367,56 @@ function update(dt) {
     }
 
     if (!e.aggro) {
-      e.wanderT -= dt;
-      if (e.wanderT <= 0) {
-        e.wanderT = 1 + Math.random() * 1.5;
-        const a = Math.random() * Math.PI * 2;
-        e.wx = Math.cos(a); e.wy = Math.sin(a);
-        if (Math.random() < 0.4) { e.wx = 0; e.wy = 0; }
+      if (e.huntCd > 0) e.huntCd -= dt;
+      // —— 食物链 ——
+      // 掠食者去追猎物，猎物掉头就跑。只在"没在打架"的时候演这一段 ——
+      // 玩家一插手，它们就各自归位。做成追逃而不是真的互相残杀：
+      // 真打起来营地会被自己吃空，玩家回来只看到一地尸体，反而更没生气。
+      let acted = false;
+      if (PREY_OF[e.type]) {
+        if (e.hunt && (e.hunt.dead || Math.hypot(e.hunt.x - e.x, e.hunt.y - e.y) > 130)) e.hunt = null;
+        if (!e.hunt && e.huntCd <= 0) {
+          for (const o of enemies) {
+            if (o.dead || o === e || o.aggro || o.sleep) continue;
+            if (PREY_OF[e.type].indexOf(o.type) < 0) continue;
+            if (Math.hypot(o.x - e.x, o.y - e.y) > 88) continue;
+            e.hunt = o; o.panicT = 1.8; e.huntCd = 7 + Math.random() * 5;
+            break;
+          }
+        }
+        if (e.hunt) {
+          const hx = e.hunt.x - e.x, hy = e.hunt.y - e.y, hd = Math.hypot(hx, hy) || 1;
+          if (hd > 15) { vx = hx / hd * 0.8; vy = hy / hd * 0.8; }
+          acted = true;
+        }
       }
-      vx = e.wx * 0.4; vy = e.wy * 0.4;
-      if (dc > 52) { vx = (campPos.x - e.x) / dc; vy = (campPos.y - e.y) / dc; }
+      if (!acted && e.panicT > 0) {
+        e.panicT -= dt;
+        const ax = e.x - campPos.x, ay = e.y - campPos.y, ad = Math.hypot(ax, ay) || 1;
+        vx = ax / ad * 0.95; vy = ay / ad * 0.95;
+        acted = true;
+      }
+      if (!acted) {
+        if (e.route && e.route.length) {
+          // 巡逻：走到点 → 停一下 → 下一个点。停的那一下很关键，
+          // 不停的话整队怪会像传送带一样匀速绕圈，一眼假。
+          const tgt = e.route[e.ri];
+          const rx = tgt.x - e.x, ry = tgt.y - e.y, rd = Math.hypot(rx, ry) || 1;
+          if (rd < 9) { e.ri = (e.ri + 1) % e.route.length; e.pauseT = 0.5 + Math.random() * 1.5; }
+          if (e.pauseT > 0) e.pauseT -= dt;
+          else { vx = rx / rd * 0.62; vy = ry / rd * 0.62; }
+        } else {
+          e.wanderT -= dt;
+          if (e.wanderT <= 0) {
+            e.wanderT = 1 + Math.random() * 1.5;
+            const a = Math.random() * Math.PI * 2;
+            e.wx = Math.cos(a); e.wy = Math.sin(a);
+            if (Math.random() < 0.4) { e.wx = 0; e.wy = 0; }
+          }
+          vx = e.wx * 0.4; vy = e.wy * 0.4;
+        }
+        if (dc > 130) { vx = (campPos.x - e.x) / dc; vy = (campPos.y - e.y) / dc; }
+      }
     } else if (m.behavior === 'archer') {
       if (e.windup > 0) {
         e.windup -= dt;
@@ -3644,7 +3874,7 @@ function drawMinimap() {
   }
   // 营地
   for (const c of camps) {
-    octx.fillStyle = c.tier === 2 ? C.red2 : C.paper1;
+    octx.fillStyle = c.lord ? C.gold3 : (c.tier === 2 ? C.red2 : C.paper1);
     octx.fillRect(mx + c.x * sx - 1, my + c.y * sy - 1, 3, 3);
   }
   // 精英 / 首领
@@ -4392,6 +4622,7 @@ window.__game = {
   },
   MAPW, MAPH, SPAWN, camps, WEAPONS, MONSTERS, NODES, SLOTS,
   get solid() { return solid; }, REGION,
+  get objects() { return objects; },
   spawnEnemy, save, load, startGame, attack, castQi, castWu, castThunder, dash, windStep,
   salvageBulk, equipItem, unequip, usePotion, renderInv, renderForge, forgeOpen, forgeClose,
   renderSkills, learnNode, toggleSkills,

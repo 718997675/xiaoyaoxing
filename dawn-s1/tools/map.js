@@ -30,10 +30,15 @@
   const pct = (reach / total * 100);
   T('可行走地块连通率 ≥ 90%', pct >= 90, pct.toFixed(1) + '% (' + reach + '/' + total + ')');
 
-  // 每个营地脚下必须站得住，而且能被走到
+  // 每个营地周围必须有能站人、也走得到的地。
+  // 不能只测正中心 —— 篝火就摆在正中心，那一格本来就是实心的。
   const badCamp = g.camps.filter(c => {
     const cx = (c.x / 16) | 0, cy = (c.y / 16) | 0;
-    return s[cy * W + cx] || !seen[cy * W + cx];
+    for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+      const i = (cy + dy) * W + (cx + dx);
+      if (i >= 0 && i < W * H && !s[i] && seen[i]) return false;
+    }
+    return true;
   });
   T('12 个营地都可达', g.camps.length === 12 && badCamp.length === 0,
     g.camps.length + ' 个' + (badCamp.length ? '，不通：' + badCamp.map(c => c.name).join('/') : ''));
