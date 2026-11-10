@@ -43,6 +43,20 @@
   T('12 个营地都可达', g.camps.length === 12 && badCamp.length === 0,
     g.camps.length + ' 个' + (badCamp.length ? '，不通：' + badCamp.map(c => c.name).join('/') : ''));
 
+  // 首领巢穴：正中心必须能站（首领就站在那儿），且周围一片得是通的。
+  // 只验"中心可站"会漏掉"巢穴是个石头坑"这种情况 —— 所以再验 3×3 有连通格。
+  const badDen = g.dens.filter(d => {
+    const cx = (d.x / 16) | 0, cy = (d.y / 16) | 0;
+    if (s[cy * W + cx]) return true;
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+      const i = (cy + dy) * W + (cx + dx);
+      if (i >= 0 && i < W * H && !s[i] && seen[i]) return false;
+    }
+    return true;
+  });
+  T('4 个首领巢穴都可达', g.dens.length === 4 && badDen.length === 0,
+    g.dens.length + ' 个' + (badDen.length ? '，不通：' + badDen.map(d => d.name).join('/') : ''));
+
   // 四区地貌确实刷出来了
   const count = id => { let n = 0; for (let i = 0; i < W * H; i++) if (t[i] === id) n++; return n; };
   const bam = count(6), cave = count(7), grave = count(8), water = count(10), bridge = count(9);

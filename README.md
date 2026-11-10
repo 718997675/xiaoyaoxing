@@ -128,7 +128,8 @@ node tools/shot.js                # CDP 截图（SHOT_W/SHOT_H/MOBILE/DPR/WAIT �
       → 施工图见 [`dawn-s1/CHAPTER-1-EXPANSION.md`](dawn-s1/CHAPTER-1-EXPANSION.md)
   - [x] P1 地图骨架：144×104、四区地貌（竹海 / 石窟 / 乱葬岗）、12 营地、路网、溪涧竹桥
   - [x] P2 营地生态：巡逻 / 吹哨叫援 / 食物链 / 昼夜作息 / 篝火帐篷哨塔 / 3 个营地首领
-  - [ ] P3 首领 3→8 · P4 NPC 与任务
+  - [x] P3 首领 3→8：招式表引擎（6 种效果）、4 个巢穴、地面危险区、5 件首杀专属装备、无面剑客接棒
+  - [ ] P4 NPC 与任务
 - [ ] **技能与剧情**：八兵器 × 八技能（64）+ 心法（22）+ 剧情三幕
       → 设计见 [`dawn-s1/SKILLS-STORY-PLAN.md`](dawn-s1/SKILLS-STORY-PLAN.md)
 - [ ] 洞内专属词缀（地宫掉落带标记，可交易 / 献祭）

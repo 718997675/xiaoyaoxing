@@ -141,12 +141,16 @@ async function waitFor(fn, timeout, label) {
       const w = +(process.argv[4] || 1440), h = +(process.argv[5] || 900);
       await api.send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
       // POS=x,y 可以先把角色挪到指定位置再截，省得为了看一眼营地专门写个 scene 模式
-      if (process.env.POS) {
-        const [px, py] = process.env.POS.split(',').map(Number);
+      // SETUP="..." 在 POS 之后、截图之前跑一段页面代码 —— 想拍"招式正在放"的瞬间
+      // 只能靠它（毒雾只亮三秒，手速跟不上）。
+      if (process.env.POS || process.env.SETUP) {
+        const [px, py] = (process.env.POS || '').split(',').map(Number);
         const clk = process.env.CLOCK ? `g.setClock(${process.env.CLOCK},3);` : '';
+        const pos = process.env.POS ? `g.setPos(${px},${py});` : '';
+        const setup = process.env.SETUP ? ';' + process.env.SETUP : '';
         await api.send('Runtime.evaluate', {
-          expression: `(()=>{const g=window.__game;g.startGame(false);${clk}g.setPos(${px},${py});`
-            + `for(let i=0;i<30;i++)g.tick(0.016);return 1})()`,
+          expression: `(()=>{const g=window.__game;g.startGame(false);${clk}${pos}`
+            + `for(let i=0;i<30;i++)g.tick(0.016);${setup};return 1})()`,
           returnByValue: true,
         });
       }

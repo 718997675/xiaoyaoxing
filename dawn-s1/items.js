@@ -187,6 +187,10 @@ export function rerollAffixes(it, rng = Math.random) {
   const pool = AFFIXES.filter(a => a.slots.indexOf(it.kind) >= 0);
   const used = new Set();
   const affixes = [];
+  // 首领专属词缀不参与重铸 —— 它是"从谁身上掉的"唯一凭证，
+  // 重铸一次就没了，等于把首杀的意义抹掉。
+  const keep = (it.affixes || []).filter(a => a.uniq);
+  for (const a of keep) used.add(a.id);
   for (let i = 0; i < t.affixes; i++) {
     const cand = pool.filter(a => !used.has(a.id));
     if (!cand.length) break;
@@ -196,8 +200,8 @@ export function rerollAffixes(it, rng = Math.random) {
     used.add(pick.id);
     affixes.push({ id: pick.id, name: pick.name, stat: pick.stat, val: affixRollVal(pick, it.r, it.ilvl, rng) });
   }
-  it.affixes = affixes;
-  if (it.r >= 2 && affixes.length) {
+  it.affixes = keep.concat(affixes);
+  if (!it.unique && it.r >= 2 && affixes.length) {
     const base = it.name.indexOf('·') >= 0 ? it.name.split('·').pop() : it.name.replace(/^传世·/, '');
     it.name = (it.r >= 4 ? '传世·' : '') + affixes[0].name + '·' + base;
   }

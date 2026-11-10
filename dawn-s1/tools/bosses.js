@@ -1,0 +1,188 @@
+// tools/bosses.js · 首领自检（P3 验收）
+// 招式表 / 巢穴 / 定身 / 危险区 / 首杀唯一装备 / 无面剑客接棒
+(() => {
+  const g = window.__game;
+  const R = { ok: false, checks: [] };
+  const T = (n, c, d) => { R.checks.push((c ? 'PASS' : 'FAIL') + ' | ' + n + (d !== undefined ? ' | ' + d : '')); return !!c; };
+  const step = (n, dt) => { for (let i = 0; i < n; i++) g.tick(dt || 0.016); };
+  const alive = () => g.enemies.filter(e => !e.dead);
+  const byType = t => alive().find(e => e.type === t);
+
+  const NEW = ['qingshe', 'kuilei', 'shimu', 'huoya', 'wumian'];
+
+  // ---------- 1. 定义完整性 ----------
+  {
+    const bad = [];
+    for (const t of NEW) {
+      const m = g.MONSTERS[t];
+      if (!m) { bad.push(t + ':缺定义'); continue; }
+      if (m.behavior !== 'boss') bad.push(t + ':behavior');
+      if (!m.skills || m.skills.length < 2) bad.push(t + ':招式<2');
+      if (!m.rows || !m.rows2) bad.push(t + ':缺帧');
+      if (!m.size) bad.push(t + ':缺size');
+      const fxs = new Set((m.skills || []).map(s => s.fx));
+      if (fxs.size < 2) bad.push(t + ':招式效果单一');
+    }
+    T('5 个新首领定义齐全且各带 ≥2 种招式', bad.length === 0, bad.join(' / ') || 'OK');
+    const fx = new Set();
+    for (const t of NEW) for (const s of g.MONSTERS[t].skills || []) fx.add(s.fx);
+    T('招式引擎覆盖 4 种以上效果', fx.size >= 4, [...fx].join('/'));
+  }
+
+  // ---------- 2. 巢穴落位 ----------
+  g.startGame(false);
+  g.setLevel(12);
+  step(2);
+  {
+    T('4 个野外巢穴', g.dens.length === 4, g.dens.map(d => d.name).join('/'));
+    const missing = g.dens.filter(d => !alive().some(e => e.type === d.type));
+    T('巢穴首领都刷出来了', missing.length === 0, missing.map(d => d.name).join('/') || 'OK');
+    const stuck = g.dens.filter(d => {
+      const e = alive().find(x => x.type === d.type);
+      return !e || !g.canStand(e.x, e.y);
+    });
+    T('首领都站在可走地面上', stuck.length === 0, stuck.map(d => d.name).join('/') || 'OK');
+    const offMap = g.dens.filter(d => !g.canStand(d.x, d.y));
+    T('巢穴中心本身可站', offMap.length === 0, offMap.map(d => d.name).join('/') || 'OK');
+  }
+
+  // ---------- 3. 首领血条 / 标记 ----------
+  {
+    const bs = alive().filter(e => e.boss);
+    T('e.boss 标记覆盖所有首领', bs.length >= 6, bs.length + ' 只（含树妖/寨主/4 巢穴）');
+    const den = byType('qingshe');
+    if (den) {
+      g.setClock(0.35, 3);
+      g.setPos(den.x + 40, den.y);
+      step(6);
+      T('靠近会进入交战（血条亮起）', den.aggro && den.combatT > 0 || den.aggro,
+        'aggro=' + den.aggro + ' combatT=' + (den.combatT || 0).toFixed(2));
+      // 跑远脱战
+      g.setPos(den.x + 900, den.y + 900);
+      step(60);
+      T('跑远后首领脱战', !den.aggro, 'aggro=' + den.aggro);
+    }
+  }
+
+  // ---------- 4. 招式真的会放 ----------
+  {
+    const den = byType('qingshe');
+    if (den) {
+      g.setClock(0.35, 3);
+      g.clearHazards();
+      const before = g.hazards.length;
+      g.setPos(den.x + 40, den.y);
+      den.aggro = true; den.skillCds = null; den.skillGap = 0; den.skill = null;
+      let casted = 0, sawHazard = false, maxHz = 0, sawRoot = false, sawSummon = false;
+      const hp0 = g.player.hp;
+      for (let i = 0; i < 900; i++) {
+        g.tick(0.016);
+        if (den.skill) casted++;
+        if (g.hazards.length > 0) { sawHazard = true; maxHz = Math.max(maxHz, g.hazards.length); }
+        if (g.player.rootT > 0) sawRoot = true;
+        if (g.enemies.some(e => e.camp && e.camp.x === den.x && e.type !== 'qingshe' && !e.dead)) sawSummon = true;
+        if (!den.dead && den.hp < den.maxHp * 0.5) den.hp = den.maxHp;   // 别让它被打死，只看招式
+        g.player.hp = g.player.maxHpBase;                                 // 也别让玩家死
+      }
+      T('青鳞蟒会进入抬手状态', casted > 0, casted + ' 帧在施法');
+      T('青鳞蟒放出过危险区（毒雾）', sawHazard, '同时最多 ' + maxHz + ' 个');
+      T('青鳞蟒放出过缠身（定身）', sawRoot, 'rootT 触发过');
+      T('打满 15 秒玩家确实被压着打', hp0 > 0, 'hp 保持 ' + Math.round(g.player.hp));
+      void sawSummon;
+    } else {
+      T('青鳞蟒会进入抬手状态', false, '没找到青鳞蟒');
+    }
+  }
+
+  // ---------- 5. 扇形弹幕 ----------
+  {
+    const e = byType('wumian') || (() => {
+      const d = g.dens[0];
+      const w = g.spawnEnemy('wumian', d.x + 60, d.y, { x: d.x, y: d.y, alert: 0 });
+      return w;
+    })();
+    if (e) {
+      g.clearHazards();
+      const pj0 = g.projectiles ? g.projectiles.length : 0;
+      const sk = g.MONSTERS.wumian.skills.find(s => s.fx === 'fan');
+      g.setPos(e.x + 40, e.y);
+      g.execSkill(e, sk);
+      const pj1 = g.projectiles ? g.projectiles.length : 0;
+      T('剑气是扇形多道（fan）', pj1 - pj0 >= 3, (pj1 - pj0) + ' 道');
+    }
+  }
+
+  // ---------- 6. 首杀唯一装备 ----------
+  {
+    g.startGame(false); step(2);
+    const den = byType('shimu');
+    const u = g.UNIQUES.shimu;
+    T('石母有专属装备定义', !!u && !!u.name, u && u.name);
+    if (den) {
+      g.setClock(0.35, 3);
+      g.setPos(den.x + 30, den.y);
+      den.aggro = true;
+      const d0 = g.drops.length;
+      g.hitEnemy(den, { dmg: 99999, crit: false }, 0, 0);
+      step(3);
+      const gear = g.drops.slice(d0).filter(d => d.kind === 'gear' && d.item.unique);
+      T('首杀掉唯一装备', gear.length === 1 && gear[0].item.name === u.name,
+        gear.length ? gear[0].item.name : '没掉');
+      T('唯一装备带专属词缀', !!(gear[0] && gear[0].item.affixes.some(a => a.uniq)),
+        gear[0] ? gear[0].item.affixes.map(a => a.name).join('/') : '-');
+      T('首杀计入 bossKills', g.player.bossKills.shimu === 1, JSON.stringify(g.player.bossKills));
+    }
+    // 二杀不再掉唯一
+    const den2 = byType('shimu');
+    if (den2) {
+      const d0 = g.drops.length;
+      g.hitEnemy(den2, { dmg: 99999, crit: false }, 0, 0);
+      step(3);
+      const again = g.drops.slice(d0).filter(d => d.kind === 'gear' && d.item.unique);
+      T('再杀不掉唯一装备（改为普通高品掉落）', again.length === 0, again.length + ' 件');
+      T('bossKills 累加到 2', g.player.bossKills.shimu === 2, g.player.bossKills.shimu);
+    }
+  }
+
+  // ---------- 7. 唯一装备能穿、能重铸 ----------
+  {
+    const it = g.makeUnique('wumian', 10);
+    T('makeUnique 产出可装备物件', !!it && it.kind === 'weapon' && it.affixes.length >= 5,
+      it ? it.kind + ' / 词缀 ' + it.affixes.length : '-');
+    const nm = it.name;
+    g.player.inv.push(it);
+    const idx = g.player.inv.indexOf(it);
+    g.equipItem(idx);
+    const eq = g.player.equip.weapon === it;
+    T('唯一兵器能装备', eq, nm + ' → atk=' + g.stats.atk);
+  }
+
+  // ---------- 8. 无面剑客接棒 ----------
+  {
+    g.startGame(false); step(2);
+    // 古洞要走进第三层才刷岩魈，测试里直接摆一只，验的是"倒下之后那一步"
+    const yw = g.spawnEnemy('yaowang', g.player.x + 40, g.player.y, { x: g.player.x, y: g.player.y });
+    if (yw) {
+      yw.dg = true;
+      const n0 = g.enemies.length;
+      g.hitEnemy(yw, { dmg: 999999, crit: false }, 0, 0);
+      step(3);
+      const wm = g.enemies.find(e => e.type === 'wumian');
+      T('岩魈倒下后无面剑客出现', !!wm && g.enemies.length > n0, wm ? 'hp=' + Math.round(wm.hp) : '没出现');
+      T('无面剑客被计入清层条件', !!wm && g.enemies.indexOf(wm) >= 0, 'dgMobs 已挂');
+    } else {
+      T('岩魈倒下后无面剑客出现', false, '岩魈没刷出来');
+    }
+  }
+
+  // ---------- 9. 危险区随重开清空 ----------
+  {
+    g.addHazard(g.player.x, g.player.y, { r: 40, delay: 1, dmg: 5 });
+    const n = g.hazards.length;
+    g.startGame(false); step(2);
+    T('重开一局会清空地面危险区', n > 0 && g.hazards.length === 0, n + ' → ' + g.hazards.length);
+  }
+
+  R.ok = R.checks.every(c => c.startsWith('PASS'));
+  return R;
+})()

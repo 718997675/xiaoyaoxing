@@ -148,7 +148,9 @@
     g.startGame(false); step(2);
     const perCamp = g.camps.map(c => alive().filter(e => e.camp === c).length);
     T('每个营地 4~8 只（含夜行与首领）', perCamp.every(n => n >= 4 && n <= 8), perCamp.join('/'));
-    T('怪总数在合理范围', alive().length >= 55 && alive().length <= 90, alive().length + ' 只');
+    // 92 = 12 营地 87 + 4 个巢穴首领 + 偶尔刷出的精英。上限放到 100，
+    // 但下限守住 55 —— 掉到 55 以下说明有营地没刷满。
+    T('怪总数在合理范围', alive().length >= 55 && alive().length <= 100, alive().length + ' 只');
   }
 
   R.ok = R.checks.every(c => c.startsWith('PASS'));

@@ -408,6 +408,33 @@ const DIURNAL = { zhiren: 1, brute: 1, shigan: 1, fox: 1, snake: 1, shanxiao: 1 
 // 食物链：谁追谁。做成"追与逃"而不是真的互相残杀 ——
 // 真打起来营地会被自己吃空，玩家回来只看到一地尸体，反而更没生气。
 const PREY_OF = { shanxiao: ['fox', 'snake'], brute: ['fox', 'snake'], treant: [] };
+
+// ============ 首领巢穴 ============
+// 首领不放进营地：营地里塞一只 500 血的家伙，玩家连清小怪的余地都没有。
+// 单独给一块空场，四周留出跑位空间，进门就能看出"这里不一样"。
+// 无面剑客不在这张表里 —— 它是古洞第三层岩魈倒下后才出现的。
+const dens = [
+  { type: 'qingshe', x: 18 * TILE, y: 88 * TILE, name: '青鳞潭', r: 3 },
+  { type: 'kuilei',  x: 54 * TILE, y: 76 * TILE, name: '废弃机坊', r: 3 },
+  { type: 'shimu',   x: 9 * TILE,  y: 34 * TILE, name: '石母洞', r: 3 },
+  { type: 'huoya',   x: 40 * TILE, y: 20 * TILE, name: '火鸦绝壁', r: 3 },
+];
+// 巢穴的空场：把半径内的实心块清掉，再把底材换成踩秃的土。
+// 不做这一步的话，青鳞蟒会刷在岩层里 —— 它血厚，卡住之后玩家只能隔着石头打。
+function carveDen(d) {
+  const cx = (d.x / TILE) | 0, cy = (d.y / TILE) | 0;
+  for (let y = cy - d.r; y <= cy + d.r; y++) for (let x = cx - d.r; x <= cx + d.r; x++) {
+    if (x < 3 || y < 3 || x >= MAPW - 3 || y >= MAPH - 3) continue;
+    const dd = Math.hypot(x - cx, y - cy);
+    if (dd > d.r + 0.4) continue;
+    const i = y * MAPW + x;
+    if (tiles[i] === 4) continue;
+    if (inDungeon(x * TILE + 8, y * TILE + 8, 10)) continue;
+    solid[i] = 0;
+    if (dd < d.r - 0.6) tiles[i] = 2;
+  }
+}
+
 for (let y = 0; y < MAPH; y++) for (let x = 0; x < MAPW; x++) {
   const i = y * MAPW + x;
   tiles[i] = rng() < 0.22 ? 1 : 0;
@@ -451,8 +478,9 @@ for (let c = 0; c < 46; c++) {
   for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
     if ((x - cx) ** 2 + (y - cy) ** 2 > r * r) continue;
     if (x < 3 || y < 3 || x >= MAPW - 3 || y >= MAPH - 3) continue;
-    // 营地所在的地面不能被岩层吃掉，否则刷怪会直接卡在石头里
+    // 营地 / 巢穴所在的地面不能被岩层吃掉，否则刷怪会直接卡在石头里
     if (camps.some(c2 => Math.hypot(x * TILE + 8 - c2.x, y * TILE + 8 - c2.y) < 66)) continue;
+    if (dens.some(d2 => Math.hypot(x * TILE + 8 - d2.x, y * TILE + 8 - d2.y) < d2.r * TILE + 24)) continue;
     solid[y * MAPW + x] = 1;
   }
 }
@@ -479,6 +507,9 @@ for (const by of [62, 76, 90]) {
     }
   }
 }
+
+// 首领空场：放在溪涧之后 —— 溪水是实心的，巢穴正落在水上就会变成"打不到的 Boss"。
+for (const d of dens) carveDen(d);
 
 // 路网。先在 tile 空间里走，主方向多走、次方向偶尔拐 ——
 // 这样出来的是"人踩出来的路"，不是尺子画出来的 45° 斜线。
@@ -515,6 +546,11 @@ carveRoad(30, 58, 16, 70, 1);          // 竹海 → 猎户棚
 carveRoad(100, 12, 122, 32, 1);        // 乱葬岗 → 守墓人小屋
 carveRoad(12, 20, 22, 10, 1);          // 矿口 → 火鸦巢
 carveRoad(12, 20, 36, 34, 1);          // 矿口 → 塌方矿道
+// 首领巢穴各接一条小路：能看见路，就知道那头有东西
+carveRoad(16, 70, 18, 88, 1);          // 猎户棚 → 青鳞潭
+carveRoad(84, 60, 54, 76, 1);          // 三岔口 → 废弃机坊
+carveRoad(12, 20, 9, 34, 1);           // 矿口 → 石母洞
+carveRoad(22, 10, 40, 20, 1);          // 火鸦巢 → 火鸦绝壁
 
 // —— 青云集：先把村址从野地里"清"出来 ——
 // 顺序很关键：必须在 nearClear / 物件生成之前改地块，否则竹子会照常长在街上。
@@ -1051,6 +1087,9 @@ function dgBuild(floor, seed) {
   dgFloor = floor;
   dgData = genFloor(seed, floor);
   dgCleared = false;
+  // 换层 / 重排时把上一层的地面危险区收掉 —— 否则一层留下的毒雾会飘到下一层，
+  // 玩家刚落地就掉血，还找不到来源。
+  clearHazards();
   const W = dgData.W, H = dgData.H;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -1140,7 +1179,8 @@ const player = {
   atkBase: 8, dir: 'down', moving: false,
   atkCd: 0, atkT: 0, atkBuf: 0, atkStep: 0, lastAtkT: -9, swing: null, lunge: 0,
   dashT: 0, dashCd: 0, flash: 0, iframe: 0, shield: 0, hurtFlash: 0,
-  poison: 0, poisonT: 0, poisonImmuneT: 0,
+  poison: 0, poisonT: 0, poisonImmuneT: 0, rootT: 0,
+  bossKills: {},
   drunkT: 0, drunk: 0, rested: false,
   inv: [], invMax: 20, equip: { weapon: null, armor: null, necklace: null, artifact: null },
   windCd: 0, skillPts: 0, skillLv: {}, kills: 0,
@@ -1558,6 +1598,11 @@ function spawnEnemy(type, x, y, camp, eliteMod) {
     // —— 生态字段 ——
     route: route, ri: route ? (Math.random() * route.length) | 0 : 0, pauseT: 0,
     sleep: false, alertT: 0, hunt: null, panicT: 0, huntCd: 0, wakeT: 0,
+    // —— 首领字段 ——
+    // e.boss 是统一标记：血条、免疫击退、掉落档位、小地图标记全看它，
+    // 不再按 type 一个个判断（以前加一个首领要改七八处）。
+    boss: (MONSTERS[type] || {}).behavior === 'boss',
+    skillCds: null, skillGap: 1.2, skill: null, skillT: 0,
   };
   e.mesh = quad(art.frames[0], art.size[0], art.size[1]);
   e.shadow = quad(SHADOW_TEX, art.size[0] * 0.95, art.size[1] * 0.3);
@@ -1594,6 +1639,19 @@ function seedCamps() {
     }
   }
   spawnEnemy('treant', TREANT_POS.x, TREANT_POS.y, { x: TREANT_POS.x, y: TREANT_POS.y });
+  // 巢穴首领：不进营地，各自独占一块空场。alert 给 0 —— 它们不吹哨，
+  // 也没有同伴可叫，玩家打不过就跑，跑出 190px 它自己会回去。
+  for (const d of dens) {
+    const b = spawnEnemy(d.type, d.x, d.y, { x: d.x, y: d.y, alert: 0 });
+    if (b) {
+      b.combatT = 0;
+      b.ring = quad(tex(RING_C), MONSTERS[d.type].size[0] + 14, MONSTERS[d.type].size[1] + 12);
+      b.ring.material.color.set(C.red2);
+      b.ring.material.opacity = 0.7;
+      b.ring.renderOrder = 990;
+      b.den = d.name;
+    }
+  }
   if (!cleared) spawnEnemy('boss', ALTAR.x, ALTAR.y, ALTAR);
 }
 function msg(txt, color) { messages.push({ txt, color: color || C.paper3, t: 2.4 }); if (messages.length > 3) messages.shift(); }
@@ -1683,7 +1741,7 @@ function hitEnemy(e, info, ang, kb) {
   if (e.sleep) { e.sleep = false; e.wakeT = 25; e.aggro = true; shout(e); }
   e.combatT = 4;   // 挨了打就算在交战，首领血条要亮着
   e.flash = 0.16; e.hitJit = 0.2; e.stagger = Math.max(e.stagger, info.crit ? 0.16 : 0.09);
-  const kbm = (e.elite ? 0.55 : 1) * (e.type === 'boss' ? 0.1 : e.type === 'treant' ? 0.25 : 1) * (e.type === 'shigan' ? 0.25 : 1);
+  const kbm = (e.elite ? 0.55 : 1) * (e.boss ? (e.type === 'treant' ? 0.25 : 0.1) : 1) * (e.type === 'shigan' ? 0.25 : 1);
   e.kvx += Math.cos(ang) * kb * kbm * 4;
   e.kvy += Math.sin(ang) * kb * kbm * 4;
   hitstop = Math.max(hitstop, info.crit ? 0.1 : Math.min(0.075, 0.028 + dmg * 0.0006));
@@ -1789,6 +1847,28 @@ function attack() {
     burst(player.x + Math.cos(base) * 18, player.y - 4 + Math.sin(base) * 10, C.gold2, 14, 90);
   }
 }
+// ============ 首领专属掉落 ============
+// 每个首领首杀必掉一件唯一装备：名字写死、词缀里挂一条专属的。
+// 不做随机生成 —— 「从谁身上掉的」要能被记住，随机名字记不住。
+const UNIQUES = {
+  qingshe: { name: '青鳞缚', kind: 'armor',    tag: '缠身', stat: 'hp',       val: 30, note: '气血 +30，被缠时受伤减半' },
+  kuilei:  { name: '机关心', kind: 'artifact', tag: '布陷', stat: 'skillDmg', val: 14, note: '术法 +14%，傀儡陷阱伤害同享' },
+  shimu:   { name: '石母胎', kind: 'armor',    tag: '厚土', stat: 'def',      val: 11, note: '防御 +11，受击时 20% 概率再减半' },
+  huoya:   { name: '火鸦翎', kind: 'necklace', tag: '灼翼', stat: 'critDmg',  val: 36, note: '暴伤 +36，暴击附带灼烧' },
+  wumian:  { name: '无面刃', kind: 'weapon',   tag: '拔刀', stat: 'atk',      val: 24, fam: 'blade', note: '攻击 +24，拔刀斩伤害 +40%' },
+};
+function makeUnique(type, ilvl) {
+  const u = UNIQUES[type];
+  if (!u) return null;
+  const it = makeGear(u.kind, 4, Math.max(6, ilvl), Math.random, u.fam);
+  it.name = u.name;
+  it.unique = true;
+  it.note = u.note;
+  // 专属词缀放最前，重铸时由 items.js 保下来
+  it.affixes.unshift({ id: 'uniq', name: u.tag, stat: u.stat, val: u.val, uniq: true });
+  return it;
+}
+
 function killEnemy(e) {
   e.dead = true; scene.remove(e.mesh); if (e.ring) scene.remove(e.ring); if (e.shadow) scene.remove(e.shadow);
   const m = MONSTERS[e.type];
@@ -1813,7 +1893,7 @@ function killEnemy(e) {
     }
   }
   // 侠名只用"值得说的事"来加：杀十只野狗不会让人记住你，斩一个寨主会。
-  if (e.type === 'boss' || e.type === 'treant') addFame(8);
+  if (e.boss) addFame(8);
   else if (e.elite) addFame(2);
   while (player.xp >= player.level * 42) {
     player.xp -= player.level * 42; player.level++;
@@ -1828,12 +1908,42 @@ function killEnemy(e) {
     cleared = true; state = 'clear';
     document.getElementById('clear').classList.remove('hidden');
     save();
-  } else if (e.type === 'boss') {
+  } else if (e.type === 'yaowang') {
     // 洞主：不通关，只在洞里兑现（清层 → 开箱）
     msg('洞主伏诛 · 石胎碎了一地', C.gold3);
+    // 石胎碎了，里面那道剑痕才露出来 —— 三幕里最深的一笔。
+    // 无面剑客作为"真正的洞主"在岩魈倒下后接手，玩家没有喘息的机会。
+    const wm = spawnEnemy('wumian', e.x, e.y - 10, { x: e.x, y: e.y });
+    if (wm) {
+      wm.dg = true; wm.aggro = true; wm.combatT = 6;
+      wm.hp = wm.maxHp = Math.round(wm.maxHp * 1.1);
+      wm.ring = quad(tex(RING_C), 34, 38);
+      wm.ring.material.color.set(C.paper1);
+      wm.ring.material.opacity = 0.8;
+      wm.ring.renderOrder = 990;
+      dgMobs.push(wm);   // 不清它，这一层的裂口不会开
+      msg('石胎之中，有人持剑而立', C.paper1);
+      AUDIO.play('boss');
+    }
   } else if (e.type === 'treant') {
     msg('千年树妖伏诛 · 天材地宝现世', C.gold3);
     for (let i = 0; i < 2; i++) addDrop('gear', makeGear(SLOTS[(Math.random() * 4) | 0], 3 + ((Math.random() * 2) | 0), player.level + 2));
+  } else if (e.boss) {
+    // 野外首领：不算通关，只把这一带打服。
+    // 首杀掉唯一装备 —— 这是"打首领"与"打一窝杂兵"唯一无法互相替代的地方。
+    const first = !player.bossKills[e.type];
+    player.bossKills[e.type] = (player.bossKills[e.type] || 0) + 1;
+    const u = UNIQUES[e.type];
+    msg(MONSTERS[e.type].name + ' 伏诛' + (first && u ? ' · 得「' + u.name + '」' : ''), C.gold3);
+    AUDIO.play('rare');
+    if (first) {
+      const it = makeUnique(e.type, player.level + 3);
+      if (it) addDrop('gear', it, e.x, e.y + 8);
+    }
+    for (let i = 0; i < 2; i++) {
+      addDrop('coin', 50 + ((Math.random() * 40) | 0), e.x + (i ? 20 : -20), e.y + 4);
+    }
+    shakeX += 8; shakeY += 8;
   }
 }
 
@@ -1886,7 +1996,7 @@ function rollDropSlot() {
 }
 function dropLoot(e) {
   const luck = stats().luck;
-  const tier = e.type === 'boss' || e.type === 'treant' ? 2 : (e.elite ? 1 : 0);
+  const tier = e.boss || e.type === 'treant' ? 2 : (e.elite ? 1 : 0);
   const ilvl = Math.max(1, player.level + (tier === 2 ? 2 : tier === 1 ? 1 : 0) + ((Math.random() * 2) | 0));
   const coinN = tier === 2 ? 4 : e.elite ? 2 : 1;
   for (let i = 0; i < coinN; i++) {
@@ -2780,6 +2890,7 @@ function save() {
     inv: player.inv, invMax: player.invMax || INV_BASE, equip: player.equip,
     skillPts: player.skillPts, skillLv: player.skillLv, kills: player.kills || 0,
     rested: !!player.rested, fame: player.fame || 0,
+    bossKills: player.bossKills || {},
     clock: clock.serialize(),
   }));
 }
@@ -2839,6 +2950,7 @@ function load() {
     },
     skillPts: s.skillPts || 0, skillLv: s.skillLv || {}, kills: s.kills || 0,
     rested: !!s.rested, fame: s.fame || 0,
+    bossKills: s.bossKills || {},
   });
   invalidateStats();
   // 地脉变动：96×72 扩到 144×104 之后，旧存档的坐标可能落在岩层里或地图外。
@@ -2863,6 +2975,7 @@ function resetWorld() {
   for (const g of ghosts) scene.remove(g.mesh);
   enemies = []; drops = []; projectiles = []; particles = []; sparks = []; ghosts = [];
   dmgNums = []; messages = []; slashGhosts = []; bolts = [];
+  clearHazards();   // 地面危险区不属于上面任何一类，忘了清就会跨局残留
   seedCamps();
 }
 function startGame(cont) {
@@ -2878,6 +2991,7 @@ function startGame(cont) {
       atkBase: 8, inv: [], invMax: INV_BASE, equip: { weapon: null, armor: null, necklace: null, artifact: null },
       skillPts: 0, skillLv: {}, kills: 0, atkStep: 0, swing: null, shield: 0, poison: 0, poisonT: 0,
       poisonImmuneT: 0, drunkT: 0, drunk: 0, rested: false, fame: 0,
+      rootT: 0, bossKills: {},
     });
     invalidateStats();
   }
@@ -3092,6 +3206,173 @@ function bossSlam(e) {
   if (d < 40) hurtPlayer(e.dmg * 1.2);
 }
 
+// ============ 首领招式引擎 ============
+// 五个新首领不各写一套 if/else，而是共用"招式表（monsters.js 的 skills）+ 效果分派"。
+// 以后加一个首领，只要在 monsters.js 里写 skills，这里一行都不用动。
+//
+// 六种效果覆盖了所有需要：
+//   slam   以自身为圆心的范围重击（断竹横扫 / 灼翼 / 拔刀斩）
+//   zone   在玩家脚下放一片危险区（毒雾 / 陷阱 / 地裂）
+//   rain   在玩家周围撒一片危险区（落石 / 火雨）
+//   summon 召唤小怪（唤傀 / 唤石 / 分身 / 镜像）
+//   bind   定身（缠身）
+//   fan    扇形弹幕（弩箭齐射 / 剑气）
+
+const hazards = [];   // 地面危险区：预警圈 → 引爆 / 持续伤害
+
+function addHazard(x, y, o) {
+  const h = {
+    x, y, r: o.r || 34, delay: o.delay || 0, life: o.life || 0,
+    dmg: o.dmg || 8, tick: o.tick || 0.8,
+    t: 0, hitT: 0, fired: false, didHit: false, dead: false,
+    color: o.color || C.red2,
+  };
+  // 不用精灵贴图：RING_C 是 12px 的点阵，放大到 60px 就散成一圈碎方块，
+  // 玩家读不出"这是范围"。改成在 overlay 上用 arc 画，边缘干净，缩放也随意。
+  hazards.push(h);
+  return h;
+}
+function clearHazards() {
+  hazards.length = 0;
+}
+function updateHazards(dt) {
+  for (let i = hazards.length - 1; i >= 0; i--) {
+    const h = hazards[i];
+    h.t += dt;
+    const inside = () => Math.hypot(player.x - h.x, player.y - h.y) < h.r;
+    if (h.life > 0) {
+      // 持续区（毒雾 / 火海）
+      if (!h.fired) {
+        if (h.t < h.delay) continue;
+        h.fired = true; h.hitT = 0.2;
+        burst(h.x, h.y, h.color, 10, 70);
+      }
+      h.hitT -= dt;
+      if (h.hitT <= 0) { if (inside()) hurtPlayer(h.dmg * 0.55); h.hitT = h.tick; }
+      if (h.t > h.delay + h.life) h.dead = true;
+    } else {
+      // 一次性（落石 / 地裂 / 陷阱）
+      if (!h.fired) {
+        if (h.t < h.delay) continue;
+        h.fired = true;
+        burst(h.x, h.y, h.color, 14, 95);
+        shakeX += 2; shakeY += 2;
+        if (inside()) hurtPlayer(h.dmg);
+      }
+      if (h.t > h.delay + 0.3) h.dead = true;
+    }
+    if (h.dead) hazards.splice(i, 1);
+  }
+}
+
+function execSkill(e, sk) {
+  const dx = player.x - e.x, dy = player.y - e.y, d = Math.hypot(dx, dy) || 1;
+  const base = e.dmg * (sk.dmg || 1);
+  switch (sk.fx) {
+    case 'slam': {
+      shakeX += 6; shakeY += 6;
+      burst(e.x, e.y - 8, C.paper1, 20, 130);
+      burst(e.x, e.y - 8, C.red2, 12, 100);
+      slashGhosts.push({
+        x: e.x, y: e.y - 8, a0: 0, a1: Math.PI * 2,
+        R: (sk.r || 70) * 0.9, colors: [C.paper1, C.red2], t: 0.3, max: 0.3,
+      });
+      if (Math.hypot(player.x - e.x, player.y - e.y) < (sk.r || 70)) hurtPlayer(base);
+      break;
+    }
+    case 'zone': {
+      const n = sk.count || 1;
+      for (let i = 0; i < n; i++) {
+        const a = n === 1 ? 0 : (i / n) * Math.PI * 2 + Math.random();
+        const rr = n === 1 ? 0 : 42 + Math.random() * 26;
+        addHazard(player.x + Math.cos(a) * rr, player.y + Math.sin(a) * rr, {
+          r: sk.r, delay: sk.delay || 0.8, life: sk.life || 0, dmg: base, color: sk.color,
+        });
+      }
+      break;
+    }
+    case 'rain': {
+      const n = sk.count || 3;
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, rr = Math.random() * (sk.spreadR || 92);
+        addHazard(player.x + Math.cos(a) * rr, player.y + Math.sin(a) * rr, {
+          r: sk.r, delay: (sk.delay || 0.8) + i * 0.09, dmg: base, color: sk.color,
+        });
+      }
+      break;
+    }
+    case 'summon': {
+      const n = sk.count || 1;
+      for (let i = 0; i < n; i++) {
+        const a = i / n * Math.PI * 2 + Math.random();
+        const ex = e.x + Math.cos(a) * 38, ey = e.y + Math.sin(a) * 28;
+        if (!canStand(ex, ey)) continue;
+        const s = spawnEnemy(sk.kind, ex, ey, e.camp || { x: e.x, y: e.y });
+        if (s) { s.aggro = true; s.combatT = 4; burst(ex, ey - 6, C.pur2, 9, 60); }
+      }
+      break;
+    }
+    case 'bind': {
+      if (d < (sk.range || 120)) {
+        player.rootT = Math.max(player.rootT, sk.bind || 1.2);
+        hurtPlayer(base);
+        msg('被缠住了！', C.jade3);
+      }
+      break;
+    }
+    case 'fan': {
+      const n = sk.count || 3, spread = sk.spread || 0.4;
+      const a0 = Math.atan2(dy, dx);
+      for (let i = 0; i < n; i++) {
+        const a = a0 + (i - (n - 1) / 2) * spread;
+        const mesh = quad(FIRE_TEX, 7, 7);
+        projectiles.push({
+          x: e.x, y: e.y - 6, vx: Math.cos(a) * (sk.speed || 150), vy: Math.sin(a) * (sk.speed || 150),
+          t: 2.2, mesh, dmg: base,
+        });
+      }
+      break;
+    }
+  }
+}
+
+function runBossSkills(e, dt, d) {
+  const m = MONSTERS[e.type];
+  if (!m.skills) return false;
+  if (e.skill) {
+    // 抬手：站在原地震一下，给玩家反应时间。手抬完了才真正放。
+    e.skillT -= dt;
+    if (e.skillT <= 0) { execSkill(e, e.skill); e.skill = null; }
+    return true;
+  }
+  // 每个招式各自计冷却。
+  // 以前只有一个全局 skillCd，而挑选逻辑是"遍历到第一个条件成立的"——
+  // 结果青鳞蟒永远只放排在最前面的缠身，毒雾与横扫一次都见不到。
+  // 分开计时 + 在可放的里面随机挑，招式表才真的是一张表。
+  if (!e.skillCds) e.skillCds = m.skills.map(() => 1.6 + Math.random() * 1.6);
+  for (let i = 0; i < e.skillCds.length; i++) if (e.skillCds[i] > 0) e.skillCds[i] -= dt;
+  if (e.skillGap > 0) { e.skillGap -= dt; return false; }
+
+  const hpR = e.hp / e.maxHp;
+  const ready = [];
+  for (let i = 0; i < m.skills.length; i++) {
+    const sk = m.skills[i];
+    if (e.skillCds[i] > 0) continue;
+    if (sk.range && d > sk.range) continue;
+    if (sk.hpBelow && hpR > sk.hpBelow) continue;
+    ready.push(i);
+  }
+  if (!ready.length) return false;
+  const i = ready[(Math.random() * ready.length) | 0];
+  const sk = m.skills[i];
+  e.skill = sk; e.skillT = sk.windup;
+  e.skillCds[i] = sk.cd * (0.85 + Math.random() * 0.3);
+  e.skillGap = 0.7 + Math.random() * 0.5;
+  msg(m.name + ' · ' + sk.name, C.red3);
+  AUDIO.play('boss');
+  return true;
+}
+
 // ============ 主循环 ============
 // 挥砍推进 + 收招留刀光
 function tickSwing(dt) {
@@ -3214,6 +3495,8 @@ function update(dt) {
     stickAmp = Math.min(1, Math.hypot(mx, my) * 1.5); // 轻推慢走，推到底全速
   }
   player.moving = !!(mx || my);
+  // 缠身：被青鳞蟒缠住时动不了。只锁位移，不锁出招 —— 全锁会让人以为卡了。
+  if (player.rootT > 0) { player.rootT -= dt; player.moving = false; mx = 0; my = 0; }
   if (player.moving) {
     if (Math.abs(mx) >= Math.abs(my)) player.dir = mx > 0 ? 'right' : 'left';
     else player.dir = my > 0 ? 'down' : 'up';
@@ -3294,6 +3577,9 @@ function update(dt) {
     }
   }
 
+  // 地面危险区：预警圈要先于敌人结算，玩家才能"看着圈躲"，而不是挨完打才看见圈
+  updateHazards(dt);
+
   // ---- 敌手 ----
   const playerSafe = inVillage(player.x, player.y, 6);
   const eFree = (x, y) => canStand(x, y) && !inVillage(x, y, 0);
@@ -3348,6 +3634,10 @@ function update(dt) {
     }
     let vx = 0, vy = 0, speed = m.speed * (e.aggro ? 1 : 0.45);
 
+    // 首领招式：施法中不走位，但血条、贴图、影子照常更新。
+    // 洞里也要能放招 —— 无面剑客是第三层真正的洞主，只会平砍就白瞎了。
+    const casting = (e.boss && e.aggro) ? runBossSkills(e, dt, d) : false;
+
     // 首领阶段
     if (e.type === 'boss') {
       if (!e.phase2 && e.hp < e.maxHp * 0.5) {
@@ -3366,7 +3656,8 @@ function update(dt) {
       else if (e.spinCd <= 0 && d < 80) { e.spinCd = 5; e.spinWind = 0.9; msg('树妖 · 根须绞杀', C.jade3); }
     }
 
-    if (!e.aggro) {
+    if (casting) { vx = 0; vy = 0; }
+    else if (!e.aggro) {
       if (e.huntCd > 0) e.huntCd -= dt;
       // —— 食物链 ——
       // 掠食者去追猎物，猎物掉头就跑。只在"没在打架"的时候演这一段 ——
@@ -3880,7 +4171,7 @@ function drawMinimap() {
   // 精英 / 首领
   for (const e of enemies) {
     if (e.dead) continue;
-    if (e.type === 'boss' || e.type === 'treant') {
+    if (e.boss) {
       octx.fillStyle = C.red3;
       octx.fillRect(mx + e.x * sx - 2, my + e.y * sy - 2, 4, 4);
     } else if (e.elite) {
@@ -4039,6 +4330,31 @@ function drawOverlay(camX, camY) {
     octx.globalAlpha = 1;
   }
 
+  // 地面危险区：外圈往内收 = 快炸了，收完那一下就是伤害落点。
+  // 持续区（毒雾）引爆后留一团脉动的色块，玩家能看出"这块地还在伤人"。
+  for (const h of hazards) {
+    const x = Math.round(h.x - camX), y = Math.round(h.y - camY);
+    const k = h.fired ? 1 : Math.min(1, h.t / Math.max(0.01, h.delay));
+    octx.save();
+    if (!h.fired) {
+      const rr = h.r * (1 + (1 - k) * 0.45);
+      octx.globalAlpha = 0.30 + k * 0.55;
+      octx.strokeStyle = h.color; octx.lineWidth = 2;
+      octx.beginPath(); octx.arc(x, y, rr, 0, Math.PI * 2); octx.stroke();
+      octx.globalAlpha = 0.10 + k * 0.20;
+      octx.fillStyle = h.color;
+      octx.beginPath(); octx.arc(x, y, h.r, 0, Math.PI * 2); octx.fill();
+    } else {
+      octx.globalAlpha = h.life > 0 ? 0.30 + Math.sin(time * 9) * 0.10 : 0.55;
+      octx.fillStyle = h.color;
+      octx.beginPath(); octx.arc(x, y, h.r, 0, Math.PI * 2); octx.fill();
+      octx.globalAlpha = 0.85;
+      octx.strokeStyle = h.color; octx.lineWidth = 2;
+      octx.beginPath(); octx.arc(x, y, h.r, 0, Math.PI * 2); octx.stroke();
+    }
+    octx.restore();
+  }
+
   // 仙品 / 传世兵器掉在地上：品阶辉光 + 脚下光环，远远就能认出来
   for (const d of drops) {
     if (d.taken || !d.epic || !d.mesh) continue;
@@ -4162,7 +4478,7 @@ function drawOverlay(camX, camY) {
   // 原来写的是 aggro || hp<maxHp，两个条件都只会变真、不会变假，
   // 于是 boss 一被惊动血条就永远挂在屏幕顶上了。
   const boss = enemies.find(e => {
-    if (e.dead || (e.type !== 'boss' && e.type !== 'treant')) return false;
+    if (e.dead || !e.boss) return false;
     if (e.combatT > 0) return true;
     if (!e.aggro) return false;
     return Math.hypot(player.x - e.x, player.y - e.y) < 240;
@@ -4620,9 +4936,11 @@ window.__game = {
   debugArc(a0, a1, R) {
     drawArcFx(octx, 240, 135, a0 === undefined ? -2 : a0, a1 === undefined ? 1 : a1, R || 40, [C.red3, C.red2], 1, 1.5);
   },
-  MAPW, MAPH, SPAWN, camps, WEAPONS, MONSTERS, NODES, SLOTS,
+  MAPW, MAPH, SPAWN, camps, dens, WEAPONS, MONSTERS, NODES, SLOTS,
   get solid() { return solid; }, REGION,
   get objects() { return objects; },
+  get hazards() { return hazards; }, addHazard, clearHazards, UNIQUES, makeUnique,
+  killEnemy, execSkill, runBossSkills,
   spawnEnemy, save, load, startGame, attack, castQi, castWu, castThunder, dash, windStep,
   salvageBulk, equipItem, unequip, usePotion, renderInv, renderForge, forgeOpen, forgeClose,
   renderSkills, learnNode, toggleSkills,

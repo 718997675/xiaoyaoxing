@@ -32,10 +32,29 @@ npx serve .        # 或 python -m http.server
 cd dawn-s1
 node tools/run.js devtest        # 全量断言，当前基线 137 pass / 0 fail
 node tools/run.js eval tools/weapons.js   # 八兵器 / 触屏专项，当前 32 pass / 0 fail
-node tools/run.js eval tools/map.js       # 大地图连通性与地貌，当前 12 pass / 0 fail
+node tools/run.js eval tools/map.js       # 大地图连通性与地貌，当前 13 pass / 0 fail
 node tools/run.js eval tools/camps.js     # 营地生态（巡逻/吹哨/食物链/作息），当前 17 pass / 0 fail
+node tools/run.js eval tools/bosses.js    # 首领（招式表/巢穴/危险区/首杀专属），当前 22 pass / 0 fail
 node tools/run.js shot out.png 1440 900   # 截图
 ```
+
+截图想拍"某一瞬间"（毒雾正在炸、Boss 正在抬手）用环境变量：
+
+```bash
+QS="dev=0" POS=760,352 CLOCK=0.35 \
+  SETUP="const d=g.enemies.find(e=>e.type==='huoya');d.aggro=true;d.skillCds=null;d.skillGap=0;\
+d.skill={fx:'rain',r:30,count:6,spreadR:96,delay:0.9,dmg:1};d.skillT=0.01;\
+for(let i=0;i<25;i++)g.tick(0.016)" \
+  node tools/run.js shot docs-boss-skill.png
+```
+
+- `POS=x,y` 先把角色挪过去再截
+- `CLOCK=t` 设时辰（0=卯 / 0.35=午 / 0.85=子）
+- `SETUP="..."` 在 POS 之后、截图之前跑一段页面代码
+- `QS=` 换成 `dev=0` 就不会盖住那个 devtest 面板
+
+> 已知：`shot` 加了 `Emulation.setDeviceMetricsOverride` 之后，画布右侧偶尔会留一条
+> 没重绘的旧帧残影。是截图工具的 resize 竞态，不是游戏本身的问题；多截一张就正常。
 
 `tools/run.js` 自己起 http server、自己拉 headless Chromium（路径在文件顶部 `CHROME` 常量，
 换机器要改）。**不要用 `nohup ... &` 起服务** —— shell 一退就被回收，表现为莫名其妙的 502。
@@ -59,14 +78,14 @@ node tools/run.js shot out.png 1440 900   # 截图
 | 双刀三段镜像动作 | ✅ |
 | **P1 大地图 144×104 + 四区地貌 + 12 营地 + 路网** | ✅ 2026-11-10 |
 | **P2 营地生态：巡逻 / 吹哨 / 食物链 / 作息 / 营地道具 / 3 个营地首领** | ✅ 2026-11-10 |
+| **P3 首领 3→8：招式表引擎 + 4 个巢穴 + 地面危险区 + 5 件首杀专属装备** | ✅ 2026-11-10 |
 | 双渠道发布（GitHub Pages + workbuddy） | ✅ |
 
 ### 未完成（按顺序）
 
 | 批次 | 内容 | 文档 |
 |---|---|---|
-| **P3** | 首领 3 → 8（青鳞蟒 / 机关傀儡 / 石母 / 火鸦王 / 无面剑客） | `CHAPTER-1-EXPANSION.md` §4 · P3 |
-| **P4** | NPC 与任务：店主 5→9、街面 8→16、任务系统从零建、10 条任务 | 同上 |
+| **P4** | NPC 与任务：店主 5→9、街面 8→16、任务系统从零建、10 条任务 | `CHAPTER-1-EXPANSION.md` §4 · P4 |
 | **P5** | 技能框架 + 兵器专精 + 16 个技能 | `SKILLS-STORY-PLAN.md` §二 |
 | **P5.5** | 心法系统（22 条 + 一主二辅 + 心法页 UI） | `SKILLS-STORY-PLAN.md` §三 |
 | **P6** | 补齐剩余 48 个技能 + 装配 UI | 同上 |
@@ -160,17 +179,20 @@ dawn-s1/
 
 ## 7. 下次开工的第一件事
 
-按 `CHAPTER-1-EXPANSION.md` §4 的 **P3 首领 3→8** 往下做。
+按 `CHAPTER-1-EXPANSION.md` §4 的 **P4 · NPC 与任务** 往下做。
 
-P1 + P2 已经把地基铺好了：
+P1~P3 已经把地基铺好了：
 
 - 12 个营地，带 `name` / `tier` / `types` / `night` / `patrol` / `alert` / `lord`
 - 每个营地都可达，都有篝火 / 帐篷 / 哨塔，夜里篝火会发光
 - 怪会巡逻、会吹哨叫援、会追猎物、按时辰睡觉
-- 3 个营地首领（教头 / 蛇母 / 守墓人）已就位，走的是 `lord` 字段
+- 3 个营地首领（教头 / 蛇母 / 守墓人）走 `lord` 字段
+- 4 个巢穴首领（青鳞蟒 / 机关傀儡 / 石母 / 火鸦王）走 `dens` + `skills` 招式表
+- 无面剑客在古洞第三层岩魈倒下后接棒
+- 招式引擎：`monsters.js` 写 `skills`，`game.js` 的 `runBossSkills` + `execSkill` 六种 `fx` 分派，
+  加新首领不用改 `game.js`
 
-P3 要加的是**真正的首领**：青鳞蟒（竹海）/ 机关傀儡（竹海）/ 石母（石窟）/ 火鸦王（石窟）/
-无面剑客（古洞终章）。它们不该是"血厚的普通怪"，每个得有自己的出招套路 ——
-现有 `MONSTERS` 里 `boss` / `treant` 的 `spinCd` / `spinWind` / `phase2` 那套是模板，照着扩就行。
+P4 要从零建**任务系统**。现有能借力的只有三样：侠名（`addFame`）、传闻（`rumor`）、
+店铺对话（`talkOpen` / `talkLine`）。任务数据建议单独开 `quests.js`，和 `monsters.js` 一样做成纯数据表。
 
-**动手前先读**：`CHAPTER-1-EXPANSION.md` §4 · P3，里面有每个首领的定位与机制草稿。
+**动手前先读**：`CHAPTER-1-EXPANSION.md` §4 · P4，里面有任务系统的最小可行结构与 10 条任务线草案。

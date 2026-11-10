@@ -53611,6 +53611,282 @@ const MONSTERS = {
       '...ssss.sss.ssss..', '....ss..ss..ss....', '....ss..ss..ss....', '...sss..ss..sss...',
     ],
   },
+  // ============ P3 新增五首领 ============
+  // 共同约定：behavior 一律 'boss'，spawnEnemy 见到它就把 e.boss 置真，
+  // 血条 / 掉落 / 免疫击退全都按这个标记走，不用再按 type 一个个判断。
+  //
+  // skills 是"招式表"，由 game.js 的 runBossSkills 轮询。字段：
+  //   fx      招式类型（slam / zone / rain / summon / bind / fan）
+  //   cd      冷却秒数（实际会在 0.8~1.2 倍之间抖动，免得节奏一模一样）
+  //   windup  抬手时间，越长越好躲
+  //   range   距离条件，超出就不放（近战首领不该隔半张地图放技能）
+  //   hpBelow 只有血量低于这个比例才放（留给二阶段的大招）
+
+  // 青鳞蟒：竹海里最难缠的东西。它不靠伤害，靠"让你动不了"。
+  qingshe: {
+    name: '青鳞蟒', behavior: 'boss', tier: 2,
+    hp: 340, speed: 48, dmg: 15, xp: 160, range: 30, cd: 1.6, windup: 0.7, kb: 0, aggro: 132,
+    size: [20, 16], def: 0.10,
+    pal: { g: '#2E6B4E', G: '#4FA878', r: C.red2 },
+    rows: [
+      '....................',
+      '.....ggggg..........',
+      '....gGGGGGg.........',
+      '...gGGrrGGGg........',
+      '...gGrrrrGGg........',
+      '...gGGrrGGGg..gg....',
+      '....gGGGGGgggGGg....',
+      '.....gggGGGGGGg.....',
+      '.......gGGGGg.......',
+      '......gGGgg.........',
+      '.....gGGg...........',
+      '....gGGg............',
+      '...gGGg.............',
+      '..gGGGGggggggggg....',
+      '..gGGGGGGGGGGGGGg...',
+      '...gggggggggggggg...',
+    ],
+    rows2: [
+      '....................',
+      '.....ggggg..........',
+      '....gGGGGGg.........',
+      '...gGGrrGGGg........',
+      '...gGrrrrGGg........',
+      '...gGGrrGGGgrrgg....',
+      '....gGGGGGgggGGg....',
+      '.....gggGGGGGGg.....',
+      '.......gGGGGg.......',
+      '......gGGgg.........',
+      '.....gGGg...........',
+      '....gGGg............',
+      '...gGGg.............',
+      '..gGGGGgggggggggg...',
+      '..gGGGGGGGGGGGGGGg..',
+      '...gggggggggggggg...',
+    ],
+    skills: [
+      { name: '缠身', fx: 'bind', cd: 8.5, windup: 0.65, range: 128, bind: 1.3, dmg: 0.9 },
+      { name: '毒雾', fx: 'zone', cd: 10, windup: 0.6, range: 200, r: 44, life: 3.2, dmg: 0.45, color: C.jade2, count: 3 },
+      { name: '断竹横扫', fx: 'slam', cd: 5.5, windup: 0.75, range: 80, r: 78, dmg: 1.35 },
+    ],
+  },
+
+  // 机关傀儡：站在工坊门口不追人。你不进去它就慢慢磨你，你冲进去它就放陷阱。
+  kuilei: {
+    name: '机关傀儡', behavior: 'boss', tier: 2,
+    hp: 430, speed: 15, dmg: 13, xp: 150, range: 96, cd: 1.4, windup: 0.5, kb: 0, aggro: 168,
+    size: [18, 20], def: 0.22,
+    pal: { w: '#6B5636', W: '#8A7048', g: C.gold2, G: C.gold3, r: C.red2 },
+    rows: [
+      '....wwwwwwwwww....',
+      '...wWWWWWWWWWWw...',
+      '...wWrrWWWWrrWw...',
+      '...wWWWWWWWWWWw...',
+      '....wwwwwwwwww....',
+      '...wwwwwwwwwwww...',
+      '..wwWWWWWWWWWWww..',
+      '..wwWgggggggWWww..',
+      '..wwWgGGGGGgWWww..',
+      '..wwWgggggggWWww..',
+      '..wwWWWWWWWWWWww..',
+      '...wwwwwwwwwwww...',
+      '....wwwwwwwwww....',
+      '....ww.wwww.ww....',
+      '....ww.wwww.ww....',
+      '....ww.wwww.ww....',
+      '...www.wwww.www...',
+      '...ww..wwww..ww...',
+      '..wwww.wwww.wwww..',
+      '..wwww......wwww..',
+    ],
+    rows2: [
+      '....wwwwwwwwww....',
+      '...wWWWWWWWWWWw...',
+      '...wWrrWWWWrrWw...',
+      '...wWWWWWWWWWWw...',
+      '....wwwwwwwwww....',
+      '...wwwwwwwwwwww...',
+      '.wwwWWWWWWWWWWwww.',
+      '.wwwWgGGGGGgWWwww.',
+      '.wwwWGrrrrrGWWwww.',
+      '.wwwWgGGGGGgWWwww.',
+      '.wwwWWWWWWWWWWwww.',
+      '...wwwwwwwwwwww...',
+      '....wwwwwwwwww....',
+      '....ww.wwww.ww....',
+      '....ww.wwww.ww....',
+      '....ww.wwww.ww....',
+      '..wwww.wwww.wwww..',
+      '..www..wwww..www..',
+      '.wwwww.wwww.wwwww.',
+      '.wwww........wwww.',
+    ],
+    skills: [
+      { name: '布陷', fx: 'zone', cd: 5.5, windup: 0.45, range: 220, r: 34, delay: 1.1, dmg: 1.1, color: C.gold3, count: 2 },
+      { name: '弩箭齐射', fx: 'fan', cd: 3.4, windup: 0.4, range: 240, count: 5, spread: 0.55, speed: 150, dmg: 0.7 },
+      { name: '唤傀', fx: 'summon', cd: 13, windup: 0.9, range: 260, kind: 'shigan', count: 2 },
+    ],
+  },
+
+  // 石母：石窟最深处那块会动的岩壁。她的招式全都"慢、重、躲得开但挨不起"。
+  shimu: {
+    name: '石母', behavior: 'boss', tier: 2,
+    hp: 520, speed: 24, dmg: 18, xp: 190, range: 34, cd: 1.8, windup: 0.8, kb: 0, aggro: 140,
+    size: [20, 18], def: 0.20,
+    pal: { s: '#5A5F66', S: '#7A8088', r: C.pur3 },
+    rows: [
+      '....................',
+      '.....ssssssssss.....',
+      '...sssSSSSSSSSsss...',
+      '..ssSSSSSSSSSSSSss..',
+      '.ssSSSSSSSSSSSSSSss.',
+      '.sSSSSSSSSSSSSSSSSs.',
+      'sSSSSSSSSSSSSSSSSSSs',
+      'sSSSrrSSSSSSSSrrSSSs',
+      'sSSSrrSSSSSSSSrrSSSs',
+      'sSSSSSSSSSSSSSSSSSSs',
+      '.sSSSSSSSSSSSSSSSSs.',
+      '..sSSSSSSSSSSSSSSs..',
+      '...ssSSSSSSSSSSss...',
+      '....sssSSSSSSsss....',
+      '...ssSSSSSSSSSSss...',
+      '..ssSSSSSSSSSSSSss..',
+      '..ssssssssssssssss..',
+      '....................',
+    ],
+    rows2: [
+      '....................',
+      '.....ssssssssss.....',
+      '...sssSSSSSSSSsss...',
+      '..ssSSSSSSSSSSSSss..',
+      '.ssSSSSSSSSSSSSSSss.',
+      '.sSSSSSSSSSSSSSSSSs.',
+      'sSSSSSSSSSSSSSSSSSSs',
+      'sSSSrrSSSSSSSSrrSSSs',
+      'sSSSrrSSSSSSSSrrSSSs',
+      'sSSSSSSSSSSSSSSSSSSs',
+      '.sSSSSSSSSSSSSSSSSs.',
+      '..sSSSSSSSSSSSSSSs..',
+      '...ssSSSSSSSSSSss...',
+      '...ssssSSSSSSssss...',
+      '..sssSSSSSSSSSSsss..',
+      '.ssSSSSSSSSSSSSSSss.',
+      '.ssssssssssssssssss.',
+      '....................',
+    ],
+    skills: [
+      { name: '落石', fx: 'rain', cd: 6.5, windup: 0.7, range: 260, count: 4, r: 30, delay: 0.9, dmg: 1.2, color: C.ink3 },
+      { name: '地裂', fx: 'zone', cd: 11, windup: 1.0, range: 260, r: 62, delay: 0.9, dmg: 1.8, color: C.pur3, count: 1 },
+      { name: '唤石', fx: 'summon', cd: 15, windup: 0.9, range: 300, kind: 'shigan', count: 2 },
+    ],
+  },
+
+  // 火鸦王：飞得快，招式全是"地上不能站"。
+  huoya: {
+    name: '火鸦王', behavior: 'boss', tier: 2,
+    hp: 380, speed: 64, dmg: 14, xp: 170, range: 26, cd: 1.2, windup: 0.45, kb: 0, aggro: 150,
+    size: [20, 16], def: 0.06,
+    pal: { r: '#8A2E1E', R: '#C24A2A', y: C.gold3, g: C.gold2 },
+    rows: [
+      '....................',
+      '..r..............r..',
+      '..rr............rr..',
+      '...rr..rrrrrr..rr...',
+      '....rrrrRRRRrrrr....',
+      '...rRRRRRRRRRRRRr...',
+      '..rRRRRRRRRRRRRRRr..',
+      '..RRRRyyRRRRyyRRRR..',
+      '..RRRRyyRRRRyyRRRR..',
+      '..rRRRRRRRRRRRRRRr..',
+      '...rRRRRggRRRRRRr...',
+      '....rrRRRRRRRRrr....',
+      '.....rrrrrrrrrr.....',
+      '......rr....rr......',
+      '.....rr......rr.....',
+      '....................',
+    ],
+    rows2: [
+      '....................',
+      '.rr..............rr.',
+      '.rrr............rrr.',
+      '..rrr..rrrrrr..rrr..',
+      '...rrrrrRRRRrrrrr...',
+      '...rRRRRRRRRRRRRr...',
+      '..rRRRRRRRRRRRRRRr..',
+      '..RRRRyyRRRRyyRRRR..',
+      '..RRRRyyRRRRyyRRRR..',
+      '..rRRRRRRRRRRRRRRr..',
+      '...rRRRRggRRRRRRr...',
+      '....rrRRRRRRRRrr....',
+      '.....rrrrrrrrrr.....',
+      '.....rr......rr.....',
+      '....rr........rr....',
+      '....................',
+    ],
+    skills: [
+      { name: '火雨', fx: 'rain', cd: 7, windup: 0.6, range: 280, count: 6, r: 26, delay: 0.85, dmg: 0.95, color: C.red2 },
+      { name: '灼翼', fx: 'slam', cd: 5, windup: 0.55, range: 88, r: 86, dmg: 1.25 },
+      { name: '分身', fx: 'summon', cd: 14, windup: 0.7, range: 300, kind: 'crow', count: 2 },
+    ],
+  },
+
+  // 无面剑客：终局。他的招式全是"看得见但躲不掉"—— 除非你提前走开。
+  wumian: {
+    name: '无面剑客', behavior: 'boss', tier: 2,
+    hp: 680, speed: 70, dmg: 22, xp: 260, range: 26, cd: 0.9, windup: 0.45, kb: 0, aggro: 176,
+    size: [16, 20], def: 0.16,
+    pal: { p: '#3A4048', P: '#5A6270', s: '#12161C' },
+    rows: [
+      '................',
+      '.....pppppp.....',
+      '....pPPPPPPp....',
+      '....pPPPPPPp....',
+      '....pPPPPPPp....',
+      '.....pppppp.....',
+      '....pppppppp....',
+      '...pppppppppp...',
+      '..pppPPPPPPppp..',
+      '..pppPssssPppp..',
+      '..pppPssssPppp..',
+      '...ppPPPPPPpp...',
+      '....pppppppp....',
+      '....pp.pp.pp....',
+      '....pp.pp.pp....',
+      '....pp.pp.pp....',
+      '...ppp.pp.ppp...',
+      '...pp..pp..pp...',
+      '..ppp..pp..ppp..',
+      '..pp...pp...pp..',
+    ],
+    rows2: [
+      '................',
+      '.....pppppp.....',
+      '....pPPPPPPp....',
+      '....pPPPPPPp....',
+      '....pPPPPPPp....',
+      '.....pppppp.....',
+      '....pppppppp....',
+      '..pppppppppppp..',
+      '..pppPPPPPPppp..',
+      '..pppPssssPppp..',
+      '..pppPssssPppp..',
+      '...ppPPPPPPpp...',
+      '....pppppppp....',
+      '....pp.pp.pp....',
+      '....pp.pp.pp....',
+      '...ppp.pp.pp....',
+      '...pp..pp.ppp...',
+      '..ppp..pp..pp...',
+      '..pp...pp..ppp..',
+      '..pp...pp...pp..',
+    ],
+    skills: [
+      { name: '拔刀斩', fx: 'slam', cd: 6, windup: 1.0, range: 120, r: 104, dmg: 2.2 },
+      { name: '剑气', fx: 'fan', cd: 3.6, windup: 0.35, range: 260, count: 3, spread: 0.34, speed: 210, dmg: 0.9 },
+      { name: '镜像', fx: 'summon', cd: 11, windup: 0.8, range: 320, kind: 'shadow', count: 2 },
+    ],
+  },
+
   boss: {
     name: '黑风寨主', behavior: 'boss', tier: 2,
     hp: 520, speed: 52, dmg: 14, xp: 180, range: 18, cd: 0.9, windup: 0.5, kb: 0, aggro: 130,
@@ -54308,6 +54584,10 @@ function rerollAffixes(it, rng = Math.random) {
   const pool = AFFIXES.filter(a => a.slots.indexOf(it.kind) >= 0);
   const used = new Set();
   const affixes = [];
+  // 首领专属词缀不参与重铸 —— 它是"从谁身上掉的"唯一凭证，
+  // 重铸一次就没了，等于把首杀的意义抹掉。
+  const keep = (it.affixes || []).filter(a => a.uniq);
+  for (const a of keep) used.add(a.id);
   for (let i = 0; i < t.affixes; i++) {
     const cand = pool.filter(a => !used.has(a.id));
     if (!cand.length) break;
@@ -54317,8 +54597,8 @@ function rerollAffixes(it, rng = Math.random) {
     used.add(pick.id);
     affixes.push({ id: pick.id, name: pick.name, stat: pick.stat, val: affixRollVal(pick, it.r, it.ilvl, rng) });
   }
-  it.affixes = affixes;
-  if (it.r >= 2 && affixes.length) {
+  it.affixes = keep.concat(affixes);
+  if (!it.unique && it.r >= 2 && affixes.length) {
     const base = it.name.indexOf('·') >= 0 ? it.name.split('·').pop() : it.name.replace(/^传世·/, '');
     it.name = (it.r >= 4 ? '传世·' : '') + affixes[0].name + '·' + base;
   }
@@ -55262,9 +55542,14 @@ const { C } = __M.pixel;
 const DT = 16;   // 与世界 TILE 一致
 
 const DG = {
-  tx0: 4, ty0: 39, tw: 30, th: 28,
-  x0: 4 * 16, y0: 39 * 16,
-  x1: 34 * 16, y1: 67 * 16,
+  // 大地图扩容后古洞挪到正北方：格 57..87 × 7..35。
+  // 西侧紧贴「西荒石窟」（x 4..52），中间只隔一道岩壁 —— 第三幕"矿道打通古洞侧壁"
+  // 那条线在地图上是真的成立的，不是文本硬编的。
+  tx0: 57, ty0: 10, tw: 30, th: 28,
+  get x0() { return this.tx0 * 16; },
+  get y0() { return this.ty0 * 16; },
+  get x1() { return (this.tx0 + this.tw) * 16; },
+  get y1() { return (this.ty0 + this.th) * 16; },
 };
 
 const DGT = { FLOOR: 6, WALL: 7, DOOR: 8 };
@@ -55599,7 +55884,7 @@ const { Clock, PHASES, PHASE_EDGES } = __M.time;
 const { VILLAGE, inVillage, villageArt, BUILDINGS, PROPS, NPCS, VILLAGERS, SHOPS } = __M.village;
 const { DG, DGT, DG_FLOORS, FLOOR_MOBS, inDungeon, genFloor, paintDungeon, dungeonArt } = __M.dungeon;
 
-const LW = 480, LH = 270, TILE = 16, MAPW = 96, MAPH = 72;
+const LW = 480, LH = 270, TILE = 16, MAPW = 144, MAPH = 104;
 const SAVE_KEY = 'xiaoyao-save-v5';
 const LEGACY_KEYS = ['xiaoyao-save-v4', 'xiaoyao-save-v3', 'xiaoyao-save-v2', 'xiaoyao-ch1-v1'];
 // 当前画布缩放倍率（resize 里算），面板自适应要用
@@ -55757,6 +56042,119 @@ const SHRINE = spriteCanvas([
   '...prppggpprp...', '...prppggpprp...', '...pppppppppp...', '..ssssssssssss..'], { i: C.ink1, p: C.paper3, r: C.red2, g: C.gold2, s: C.ink3 });
 const STONE = spriteCanvas([
   '...kkkkkk...', '..kkkkkkkk..', '..kKKKKKKk..', '..kKxxxxKk..', '..kKKKKKKk..', '..kkkkkkkk..', '...kkkkkk...'], { k: C.ink3, K: C.ink2, x: C.paper1 });
+// 坟头：矮碑 + 一抔土。碑面留一块浅色"刻字"，远看就知道是坟不是石头
+const GRAVE = spriteCanvas([
+  '...kkkkkk...',
+  '..kKKKKKKk..',
+  '.kKKKKKKKKk.',
+  '.kKKxxKKKKk.',
+  '.kKxxxxKKKk.',
+  '.kKKxxKKKKk.',
+  '.kKKKKKKKKk.',
+  '.kKKKKKKKKk.',
+  'kkkkkkkkkkkk',
+  '.bbbbbbbbbb.',
+], { k: C.ink3, K: C.ink2, x: C.paper1, b: '#3E3A30' });
+// 枯树：只有枝、没有叶。乱葬岗靠它和竹海拉开气质
+const DEADTREE = spriteCanvas([
+  '................',
+  '.......k........',
+  '....k..k..k.....',
+  '.....k.k.k......',
+  '..k...kkk...k...',
+  '...k..kkk..k....',
+  '....k.kbk.k.....',
+  '.....kkbkk......',
+  '......kbk.......',
+  '......kbk.......',
+  '......kbk.......',
+  '.....kkbkk......',
+  '......kbk.......',
+  '......kbk.......',
+  '......kbk.......',
+  '.....kkbkk......',
+  '....kk...kk.....',
+  '...kk.....kk....',
+], { k: '#57503F', b: C.ink2 });
+// 石笋：石窟里的立石，比地面上的 stone 更尖、更高
+const STALAG = spriteCanvas([
+  '....kk....',
+  '...kKKk...',
+  '...kKKk...',
+  '..kKKKKk..',
+  '..kKKKKk..',
+  '..kKKxKk..',
+  '.kKKKKKKk.',
+  '.kKKKKKKk.',
+  '.kKKxKKKk.',
+  'kKKKKKKKKk',
+  'kKKKKKKKKk',
+  'kkkkkkkkkk',
+  '.kkkkkkkk.',
+  '..kkkkkk..',
+], { k: C.ink3, K: C.ink2, x: C.paper1 });
+// 火把：矿道里唯一的光。夜里也是个小灯
+const TORCH = spriteCanvas([
+  '...y....',
+  '..yry...',
+  '..rrr...',
+  '...r....',
+  '...s....',
+  '...s....',
+  '...s....',
+  '...s....',
+  '...s....',
+  '...s....',
+  '...s....',
+  '..sss...',
+], { y: C.gold2, r: C.red2, s: C.ink3 });
+// 营地道具三件套：篝火 / 帐篷 / 哨塔。
+// 它们不是装饰 —— 玩家从远处一眼认出"那片地方有人住"，才知道该绕路还是该打。
+const CAMPFIRE = spriteCanvas([
+  '............',
+  '.....yy.....',
+  '....yrry....',
+  '...yrrrry...',
+  '...rrrrrr...',
+  '....rrrr....',
+  '.....rr.....',
+  '..k..k..k...',
+  '...k.k.k....',
+], { y: C.gold2, r: C.red2, k: C.ink3 });
+const TENT = spriteCanvas([
+  '................',
+  '.......kk.......',
+  '......kKKk......',
+  '.....kKKKKk.....',
+  '....kKKKKKKk....',
+  '...kKKKKKKKKk...',
+  '..kKKKKKKKKKKk..',
+  '.kKKKKKKKKKKKKk.',
+  'kKKKKKKKKKKKKKKk',
+  'kkkkkkkkkkkkkkkk',
+  '.k............k.',
+  '................',
+], { k: C.ink2, K: '#9C8663' });
+const TOWER = spriteCanvas([
+  '..kkkkkkkkkk..',
+  '.kKKKKKKKKKKk.',
+  '.kKKKKKKKKKKk.',
+  '..kkkkkkkkkk..',
+  '...k......k...',
+  '...k......k...',
+  '..k........k..',
+  '..k........k..',
+  '...k......k...',
+  '...k......k...',
+  '..k........k..',
+  '..k........k..',
+  '...k......k...',
+  '...k......k...',
+  '..k........k..',
+  '..k........k..',
+  '...k......k...',
+  '..kkk....kkk..',
+], { k: C.ink2, K: '#8A7551' });
 
 // ============ three.js ============
 const glCanvas = document.getElementById('gl');
@@ -55801,33 +56199,225 @@ const rng = mulberry32(20261109);
 const tiles = new Uint8Array(MAPW * MAPH);
 const solid = new Uint8Array(MAPW * MAPH);
 const objects = [];
-const SPAWN = { x: 48 * TILE + 8, y: 64 * TILE + 8 };
-const ALTAR = { x: 48 * TILE + 8, y: 9 * TILE + 8 };
-const TREANT_POS = { x: 15 * TILE + 8, y: 34 * TILE + 8 };
+// ============ 大地图：村庄整体位移 ============
+// 96×72 → 144×104 之后，青云集要留在东南角（新图往北、往西各扩了一圈）。
+// village.js 里 NPC / 建筑 / 摆件 / 店铺全是村庄内的绝对像素坐标，一个个改容易漏，
+// 这里统一加一个位移 —— 改一处就全动了，而且不用碰 village.js 里的任何美术数据。
+const V_SHIFT_X = 1120, V_SHIFT_Y = 512;
+VILLAGE.x0 += V_SHIFT_X; VILLAGE.x1 += V_SHIFT_X;
+VILLAGE.y0 += V_SHIFT_Y; VILLAGE.y1 += V_SHIFT_Y;
+VILLAGE.gateX += V_SHIFT_X;
+for (const arr of [BUILDINGS, NPCS, VILLAGERS, PROPS]) {
+  for (const o of arr) { if (o.x !== undefined) o.x += V_SHIFT_X; if (o.y !== undefined) o.y += V_SHIFT_Y; }
+}
+for (const id in SHOPS) { SHOPS[id].x += V_SHIFT_X; SHOPS[id].y += V_SHIFT_Y; }
+
+const SPAWN = { x: 1896, y: 1544 };
+const ALTAR = { x: 1152, y: 96 };
+const TREANT_POS = { x: 2000, y: 320 };
+
+// —— 四区地貌（tile 坐标，左闭右开）——
+// 竹海西南、石窟西北、乱葬岗东北，青云集东南，古洞正北。
+const REGION = {
+  cave:   { x0: 4,  y0: 6,  x1: 52,  y1: 46,  label: '西荒石窟' },
+  grave:  { x0: 92, y0: 4,  x1: 140, y1: 44,  label: '北坡乱葬岗' },
+  bamboo: { x0: 4,  y0: 52, x1: 62,  y1: 100, label: '南岭竹海' },
+};
+
+// ============ 营地 ============
+// 一个营地要"像个活的地方"，光有一堆怪站着是不够的。这里给每个营地配四样东西：
+//   patrol  巡逻路线。数字 = 自动生成 n 点环形；数组 = 手写 [dx,dy] 格偏移
+//   alert   吹哨半径。一只发现你，这个半径内的同伴一起上（"哨营"就该比"巢穴"吹得远）
+//   night   夜里额外冒出来的东西。它们是"夜行"的，白天在睡觉 —— 可以摸过去偷袭
+//   lord    营地首领。精英，打死额外掉宝，是这批怪的"为什么聚在这"
 const camps = [
-  { x: 21 * TILE, y: 19 * TILE, tier: 1, types: ['zhiren', 'zhiren', 'fox', 'snake'], name: '山贼哨营' },
-  { x: 73 * TILE, y: 17 * TILE, tier: 1, types: ['zhiren', 'ghost', 'fukui'], name: '黑风前哨' },
-  { x: 37 * TILE, y: 35 * TILE, tier: 1, types: ['fox', 'snake', 'shanxiao'], name: '妖兽巢穴' },
-  { x: 77 * TILE, y: 45 * TILE, tier: 2, types: ['brute', 'shadow', 'shigan'], name: '演武场' },
-  // 乱葬岗原本在 (23,54)，正好压在青云古洞的山体上 —— 挪到西坡高处
-  { x: 24 * TILE, y: 30 * TILE, tier: 1, types: ['crow', 'fukui', 'yinhun'], name: '乱葬岗' },
-  { x: 68 * TILE, y: 63 * TILE, tier: 2, types: ['shanxiao', 'brute', 'yinhun', 'crow'], name: '黑风寨外营' },
+  // —— 青云集周边：山贼，有纪律，吹哨传得远 ——
+  { x: 96 * TILE, y: 96 * TILE, tier: 1, name: '山贼哨营',
+    types: ['zhiren', 'zhiren', 'fox', 'snake'], night: ['ghost'],
+    alert: 165, patrol: [[-3, 2], [2, 3], [4, -1], [1, -3], [-3, -1]] },
+  { x: 78 * TILE, y: 92 * TILE, tier: 1, name: '黑风前哨',
+    types: ['zhiren', 'ghost', 'fukui'], night: ['ghost', 'fukui'],
+    alert: 205, patrol: 4 },
+  { x: 90 * TILE, y: 74 * TILE, tier: 2, name: '演武场',
+    types: ['brute', 'shadow', 'shigan'], night: ['shadow'],
+    alert: 125, patrol: 3, lord: { type: 'brute', name: '教头' } },
+  // —— 南岭竹海：野兽的地盘，食物链在这里最明显 ——
+  { x: 30 * TILE, y: 58 * TILE, tier: 1, name: '妖兽巢穴',
+    types: ['fox', 'snake', 'shanxiao'], alert: 105, patrol: 5 },
+  { x: 16 * TILE, y: 70 * TILE, tier: 1, name: '猎户棚',
+    types: ['shanxiao', 'fox', 'snake'], alert: 90, patrol: 3 },
+  { x: 46 * TILE, y: 86 * TILE, tier: 2, name: '蛇窟',
+    types: ['snake', 'snake', 'brute'], night: ['snake'],
+    alert: 140, patrol: 4, lord: { type: 'shigan', name: '蛇母' } },
+  { x: 56 * TILE, y: 96 * TILE, tier: 2, name: '机关工坊',
+    types: ['shigan', 'brute', 'shadow'], alert: 130, patrol: 4 },
+  // —— 西荒石窟：矿道里，视线短，靠火把 ——
+  { x: 12 * TILE, y: 20 * TILE, tier: 1, name: '矿口哨卡',
+    types: ['zhiren', 'brute', 'ghost'], night: ['ghost'], alert: 180, patrol: 4 },
+  { x: 36 * TILE, y: 34 * TILE, tier: 2, name: '塌方矿道',
+    types: ['shigan', 'shadow', 'brute'], alert: 120, patrol: 3 },
+  { x: 22 * TILE, y: 10 * TILE, tier: 2, name: '火鸦巢',
+    types: ['crow', 'crow', 'fukui'], night: ['crow'], alert: 110, patrol: 4 },
+  // —— 北坡乱葬岗：白天只剩几个守墓的，夜里全是阴物 ——
+  { x: 100 * TILE, y: 12 * TILE, tier: 1, name: '乱葬岗',
+    types: ['crow', 'fukui', 'yinhun'], night: ['yinhun', 'yinhun', 'fukui'],
+    alert: 120, patrol: 5 },
+  { x: 122 * TILE, y: 32 * TILE, tier: 2, name: '守墓人小屋',
+    types: ['yinhun', 'shadow', 'yinhun'], night: ['yinhun'],
+    alert: 150, patrol: 3, lord: { type: 'yinhun', name: '守墓人' } },
 ];
+
+// 夜行的：白天在睡，可以摸过去偷袭
+const NOCTURNAL = { ghost: 1, fukui: 1, yinhun: 1, shadow: 1, crow: 1 };
+// 昼行的：子时在睡，夜里营地就变成阴物的地盘
+const DIURNAL = { zhiren: 1, brute: 1, shigan: 1, fox: 1, snake: 1, shanxiao: 1 };
+// 食物链：谁追谁。做成"追与逃"而不是真的互相残杀 ——
+// 真打起来营地会被自己吃空，玩家回来只看到一地尸体，反而更没生气。
+const PREY_OF = { shanxiao: ['fox', 'snake'], brute: ['fox', 'snake'], treant: [] };
+
+// ============ 首领巢穴 ============
+// 首领不放进营地：营地里塞一只 500 血的家伙，玩家连清小怪的余地都没有。
+// 单独给一块空场，四周留出跑位空间，进门就能看出"这里不一样"。
+// 无面剑客不在这张表里 —— 它是古洞第三层岩魈倒下后才出现的。
+const dens = [
+  { type: 'qingshe', x: 18 * TILE, y: 88 * TILE, name: '青鳞潭', r: 3 },
+  { type: 'kuilei',  x: 54 * TILE, y: 76 * TILE, name: '废弃机坊', r: 3 },
+  { type: 'shimu',   x: 9 * TILE,  y: 34 * TILE, name: '石母洞', r: 3 },
+  { type: 'huoya',   x: 40 * TILE, y: 20 * TILE, name: '火鸦绝壁', r: 3 },
+];
+// 巢穴的空场：把半径内的实心块清掉，再把底材换成踩秃的土。
+// 不做这一步的话，青鳞蟒会刷在岩层里 —— 它血厚，卡住之后玩家只能隔着石头打。
+function carveDen(d) {
+  const cx = (d.x / TILE) | 0, cy = (d.y / TILE) | 0;
+  for (let y = cy - d.r; y <= cy + d.r; y++) for (let x = cx - d.r; x <= cx + d.r; x++) {
+    if (x < 3 || y < 3 || x >= MAPW - 3 || y >= MAPH - 3) continue;
+    const dd = Math.hypot(x - cx, y - cy);
+    if (dd > d.r + 0.4) continue;
+    const i = y * MAPW + x;
+    if (tiles[i] === 4) continue;
+    if (inDungeon(x * TILE + 8, y * TILE + 8, 10)) continue;
+    solid[i] = 0;
+    if (dd < d.r - 0.6) tiles[i] = 2;
+  }
+}
+
 for (let y = 0; y < MAPH; y++) for (let x = 0; x < MAPW; x++) {
   const i = y * MAPW + x;
   tiles[i] = rng() < 0.22 ? 1 : 0;
   if (x < 2 || y < 2 || x >= MAPW - 2 || y >= MAPH - 2) { tiles[i] = 4; solid[i] = 1; }
 }
-for (let p = 0; p < 90; p++) {
+// 荒地斑块与野花：数量按面积比放大（96×72 → 144×104 约 2.17 倍），
+// 照旧数量撒的话大图会稀得像没画完。
+for (let p = 0; p < 195; p++) {
   const cx = 3 + (rng() * (MAPW - 6)) | 0, cy = 3 + (rng() * (MAPH - 6)) | 0, r = 1 + (rng() * 2) | 0;
   for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
     if (x > 2 && y > 2 && x < MAPW - 3 && y < MAPH - 3 && (x - cx) ** 2 + (y - cy) ** 2 <= r * r) tiles[y * MAPW + x] = 2;
   }
 }
-for (let f = 0; f < 320; f++) {
+for (let f = 0; f < 700; f++) {
   const x = 3 + (rng() * (MAPW - 6)) | 0, y = 3 + (rng() * (MAPH - 6)) | 0;
   if (tiles[y * MAPW + x] === 0) tiles[y * MAPW + x] = 3;
 }
+
+// ============ 四区地貌 ============
+// 用一条抖动过的矩形边把整块地刷成该区底材。不做噪声地形 ——
+// 玩家看小地图要能一眼分出"这片是竹林、那片是坟地"，噪声会把它们糊成一团。
+function regionFloor(r, id) {
+  for (let y = r.y0; y < r.y1; y++) for (let x = r.x0; x < r.x1; x++) {
+    const i = y * MAPW + x;
+    if (tiles[i] === 4) continue;
+    const n = Math.sin(x * 0.17 + y * 0.11) * 3.1 + Math.sin(y * 0.29 - x * 0.06) * 2.2;
+    if (x < r.x0 + 4 + n || x > r.x1 - 4 - n) continue;
+    if (y < r.y0 + 4 + n || y > r.y1 - 4 - n) continue;
+    tiles[i] = id;
+  }
+}
+regionFloor(REGION.bamboo, 6);
+regionFloor(REGION.cave, 7);
+regionFloor(REGION.grave, 8);
+
+// 石窟的岩层：整片实心会变成迷宫，只撒几十块小岩体，通路靠后面的路去打通
+for (let c = 0; c < 46; c++) {
+  const cx = REGION.cave.x0 + 5 + (rng() * (REGION.cave.x1 - REGION.cave.x0 - 10)) | 0;
+  const cy = REGION.cave.y0 + 5 + (rng() * (REGION.cave.y1 - REGION.cave.y0 - 10)) | 0;
+  const r = 1 + (rng() * 2) | 0;
+  for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
+    if ((x - cx) ** 2 + (y - cy) ** 2 > r * r) continue;
+    if (x < 3 || y < 3 || x >= MAPW - 3 || y >= MAPH - 3) continue;
+    // 营地 / 巢穴所在的地面不能被岩层吃掉，否则刷怪会直接卡在石头里
+    if (camps.some(c2 => Math.hypot(x * TILE + 8 - c2.x, y * TILE + 8 - c2.y) < 66)) continue;
+    if (dens.some(d2 => Math.hypot(x * TILE + 8 - d2.x, y * TILE + 8 - d2.y) < d2.r * TILE + 24)) continue;
+    solid[y * MAPW + x] = 1;
+  }
+}
+
+// 竹海的溪涧：从北缘蜿蜒到南缘。水是实心的，只在三处架竹桥 ——
+// 桥不铺满整条溪，玩家得自己找过河的地方，竹海才有点"迷"的意思。
+let wx = 38;
+for (let y = REGION.bamboo.y0 + 6; y < REGION.bamboo.y1 - 4; y++) {
+  wx += Math.round(Math.sin(y * 0.23) * 1.1);
+  if (wx < REGION.bamboo.x0 + 7) wx = REGION.bamboo.x0 + 7;
+  if (wx > REGION.bamboo.x1 - 11) wx = REGION.bamboo.x1 - 11;
+  for (let k = 0; k < 3; k++) {
+    const i = y * MAPW + (wx + k);
+    if (tiles[i] === 4) continue;
+    tiles[i] = 10; solid[i] = 1;
+  }
+}
+for (const by of [62, 76, 90]) {
+  for (let x = 0; x < MAPW; x++) {
+    if (tiles[by * MAPW + x] !== 10) continue;
+    for (const yy of [by, by + 1]) {
+      const i = yy * MAPW + x;
+      if (tiles[i] === 10) { tiles[i] = 9; solid[i] = 0; }
+    }
+  }
+}
+
+// 首领空场：放在溪涧之后 —— 溪水是实心的，巢穴正落在水上就会变成"打不到的 Boss"。
+for (const d of dens) carveDen(d);
+
+// 路网。先在 tile 空间里走，主方向多走、次方向偶尔拐 ——
+// 这样出来的是"人踩出来的路"，不是尺子画出来的 45° 斜线。
+function carveRoad(tx0, ty0, tx1, ty1, halfW) {
+  let x = tx0, y = ty0, guard = 0;
+  while ((x !== tx1 || y !== ty1) && guard++ < 8000) {
+    const dx = Math.sign(tx1 - x), dy = Math.sign(ty1 - y);
+    if (Math.abs(tx1 - x) >= Math.abs(ty1 - y)) {
+      if (rng() < 0.82 || !dy) x += dx; else y += dy;
+    } else {
+      if (rng() < 0.82 || !dx) y += dy; else x += dx;
+    }
+    for (let oy = -halfW; oy <= halfW; oy++) for (let ox = -halfW; ox <= halfW; ox++) {
+      const px = x + ox, py = y + oy;
+      if (px < 2 || py < 2 || px >= MAPW - 2 || py >= MAPH - 2) continue;
+      if (inDungeon(px * TILE + 8, py * TILE + 8, 10)) continue;
+      const i = py * MAPW + px;
+      if (tiles[i] === 4) continue;
+      tiles[i] = 2; solid[i] = 0;
+    }
+  }
+}
+const HUB = { x: 84, y: 60 };
+carveRoad(119, 91, HUB.x, HUB.y, 1);   // 村口 → 三岔口
+carveRoad(119, 91, 96, 96, 1);         // 村口 → 山贼哨营
+carveRoad(90, 74, 119, 91, 1);         // 演武场 → 村口
+carveRoad(HUB.x, HUB.y, 100, 12, 1);   // 三岔口 → 乱葬岗
+carveRoad(HUB.x, HUB.y, 72, 40, 1);    // 三岔口 → 古洞前
+carveRoad(72, 40, 12, 20, 1);          // 古洞前 → 石窟矿口
+carveRoad(HUB.x, HUB.y, 30, 58, 1);    // 三岔口 → 竹海
+carveRoad(30, 58, 46, 86, 1);          // 竹海 → 蛇窟
+carveRoad(46, 86, 56, 96, 1);          // 蛇窟 → 机关工坊
+carveRoad(30, 58, 16, 70, 1);          // 竹海 → 猎户棚
+carveRoad(100, 12, 122, 32, 1);        // 乱葬岗 → 守墓人小屋
+carveRoad(12, 20, 22, 10, 1);          // 矿口 → 火鸦巢
+carveRoad(12, 20, 36, 34, 1);          // 矿口 → 塌方矿道
+// 首领巢穴各接一条小路：能看见路，就知道那头有东西
+carveRoad(16, 70, 18, 88, 1);          // 猎户棚 → 青鳞潭
+carveRoad(84, 60, 54, 76, 1);          // 三岔口 → 废弃机坊
+carveRoad(12, 20, 9, 34, 1);           // 矿口 → 石母洞
+carveRoad(22, 10, 40, 20, 1);          // 火鸦巢 → 火鸦绝壁
+
 // —— 青云集：先把村址从野地里"清"出来 ——
 // 顺序很关键：必须在 nearClear / 物件生成之前改地块，否则竹子会照常长在街上。
 // 5 号地块 = 石板街（新加的类型，不参与土路的"啃碎边缘"那一步）。
@@ -55845,8 +56435,9 @@ for (let x = V_T0; x < V_T1; x++) {
   solid[(V_TY1 - 1) * MAPW + x] = 1;
 }
 // 官道：从牌坊一路铺到土地庙，玩家一出门就能看见村口
+const GATE_T = (VILLAGE.gateX / TILE) | 0;
 for (let y = V_TY1; y <= ((SPAWN.y / TILE) | 0) + 1; y++) {
-  for (let x = 46; x <= 51; x++) {
+  for (let x = GATE_T - 2; x <= GATE_T + 2; x++) {
     const i = y * MAPW + x;
     if (i > 0 && i < tiles.length) { tiles[i] = 2; solid[i] = 0; }
   }
@@ -55860,7 +56451,25 @@ function nearClear(x, y) {
   if (Math.hypot(x - TREANT_POS.x, y - TREANT_POS.y) < 60) return true;
   return camps.some(c => Math.hypot(x - c.x, y - c.y) < 58);
 }
-for (let c = 0; c < 150; c++) {
+// —— 分区撒风物 ——
+// 每个区只在自己那片地上长东西：竹海是密竹、石窟是石笋与火把、乱葬岗是坟与枯树。
+// 通用草地仍然撒桃树和竹子，保留"野地"的底子。
+function scatterOn(id, r, count, kinds) {
+  const w = r.x1 - r.x0, h = r.y1 - r.y0;
+  for (let c = 0; c < count; c++) {
+    const x = r.x0 + 2 + ((rng() * (w - 4)) | 0), y = r.y0 + 2 + ((rng() * (h - 4)) | 0);
+    const i = y * MAPW + x;
+    if (tiles[i] !== id || solid[i]) continue;
+    if (nearClear(x * TILE + 8, y * TILE + 16)) continue;
+    solid[i] = 1;
+    objects.push({ kind: kinds[(rng() * kinds.length) | 0], x: x * TILE + 8, y: y * TILE + 16 });
+  }
+}
+scatterOn(6, REGION.bamboo, 420, ['bamboo', 'bamboo', 'bamboo', 'peach']);
+scatterOn(7, REGION.cave, 150, ['stalag', 'stalag', 'stone', 'torch']);
+scatterOn(8, REGION.grave, 260, ['grave', 'grave', 'grave', 'deadtree']);
+
+for (let c = 0; c < 300; c++) {
   const cx = 4 + (rng() * (MAPW - 8)) | 0, cy = 4 + (rng() * (MAPH - 8)) | 0;
   const n = 2 + (rng() * 4) | 0;
   for (let k = 0; k < n; k++) {
@@ -55871,16 +56480,31 @@ for (let c = 0; c < 150; c++) {
     }
   }
 }
-for (let r = 0; r < 40; r++) {
+for (let r = 0; r < 87; r++) {
   const x = 3 + (rng() * (MAPW - 6)) | 0, y = 3 + (rng() * (MAPH - 6)) | 0, i = y * MAPW + x;
   if (tiles[i] < 2 && !solid[i] && !nearClear(x * TILE + 8, y * TILE + 12)) {
     solid[i] = 1; objects.push({ kind: 'lantern', x: x * TILE + 8, y: y * TILE + 12 });
   }
 }
-for (let r = 0; r < 18; r++) {
+for (let r = 0; r < 39; r++) {
   const x = 4 + (rng() * (MAPW - 8)) | 0, y = 4 + (rng() * (MAPH - 8)) | 0, i = y * MAPW + x;
   if (tiles[i] < 2 && !solid[i] && !nearClear(x * TILE + 8, y * TILE + 12)) {
     solid[i] = 1; objects.push({ kind: 'stone', x: x * TILE + 8, y: y * TILE + 10 });
+  }
+}
+// —— 营地道具 ——
+// 篝火在正中（怪围着它站），帐篷与哨塔放在外圈。位置如果已经被树占了就跳过，
+// 宁可少一件道具，也不要把帐篷插进竹林里。
+for (const c of camps) {
+  const spots = [['campfire', 0, 0], ['tent', -58, 34], ['tower', 64, -30]];
+  for (const sp of spots) {
+    const kind = sp[0], px = c.x + sp[1], py = c.y + sp[2];
+    const tx = (px / TILE) | 0, ty = (py / TILE) | 0;
+    if (tx < 3 || ty < 3 || tx >= MAPW - 3 || ty >= MAPH - 3) continue;
+    const i = ty * MAPW + tx;
+    if (tiles[i] === 4 || solid[i]) continue;
+    solid[i] = 1;
+    objects.push({ kind, x: px, y: py });
   }
 }
 objects.push({ kind: 'shrine', x: SPAWN.x, y: SPAWN.y - 16 });
@@ -55891,7 +56515,9 @@ const groundC = document.createElement('canvas');
 groundC.width = MAPW * TILE; groundC.height = MAPH * TILE;
 {
   const g = groundC.getContext('2d');
-  const cols = [C.jade1, C.jade1, C.paper1, C.jade1, C.ink1, '#8A8268'];
+  // 索引：0/1 草 2 土路 3 野花 4 边界 5 石板街 6 竹海 7 石窟 8 荒土 9 竹桥 10 溪水
+  const cols = [C.jade1, C.jade1, C.paper1, C.jade1, C.ink1, '#8A8268',
+    '#2A5B54', '#3B3C3D', '#59523F', '#6B4B2E', '#1D4A56'];
   for (let y = 0; y < MAPH; y++) for (let x = 0; x < MAPW; x++) {
     const t = tiles[y * MAPW + x];
     // 草地做低频色块：同一片草不必一个颜色，远看有起伏
@@ -55946,9 +56572,65 @@ groundC.width = MAPW * TILE; groundC.height = MAPH * TILE;
       }
     }
     if (t === 4) { g.fillStyle = C.jade2; g.fillRect(x * TILE + 2, y * TILE + 4 + ((rng() * 8) | 0), 6, 1); g.fillRect(x * TILE + 9, y * TILE + 2 + ((rng() * 10) | 0), 5, 1); }
+    if (t === 6) {
+      // 竹海：湿、暗、落叶多。不铺满，留 40% 干净的底，否则整片像地毯
+      const bx = x * TILE, by = y * TILE;
+      g.fillStyle = '#35706A';
+      for (let k = 0; k < 4; k++) g.fillRect(bx + ((rng() * 15) | 0), by + ((rng() * 15) | 0), 1, 2);
+      if (rng() < 0.45) {
+        g.fillStyle = '#8A7A3C';
+        g.fillRect(bx + ((rng() * 13) | 0), by + ((rng() * 13) | 0), 2, 1);
+      }
+      if (rng() < 0.18) {
+        g.fillStyle = '#244F49';
+        g.fillRect(bx + ((rng() * 12) | 0), by + ((rng() * 12) | 0), 4, 3);
+      }
+    }
+    if (t === 7) {
+      // 石窟：碎岩 + 一道裂缝。岩面比外面冷，靠裂纹读"石头"而不是靠颜色
+      const bx = x * TILE, by = y * TILE;
+      g.fillStyle = '#4A4B4C';
+      for (let k = 0; k < 3; k++) g.fillRect(bx + ((rng() * 14) | 0), by + ((rng() * 14) | 0), 2, 1);
+      if (rng() < 0.3) {
+        g.fillStyle = '#2A2B2C';
+        let cx2 = bx + ((rng() * 10) | 0) + 3, cy2 = by + ((rng() * 6) | 0) + 2;
+        for (let k = 0; k < 5; k++) { g.fillRect(cx2, cy2, 1, 1); cx2 += ((rng() * 3) | 0) - 1; cy2 += 1; }
+      }
+    }
+    if (t === 8) {
+      // 乱葬岗：干裂的土 + 零星白骨。刻意压低饱和，和竹海的湿绿正好相反
+      const bx = x * TILE, by = y * TILE;
+      g.fillStyle = '#6A6250';
+      for (let k = 0; k < 3; k++) g.fillRect(bx + ((rng() * 14) | 0), by + ((rng() * 14) | 0), 3, 1);
+      if (rng() < 0.12) {
+        g.fillStyle = C.paper1;
+        g.fillRect(bx + ((rng() * 13) | 0), by + ((rng() * 13) | 0), 2, 1);
+      }
+      if (rng() < 0.06) {
+        g.fillStyle = '#3A3529';
+        g.fillRect(bx + ((rng() * 10) | 0), by + ((rng() * 12) | 0), 1, 4);
+      }
+    }
+    if (t === 9) {
+      // 竹桥：横向铺板，两端各留一条暗边当"桥沿"
+      const bx = x * TILE, by = y * TILE;
+      g.fillStyle = '#7C5836';
+      for (let k = 0; k < 2; k++) g.fillRect(bx, by + k * 8 + 1, 16, 6);
+      g.fillStyle = '#4E3620';
+      g.fillRect(bx, by, 16, 1); g.fillRect(bx, by + 15, 16, 1);
+      g.fillRect(bx + 7, by, 1, 16);
+    }
+    if (t === 10) {
+      // 溪水：两道横纹 + 一处反光。不做动画，静态水面在俯视角下也够用
+      const bx = x * TILE, by = y * TILE;
+      g.fillStyle = '#2C6A78';
+      g.fillRect(bx, by + 3, 16, 1);
+      g.fillRect(bx + 2, by + 10, 12, 1);
+      if (rng() < 0.22) { g.fillStyle = '#5FA6AE'; g.fillRect(bx + ((rng() * 11) | 0), by + ((rng() * 14) | 0), 3, 1); }
+    }
   }
   // 大尺度明暗斑块：打散"一格一格"的棋盘感
-  for (let i = 0; i < 420; i++) {
+  for (let i = 0; i < 900; i++) {
     const cx = rng() * groundC.width, cy = rng() * groundC.height;
     const r = 40 + rng() * 110;
     g.save();
@@ -55993,6 +56675,15 @@ groundC.width = MAPW * TILE; groundC.height = MAPH * TILE;
     g.globalAlpha = 0.5;
     g.strokeStyle = C.ink2; g.lineWidth = 1;
     g.beginPath(); g.arc(c.x, c.y, 11, 0, 6.28); g.stroke();
+    // 篝火余烬：一圈焦土 + 中间一层暖色。
+    // 光靠帐篷和哨塔，"这是个营地"要靠玩家凑近了才看得出；
+    // 地上这块暖色从半个屏幕外就能认出来，而且夜里正好和 campfire 的光源对齐。
+    g.globalAlpha = 0.42;
+    g.fillStyle = '#8A6A44';
+    g.beginPath(); g.ellipse(c.x, c.y + 2, 13, 9, 0, 0, 6.28); g.fill();
+    g.globalAlpha = 0.5;
+    g.fillStyle = '#C88A4A';
+    g.beginPath(); g.ellipse(c.x, c.y + 1, 6, 4, 0, 0, 6.28); g.fill();
     g.restore();
   }
   // 土地庙 / 树妖 前的空地也给一点人气
@@ -56006,8 +56697,16 @@ function grassN(x, y) { return Math.sin(x * 0.7 + y * 0.4) + Math.cos(y * 0.55 -
 const ground = quad(tex(groundC), MAPW * TILE, MAPH * TILE);
 ground.position.set(MAPW * TILE / 2, MAPH * TILE / 2, 0);
 ground.renderOrder = 0;
-const objTex = { bamboo: tex(BAMBOO), peach: tex(PEACH), lantern: tex(LANTERN), shrine: tex(SHRINE), stone: tex(STONE) };
-const objSize = { bamboo: [16, 20], peach: [16, 14], lantern: [10, 8], shrine: [16, 8], stone: [12, 7] };
+const objTex = {
+  bamboo: tex(BAMBOO), peach: tex(PEACH), lantern: tex(LANTERN), shrine: tex(SHRINE), stone: tex(STONE),
+  grave: tex(GRAVE), deadtree: tex(DEADTREE), stalag: tex(STALAG), torch: tex(TORCH),
+  campfire: tex(CAMPFIRE), tent: tex(TENT), tower: tex(TOWER),
+};
+const objSize = {
+  bamboo: [16, 20], peach: [16, 14], lantern: [10, 8], shrine: [16, 8], stone: [12, 7],
+  grave: [12, 10], deadtree: [16, 18], stalag: [10, 14], torch: [8, 12],
+  campfire: [12, 9], tent: [16, 12], tower: [14, 18],
+};
 for (const o of objects) {
   const [w, h] = objSize[o.kind];
   o.mesh = quad(objTex[o.kind], w, h);
@@ -56254,6 +56953,9 @@ function dgBuild(floor, seed) {
   dgFloor = floor;
   dgData = genFloor(seed, floor);
   dgCleared = false;
+  // 换层 / 重排时把上一层的地面危险区收掉 —— 否则一层留下的毒雾会飘到下一层，
+  // 玩家刚落地就掉血，还找不到来源。
+  clearHazards();
   const W = dgData.W, H = dgData.H;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -56343,7 +57045,8 @@ const player = {
   atkBase: 8, dir: 'down', moving: false,
   atkCd: 0, atkT: 0, atkBuf: 0, atkStep: 0, lastAtkT: -9, swing: null, lunge: 0,
   dashT: 0, dashCd: 0, flash: 0, iframe: 0, shield: 0, hurtFlash: 0,
-  poison: 0, poisonT: 0, poisonImmuneT: 0,
+  poison: 0, poisonT: 0, poisonImmuneT: 0, rootT: 0,
+  bossKills: {},
   drunkT: 0, drunk: 0, rested: false,
   inv: [], invMax: 20, equip: { weapon: null, armor: null, necklace: null, artifact: null },
   windCd: 0, skillPts: 0, skillLv: {}, kills: 0,
@@ -56732,6 +57435,21 @@ function spawnEnemy(type, x, y, camp, eliteMod) {
     spd *= eliteMod.spdMul || 1;
   }
   const art = monTex[type] || monTex.zhiren;
+  // 巡逻路线：手写的用 [dx,dy] 格偏移，数字的自动摊一个椭圆环。
+  // 环用 54×42 而不是正圆 —— 正圆一眼就看得出是"程序画的"。
+  let route = null;
+  if (camp && camp.patrol) {
+    if (Array.isArray(camp.patrol)) {
+      route = camp.patrol.map(p => ({ x: camp.x + p[0] * TILE, y: camp.y + p[1] * TILE }));
+    } else {
+      const n = camp.patrol | 0, a0 = (camps.indexOf(camp) + 1) * 0.9;
+      route = [];
+      for (let k = 0; k < n; k++) {
+        const a = k / n * Math.PI * 2 + a0;
+        route.push({ x: camp.x + Math.cos(a) * 54, y: camp.y + Math.sin(a) * 42 });
+      }
+    }
+  }
   const e = {
     type, x, y, hp, maxHp: hp, dmg, def, ls, cd, cdMax: cd, speed: spd,
     flash: 0, aggro: false, wanderT: 0, wx: 0, wy: 0, camp, dead: false,
@@ -56743,6 +57461,14 @@ function spawnEnemy(type, x, y, camp, eliteMod) {
     anim: Math.random() * 2, windup: 0, strike: false, elite: eliteMod || null,
     blinkCd: 1 + Math.random() * 2, spinCd: 6, spinWind: 0, phase2: false, hitJit: 0,
     stagger: 0, kvx: 0, kvy: 0, charge: 0, chx: 0, chy: 0, h: art.size[1],
+    // —— 生态字段 ——
+    route: route, ri: route ? (Math.random() * route.length) | 0 : 0, pauseT: 0,
+    sleep: false, alertT: 0, hunt: null, panicT: 0, huntCd: 0, wakeT: 0,
+    // —— 首领字段 ——
+    // e.boss 是统一标记：血条、免疫击退、掉落档位、小地图标记全看它，
+    // 不再按 type 一个个判断（以前加一个首领要改七八处）。
+    boss: (MONSTERS[type] || {}).behavior === 'boss',
+    skillCds: null, skillGap: 1.2, skill: null, skillT: 0,
   };
   e.mesh = quad(art.frames[0], art.size[0], art.size[1]);
   e.shadow = quad(SHADOW_TEX, art.size[0] * 0.95, art.size[1] * 0.3);
@@ -56763,11 +57489,58 @@ function seedCamps() {
       const a = i / n * Math.PI * 2;
       spawnEnemy(t, c.x + Math.cos(a) * 36, c.y + Math.sin(a) * 36, c);
     }
+    // 夜行的那批一起生成，白天只是"睡着"。
+    // 不做"到点重新刷一批"—— 那会出现打到一半怪凭空消失的情况。
+    if (c.night) {
+      for (let i = 0; i < c.night.length; i++) {
+        const a = i / c.night.length * Math.PI * 2 + 0.7;
+        spawnEnemy(c.night[i], c.x + Math.cos(a) * 62, c.y + Math.sin(a) * 48, c);
+      }
+    }
+    if (c.lord) {
+      const lord = spawnEnemy(c.lord.type, c.x, c.y - 22, c, {
+        name: c.lord.name, hp: 2.4, dmg: 1.3, cd: 0.8, color: C.gold3, lord: true,
+      });
+      if (lord) lord.lord = c.lord.name;
+    }
   }
   spawnEnemy('treant', TREANT_POS.x, TREANT_POS.y, { x: TREANT_POS.x, y: TREANT_POS.y });
+  // 巢穴首领：不进营地，各自独占一块空场。alert 给 0 —— 它们不吹哨，
+  // 也没有同伴可叫，玩家打不过就跑，跑出 190px 它自己会回去。
+  for (const d of dens) {
+    const b = spawnEnemy(d.type, d.x, d.y, { x: d.x, y: d.y, alert: 0 });
+    if (b) {
+      b.combatT = 0;
+      b.ring = quad(tex(RING_C), MONSTERS[d.type].size[0] + 14, MONSTERS[d.type].size[1] + 12);
+      b.ring.material.color.set(C.red2);
+      b.ring.material.opacity = 0.7;
+      b.ring.renderOrder = 990;
+      b.den = d.name;
+    }
+  }
   if (!cleared) spawnEnemy('boss', ALTAR.x, ALTAR.y, ALTAR);
 }
 function msg(txt, color) { messages.push({ txt, color: color || C.paper3, t: 2.4 }); if (messages.length > 3) messages.shift(); }
+// 吹哨：一只发现你，同营地、alert 半径内的同伴一起上。
+// 只传一层 —— 被叫醒的不再继续叫，否则整片野地会连锁反应，玩家永远在打一个营。
+function shout(e) {
+  const c = e.camp;
+  if (!c || !c.alert) return;
+  let n = 0;
+  for (const o of enemies) {
+    if (o === e || o.dead || o.aggro || o.sleep) continue;
+    if (o.camp !== c) continue;
+    if (Math.hypot(o.x - e.x, o.y - e.y) > c.alert) continue;
+    o.aggro = true; o.pauseT = 0; o.hunt = null; o.wakeT = 20;
+    n++;
+  }
+  if (n > 0) {
+    e.alertT = 0.6;
+    burst(e.x, e.y - 16, C.gold2, 7, 34);
+    dmgNum(e.x, e.y - 26, '！', C.gold3, false);
+    AUDIO.play('windup');
+  }
+}
 function dmgNum(x, y, txt, color, big) {
   dmgNums.push({ x, y, txt, color, t: big ? 0.95 : 0.72, max: big ? 0.95 : 0.72, big: !!big, vx: (Math.random() - 0.5) * 14 });
 }
@@ -56825,14 +57598,16 @@ function rollDamage(mul, opt) {
 function hitEnemy(e, info, ang, kb) {
   const s = stats();
   const def = Math.min(0.7, e.def || 0);
-  // 晨雾偷袭：还没察觉你的怪，第一下 ×1.5 —— 卯时是清营地最划算的时候
-  const sneak = clock.isDawn && !e.aggro;
+  // 晨雾偷袭 / 摸睡：还没察觉你的怪，第一下 ×1.5 —— 卯时与深夜清营地最划算
+  const sneak = (clock.isDawn || e.sleep) && !e.aggro;
   const mul = sneak ? dawnStrike() : 1;
   const dmg = Math.max(1, Math.round(info.dmg * mul * (1 - def)));
   e.hp -= dmg;
+  // 打醒：睡着了挨一下必然醒，而且立刻叫人
+  if (e.sleep) { e.sleep = false; e.wakeT = 25; e.aggro = true; shout(e); }
   e.combatT = 4;   // 挨了打就算在交战，首领血条要亮着
   e.flash = 0.16; e.hitJit = 0.2; e.stagger = Math.max(e.stagger, info.crit ? 0.16 : 0.09);
-  const kbm = (e.elite ? 0.55 : 1) * (e.type === 'boss' ? 0.1 : e.type === 'treant' ? 0.25 : 1) * (e.type === 'shigan' ? 0.25 : 1);
+  const kbm = (e.elite ? 0.55 : 1) * (e.boss ? (e.type === 'treant' ? 0.25 : 0.1) : 1) * (e.type === 'shigan' ? 0.25 : 1);
   e.kvx += Math.cos(ang) * kb * kbm * 4;
   e.kvy += Math.sin(ang) * kb * kbm * 4;
   hitstop = Math.max(hitstop, info.crit ? 0.1 : Math.min(0.075, 0.028 + dmg * 0.0006));
@@ -56938,6 +57713,28 @@ function attack() {
     burst(player.x + Math.cos(base) * 18, player.y - 4 + Math.sin(base) * 10, C.gold2, 14, 90);
   }
 }
+// ============ 首领专属掉落 ============
+// 每个首领首杀必掉一件唯一装备：名字写死、词缀里挂一条专属的。
+// 不做随机生成 —— 「从谁身上掉的」要能被记住，随机名字记不住。
+const UNIQUES = {
+  qingshe: { name: '青鳞缚', kind: 'armor',    tag: '缠身', stat: 'hp',       val: 30, note: '气血 +30，被缠时受伤减半' },
+  kuilei:  { name: '机关心', kind: 'artifact', tag: '布陷', stat: 'skillDmg', val: 14, note: '术法 +14%，傀儡陷阱伤害同享' },
+  shimu:   { name: '石母胎', kind: 'armor',    tag: '厚土', stat: 'def',      val: 11, note: '防御 +11，受击时 20% 概率再减半' },
+  huoya:   { name: '火鸦翎', kind: 'necklace', tag: '灼翼', stat: 'critDmg',  val: 36, note: '暴伤 +36，暴击附带灼烧' },
+  wumian:  { name: '无面刃', kind: 'weapon',   tag: '拔刀', stat: 'atk',      val: 24, fam: 'blade', note: '攻击 +24，拔刀斩伤害 +40%' },
+};
+function makeUnique(type, ilvl) {
+  const u = UNIQUES[type];
+  if (!u) return null;
+  const it = makeGear(u.kind, 4, Math.max(6, ilvl), Math.random, u.fam);
+  it.name = u.name;
+  it.unique = true;
+  it.note = u.note;
+  // 专属词缀放最前，重铸时由 items.js 保下来
+  it.affixes.unshift({ id: 'uniq', name: u.tag, stat: u.stat, val: u.val, uniq: true });
+  return it;
+}
+
 function killEnemy(e) {
   e.dead = true; scene.remove(e.mesh); if (e.ring) scene.remove(e.ring); if (e.shadow) scene.remove(e.shadow);
   const m = MONSTERS[e.type];
@@ -56949,8 +57746,20 @@ function killEnemy(e) {
   if (e.elite) burst(e.x, e.y - e.h / 2, e.elite.color, 16, 110);
   AUDIO.play('die');
   dropLoot(e);
+  // 营地首领：多掉一轮。不另做宝箱系统 —— 玩家要的是"这一下值钱"，
+  // 而不是"再去点一个箱子"，多两次掉落读起来一样，还少一个交互。
+  if (e.lord) {
+    msg(e.lord + ' 伏诛 · 营地溃散', C.gold3);
+    addFame(4);
+    for (let i = 0; i < 2; i++) {
+      const dx2 = i ? 18 : -18;
+      addDrop('coin', 40 + ((Math.random() * 40) | 0), e.x + dx2, e.y + 4);
+      const r = Math.max(2, rollRarity(stats().luck + nightLuck(), 2));
+      addDrop('gear', makeGear(i ? 'armor' : 'weapon', r, Math.max(1, player.level + 2)), e.x + dx2, e.y + 10);
+    }
+  }
   // 侠名只用"值得说的事"来加：杀十只野狗不会让人记住你，斩一个寨主会。
-  if (e.type === 'boss' || e.type === 'treant') addFame(8);
+  if (e.boss) addFame(8);
   else if (e.elite) addFame(2);
   while (player.xp >= player.level * 42) {
     player.xp -= player.level * 42; player.level++;
@@ -56965,12 +57774,42 @@ function killEnemy(e) {
     cleared = true; state = 'clear';
     document.getElementById('clear').classList.remove('hidden');
     save();
-  } else if (e.type === 'boss') {
+  } else if (e.type === 'yaowang') {
     // 洞主：不通关，只在洞里兑现（清层 → 开箱）
     msg('洞主伏诛 · 石胎碎了一地', C.gold3);
+    // 石胎碎了，里面那道剑痕才露出来 —— 三幕里最深的一笔。
+    // 无面剑客作为"真正的洞主"在岩魈倒下后接手，玩家没有喘息的机会。
+    const wm = spawnEnemy('wumian', e.x, e.y - 10, { x: e.x, y: e.y });
+    if (wm) {
+      wm.dg = true; wm.aggro = true; wm.combatT = 6;
+      wm.hp = wm.maxHp = Math.round(wm.maxHp * 1.1);
+      wm.ring = quad(tex(RING_C), 34, 38);
+      wm.ring.material.color.set(C.paper1);
+      wm.ring.material.opacity = 0.8;
+      wm.ring.renderOrder = 990;
+      dgMobs.push(wm);   // 不清它，这一层的裂口不会开
+      msg('石胎之中，有人持剑而立', C.paper1);
+      AUDIO.play('boss');
+    }
   } else if (e.type === 'treant') {
     msg('千年树妖伏诛 · 天材地宝现世', C.gold3);
     for (let i = 0; i < 2; i++) addDrop('gear', makeGear(SLOTS[(Math.random() * 4) | 0], 3 + ((Math.random() * 2) | 0), player.level + 2));
+  } else if (e.boss) {
+    // 野外首领：不算通关，只把这一带打服。
+    // 首杀掉唯一装备 —— 这是"打首领"与"打一窝杂兵"唯一无法互相替代的地方。
+    const first = !player.bossKills[e.type];
+    player.bossKills[e.type] = (player.bossKills[e.type] || 0) + 1;
+    const u = UNIQUES[e.type];
+    msg(MONSTERS[e.type].name + ' 伏诛' + (first && u ? ' · 得「' + u.name + '」' : ''), C.gold3);
+    AUDIO.play('rare');
+    if (first) {
+      const it = makeUnique(e.type, player.level + 3);
+      if (it) addDrop('gear', it, e.x, e.y + 8);
+    }
+    for (let i = 0; i < 2; i++) {
+      addDrop('coin', 50 + ((Math.random() * 40) | 0), e.x + (i ? 20 : -20), e.y + 4);
+    }
+    shakeX += 8; shakeY += 8;
   }
 }
 
@@ -57023,7 +57862,7 @@ function rollDropSlot() {
 }
 function dropLoot(e) {
   const luck = stats().luck;
-  const tier = e.type === 'boss' || e.type === 'treant' ? 2 : (e.elite ? 1 : 0);
+  const tier = e.boss || e.type === 'treant' ? 2 : (e.elite ? 1 : 0);
   const ilvl = Math.max(1, player.level + (tier === 2 ? 2 : tier === 1 ? 1 : 0) + ((Math.random() * 2) | 0));
   const coinN = tier === 2 ? 4 : e.elite ? 2 : 1;
   for (let i = 0; i < coinN; i++) {
@@ -57917,6 +58756,7 @@ function save() {
     inv: player.inv, invMax: player.invMax || INV_BASE, equip: player.equip,
     skillPts: player.skillPts, skillLv: player.skillLv, kills: player.kills || 0,
     rested: !!player.rested, fame: player.fame || 0,
+    bossKills: player.bossKills || {},
     clock: clock.serialize(),
   }));
 }
@@ -57976,8 +58816,17 @@ function load() {
     },
     skillPts: s.skillPts || 0, skillLv: s.skillLv || {}, kills: s.kills || 0,
     rested: !!s.rested, fame: s.fame || 0,
+    bossKills: s.bossKills || {},
   });
   invalidateStats();
+  // 地脉变动：96×72 扩到 144×104 之后，旧存档的坐标可能落在岩层里或地图外。
+  // 与其让玩家一进游戏就卡在石头里，不如直接送回青云集门口。
+  if (!isFinite(player.x) || !isFinite(player.y) ||
+      player.x < 16 || player.y < 16 || player.x > MAPW * TILE - 16 || player.y > MAPH * TILE - 16 ||
+      !canStand(player.x, player.y)) {
+    player.x = SPAWN.x; player.y = SPAWN.y;
+    msg('地脉变动，已送回青云集', C.jade3);
+  }
   player.hp = Math.min(player.hp, maxHp());
   player.qi = Math.min(player.qi, maxQi());
   clock.restore(s.clock || { t: 0.40, day: 1 });   // 老档没有时辰字段，给回开局午后
@@ -57992,6 +58841,7 @@ function resetWorld() {
   for (const g of ghosts) scene.remove(g.mesh);
   enemies = []; drops = []; projectiles = []; particles = []; sparks = []; ghosts = [];
   dmgNums = []; messages = []; slashGhosts = []; bolts = [];
+  clearHazards();   // 地面危险区不属于上面任何一类，忘了清就会跨局残留
   seedCamps();
 }
 function startGame(cont) {
@@ -58007,6 +58857,7 @@ function startGame(cont) {
       atkBase: 8, inv: [], invMax: INV_BASE, equip: { weapon: null, armor: null, necklace: null, artifact: null },
       skillPts: 0, skillLv: {}, kills: 0, atkStep: 0, swing: null, shield: 0, poison: 0, poisonT: 0,
       poisonImmuneT: 0, drunkT: 0, drunk: 0, rested: false, fame: 0,
+      rootT: 0, bossKills: {},
     });
     invalidateStats();
   }
@@ -58221,6 +59072,173 @@ function bossSlam(e) {
   if (d < 40) hurtPlayer(e.dmg * 1.2);
 }
 
+// ============ 首领招式引擎 ============
+// 五个新首领不各写一套 if/else，而是共用"招式表（monsters.js 的 skills）+ 效果分派"。
+// 以后加一个首领，只要在 monsters.js 里写 skills，这里一行都不用动。
+//
+// 六种效果覆盖了所有需要：
+//   slam   以自身为圆心的范围重击（断竹横扫 / 灼翼 / 拔刀斩）
+//   zone   在玩家脚下放一片危险区（毒雾 / 陷阱 / 地裂）
+//   rain   在玩家周围撒一片危险区（落石 / 火雨）
+//   summon 召唤小怪（唤傀 / 唤石 / 分身 / 镜像）
+//   bind   定身（缠身）
+//   fan    扇形弹幕（弩箭齐射 / 剑气）
+
+const hazards = [];   // 地面危险区：预警圈 → 引爆 / 持续伤害
+
+function addHazard(x, y, o) {
+  const h = {
+    x, y, r: o.r || 34, delay: o.delay || 0, life: o.life || 0,
+    dmg: o.dmg || 8, tick: o.tick || 0.8,
+    t: 0, hitT: 0, fired: false, didHit: false, dead: false,
+    color: o.color || C.red2,
+  };
+  // 不用精灵贴图：RING_C 是 12px 的点阵，放大到 60px 就散成一圈碎方块，
+  // 玩家读不出"这是范围"。改成在 overlay 上用 arc 画，边缘干净，缩放也随意。
+  hazards.push(h);
+  return h;
+}
+function clearHazards() {
+  hazards.length = 0;
+}
+function updateHazards(dt) {
+  for (let i = hazards.length - 1; i >= 0; i--) {
+    const h = hazards[i];
+    h.t += dt;
+    const inside = () => Math.hypot(player.x - h.x, player.y - h.y) < h.r;
+    if (h.life > 0) {
+      // 持续区（毒雾 / 火海）
+      if (!h.fired) {
+        if (h.t < h.delay) continue;
+        h.fired = true; h.hitT = 0.2;
+        burst(h.x, h.y, h.color, 10, 70);
+      }
+      h.hitT -= dt;
+      if (h.hitT <= 0) { if (inside()) hurtPlayer(h.dmg * 0.55); h.hitT = h.tick; }
+      if (h.t > h.delay + h.life) h.dead = true;
+    } else {
+      // 一次性（落石 / 地裂 / 陷阱）
+      if (!h.fired) {
+        if (h.t < h.delay) continue;
+        h.fired = true;
+        burst(h.x, h.y, h.color, 14, 95);
+        shakeX += 2; shakeY += 2;
+        if (inside()) hurtPlayer(h.dmg);
+      }
+      if (h.t > h.delay + 0.3) h.dead = true;
+    }
+    if (h.dead) hazards.splice(i, 1);
+  }
+}
+
+function execSkill(e, sk) {
+  const dx = player.x - e.x, dy = player.y - e.y, d = Math.hypot(dx, dy) || 1;
+  const base = e.dmg * (sk.dmg || 1);
+  switch (sk.fx) {
+    case 'slam': {
+      shakeX += 6; shakeY += 6;
+      burst(e.x, e.y - 8, C.paper1, 20, 130);
+      burst(e.x, e.y - 8, C.red2, 12, 100);
+      slashGhosts.push({
+        x: e.x, y: e.y - 8, a0: 0, a1: Math.PI * 2,
+        R: (sk.r || 70) * 0.9, colors: [C.paper1, C.red2], t: 0.3, max: 0.3,
+      });
+      if (Math.hypot(player.x - e.x, player.y - e.y) < (sk.r || 70)) hurtPlayer(base);
+      break;
+    }
+    case 'zone': {
+      const n = sk.count || 1;
+      for (let i = 0; i < n; i++) {
+        const a = n === 1 ? 0 : (i / n) * Math.PI * 2 + Math.random();
+        const rr = n === 1 ? 0 : 42 + Math.random() * 26;
+        addHazard(player.x + Math.cos(a) * rr, player.y + Math.sin(a) * rr, {
+          r: sk.r, delay: sk.delay || 0.8, life: sk.life || 0, dmg: base, color: sk.color,
+        });
+      }
+      break;
+    }
+    case 'rain': {
+      const n = sk.count || 3;
+      for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, rr = Math.random() * (sk.spreadR || 92);
+        addHazard(player.x + Math.cos(a) * rr, player.y + Math.sin(a) * rr, {
+          r: sk.r, delay: (sk.delay || 0.8) + i * 0.09, dmg: base, color: sk.color,
+        });
+      }
+      break;
+    }
+    case 'summon': {
+      const n = sk.count || 1;
+      for (let i = 0; i < n; i++) {
+        const a = i / n * Math.PI * 2 + Math.random();
+        const ex = e.x + Math.cos(a) * 38, ey = e.y + Math.sin(a) * 28;
+        if (!canStand(ex, ey)) continue;
+        const s = spawnEnemy(sk.kind, ex, ey, e.camp || { x: e.x, y: e.y });
+        if (s) { s.aggro = true; s.combatT = 4; burst(ex, ey - 6, C.pur2, 9, 60); }
+      }
+      break;
+    }
+    case 'bind': {
+      if (d < (sk.range || 120)) {
+        player.rootT = Math.max(player.rootT, sk.bind || 1.2);
+        hurtPlayer(base);
+        msg('被缠住了！', C.jade3);
+      }
+      break;
+    }
+    case 'fan': {
+      const n = sk.count || 3, spread = sk.spread || 0.4;
+      const a0 = Math.atan2(dy, dx);
+      for (let i = 0; i < n; i++) {
+        const a = a0 + (i - (n - 1) / 2) * spread;
+        const mesh = quad(FIRE_TEX, 7, 7);
+        projectiles.push({
+          x: e.x, y: e.y - 6, vx: Math.cos(a) * (sk.speed || 150), vy: Math.sin(a) * (sk.speed || 150),
+          t: 2.2, mesh, dmg: base,
+        });
+      }
+      break;
+    }
+  }
+}
+
+function runBossSkills(e, dt, d) {
+  const m = MONSTERS[e.type];
+  if (!m.skills) return false;
+  if (e.skill) {
+    // 抬手：站在原地震一下，给玩家反应时间。手抬完了才真正放。
+    e.skillT -= dt;
+    if (e.skillT <= 0) { execSkill(e, e.skill); e.skill = null; }
+    return true;
+  }
+  // 每个招式各自计冷却。
+  // 以前只有一个全局 skillCd，而挑选逻辑是"遍历到第一个条件成立的"——
+  // 结果青鳞蟒永远只放排在最前面的缠身，毒雾与横扫一次都见不到。
+  // 分开计时 + 在可放的里面随机挑，招式表才真的是一张表。
+  if (!e.skillCds) e.skillCds = m.skills.map(() => 1.6 + Math.random() * 1.6);
+  for (let i = 0; i < e.skillCds.length; i++) if (e.skillCds[i] > 0) e.skillCds[i] -= dt;
+  if (e.skillGap > 0) { e.skillGap -= dt; return false; }
+
+  const hpR = e.hp / e.maxHp;
+  const ready = [];
+  for (let i = 0; i < m.skills.length; i++) {
+    const sk = m.skills[i];
+    if (e.skillCds[i] > 0) continue;
+    if (sk.range && d > sk.range) continue;
+    if (sk.hpBelow && hpR > sk.hpBelow) continue;
+    ready.push(i);
+  }
+  if (!ready.length) return false;
+  const i = ready[(Math.random() * ready.length) | 0];
+  const sk = m.skills[i];
+  e.skill = sk; e.skillT = sk.windup;
+  e.skillCds[i] = sk.cd * (0.85 + Math.random() * 0.3);
+  e.skillGap = 0.7 + Math.random() * 0.5;
+  msg(m.name + ' · ' + sk.name, C.red3);
+  AUDIO.play('boss');
+  return true;
+}
+
 // ============ 主循环 ============
 // 挥砍推进 + 收招留刀光
 function tickSwing(dt) {
@@ -58343,6 +59361,8 @@ function update(dt) {
     stickAmp = Math.min(1, Math.hypot(mx, my) * 1.5); // 轻推慢走，推到底全速
   }
   player.moving = !!(mx || my);
+  // 缠身：被青鳞蟒缠住时动不了。只锁位移，不锁出招 —— 全锁会让人以为卡了。
+  if (player.rootT > 0) { player.rootT -= dt; player.moving = false; mx = 0; my = 0; }
   if (player.moving) {
     if (Math.abs(mx) >= Math.abs(my)) player.dir = mx > 0 ? 'right' : 'left';
     else player.dir = my > 0 ? 'down' : 'up';
@@ -58423,6 +59443,9 @@ function update(dt) {
     }
   }
 
+  // 地面危险区：预警圈要先于敌人结算，玩家才能"看着圈躲"，而不是挨完打才看见圈
+  updateHazards(dt);
+
   // ---- 敌手 ----
   const playerSafe = inVillage(player.x, player.y, 6);
   const eFree = (x, y) => canStand(x, y) && !inVillage(x, y, 0);
@@ -58442,22 +59465,44 @@ function update(dt) {
     const dx = player.x - e.x, dy = player.y - e.y, d = Math.hypot(dx, dy);
     const campPos = e.camp || { x: SPAWN.x, y: SPAWN.y };
     const dc = Math.hypot(e.x - campPos.x, e.y - campPos.y);
+    // —— 作息 ——
+    // 夜行的正午睡（一天里只有"白昼"这一档算白天），昼行的子时睡。
+    // 睡着的不动、不主动咬人，但打它算偷袭（×1.5）—— 玩家可以专门挑时辰摸营。
+    const phaseId = clock.phase.id;
+    let asleep = NOCTURNAL[e.type] ? (phaseId === 'wu')
+      : (DIURNAL[e.type] ? (phaseId === 'zi') : false);
+    // 被打醒之后要清醒一阵子 —— 否则下一帧按时辰又睡回去，
+    // 玩家会看到"刚砍了一刀，它倒头又睡了"，偷袭变成无限连。
+    if (e.wakeT > 0) { e.wakeT -= dt; asleep = false; }
+    if (asleep !== e.sleep) {
+      e.sleep = asleep;
+      if (!asleep) e.pauseT = 0.3 + Math.random() * 0.5;
+    }
     // 青云集是安全区：踏进城墙便不再被盯上，追到墙根的也会散去
     if (playerSafe) e.aggro = false;
-    else if (d < m.aggro) e.aggro = true;
+    else if (!e.sleep && d < m.aggro && !e.aggro) { e.aggro = true; shout(e); }
+    // 追丢了就回营：以前只有"离营地 190px"一个条件，被吹哨叫醒的怪会永远挂着 aggro，
+    // 玩家跑出半张地图它还站在原地待机，等他一回来立刻又扑上来。
+    if (!e.dg && d > 200) e.aggro = false;
     if (dc > 190 && !e.dg) e.aggro = false;   // 洞里的怪没有后方可退
     // 万一有东西已经落在村里（老存档／瞬移残留），送回它的营地
     if (inVillage(e.x, e.y, 0)) {
       burst(e.x, e.y - 6, C.pur2, 12, 80);
       e.x = campPos.x; e.y = campPos.y; e.aggro = false;
     }
-    if (e.stagger > 0) {
-      // 受击僵直：不移动不出手
-      e.mesh.material.map = monTex[e.type].frames[0];
+    if (e.stagger > 0 || e.sleep) {
+      // 受击僵直 / 睡着的：不移动不出手，但呼吸还是要有的
+      e.mesh.material.map = monTex[e.type].frames[e.sleep ? 0 : 0];
       e.mesh.position.set(e.x, e.y - e.h / 2, 0);
+      if (e.sleep) e.mesh.material.color.setRGB(0.62, 0.66, 0.78);
+      else e.mesh.material.color.setRGB(1, 1, 1);
       continue;
     }
     let vx = 0, vy = 0, speed = m.speed * (e.aggro ? 1 : 0.45);
+
+    // 首领招式：施法中不走位，但血条、贴图、影子照常更新。
+    // 洞里也要能放招 —— 无面剑客是第三层真正的洞主，只会平砍就白瞎了。
+    const casting = (e.boss && e.aggro) ? runBossSkills(e, dt, d) : false;
 
     // 首领阶段
     if (e.type === 'boss') {
@@ -58477,16 +59522,58 @@ function update(dt) {
       else if (e.spinCd <= 0 && d < 80) { e.spinCd = 5; e.spinWind = 0.9; msg('树妖 · 根须绞杀', C.jade3); }
     }
 
-    if (!e.aggro) {
-      e.wanderT -= dt;
-      if (e.wanderT <= 0) {
-        e.wanderT = 1 + Math.random() * 1.5;
-        const a = Math.random() * Math.PI * 2;
-        e.wx = Math.cos(a); e.wy = Math.sin(a);
-        if (Math.random() < 0.4) { e.wx = 0; e.wy = 0; }
+    if (casting) { vx = 0; vy = 0; }
+    else if (!e.aggro) {
+      if (e.huntCd > 0) e.huntCd -= dt;
+      // —— 食物链 ——
+      // 掠食者去追猎物，猎物掉头就跑。只在"没在打架"的时候演这一段 ——
+      // 玩家一插手，它们就各自归位。做成追逃而不是真的互相残杀：
+      // 真打起来营地会被自己吃空，玩家回来只看到一地尸体，反而更没生气。
+      let acted = false;
+      if (PREY_OF[e.type]) {
+        if (e.hunt && (e.hunt.dead || Math.hypot(e.hunt.x - e.x, e.hunt.y - e.y) > 130)) e.hunt = null;
+        if (!e.hunt && e.huntCd <= 0) {
+          for (const o of enemies) {
+            if (o.dead || o === e || o.aggro || o.sleep) continue;
+            if (PREY_OF[e.type].indexOf(o.type) < 0) continue;
+            if (Math.hypot(o.x - e.x, o.y - e.y) > 88) continue;
+            e.hunt = o; o.panicT = 1.8; e.huntCd = 7 + Math.random() * 5;
+            break;
+          }
+        }
+        if (e.hunt) {
+          const hx = e.hunt.x - e.x, hy = e.hunt.y - e.y, hd = Math.hypot(hx, hy) || 1;
+          if (hd > 15) { vx = hx / hd * 0.8; vy = hy / hd * 0.8; }
+          acted = true;
+        }
       }
-      vx = e.wx * 0.4; vy = e.wy * 0.4;
-      if (dc > 52) { vx = (campPos.x - e.x) / dc; vy = (campPos.y - e.y) / dc; }
+      if (!acted && e.panicT > 0) {
+        e.panicT -= dt;
+        const ax = e.x - campPos.x, ay = e.y - campPos.y, ad = Math.hypot(ax, ay) || 1;
+        vx = ax / ad * 0.95; vy = ay / ad * 0.95;
+        acted = true;
+      }
+      if (!acted) {
+        if (e.route && e.route.length) {
+          // 巡逻：走到点 → 停一下 → 下一个点。停的那一下很关键，
+          // 不停的话整队怪会像传送带一样匀速绕圈，一眼假。
+          const tgt = e.route[e.ri];
+          const rx = tgt.x - e.x, ry = tgt.y - e.y, rd = Math.hypot(rx, ry) || 1;
+          if (rd < 9) { e.ri = (e.ri + 1) % e.route.length; e.pauseT = 0.5 + Math.random() * 1.5; }
+          if (e.pauseT > 0) e.pauseT -= dt;
+          else { vx = rx / rd * 0.62; vy = ry / rd * 0.62; }
+        } else {
+          e.wanderT -= dt;
+          if (e.wanderT <= 0) {
+            e.wanderT = 1 + Math.random() * 1.5;
+            const a = Math.random() * Math.PI * 2;
+            e.wx = Math.cos(a); e.wy = Math.sin(a);
+            if (Math.random() < 0.4) { e.wx = 0; e.wy = 0; }
+          }
+          vx = e.wx * 0.4; vy = e.wy * 0.4;
+        }
+        if (dc > 130) { vx = (campPos.x - e.x) / dc; vy = (campPos.y - e.y) / dc; }
+      }
     } else if (m.behavior === 'archer') {
       if (e.windup > 0) {
         e.windup -= dt;
@@ -58905,7 +59992,7 @@ function drawSkillBar() {
 }
 
 function drawMinimap() {
-  const mw = 78, mh = 58, mx = LW - mw - 8, my = 8;
+  const mw = 80, mh = 58, mx = LW - mw - 8, my = 8;
   octx.fillStyle = 'rgba(18,22,31,0.72)';
   octx.fillRect(mx - 2, my - 2, mw + 4, mh + 4);
   octx.strokeStyle = C.gold1; octx.lineWidth = 1;
@@ -58944,13 +60031,13 @@ function drawMinimap() {
   }
   // 营地
   for (const c of camps) {
-    octx.fillStyle = c.tier === 2 ? C.red2 : C.paper1;
+    octx.fillStyle = c.lord ? C.gold3 : (c.tier === 2 ? C.red2 : C.paper1);
     octx.fillRect(mx + c.x * sx - 1, my + c.y * sy - 1, 3, 3);
   }
   // 精英 / 首领
   for (const e of enemies) {
     if (e.dead) continue;
-    if (e.type === 'boss' || e.type === 'treant') {
+    if (e.boss) {
       octx.fillStyle = C.red3;
       octx.fillRect(mx + e.x * sx - 2, my + e.y * sy - 2, 4, 4);
     } else if (e.elite) {
@@ -59109,6 +60196,31 @@ function drawOverlay(camX, camY) {
     octx.globalAlpha = 1;
   }
 
+  // 地面危险区：外圈往内收 = 快炸了，收完那一下就是伤害落点。
+  // 持续区（毒雾）引爆后留一团脉动的色块，玩家能看出"这块地还在伤人"。
+  for (const h of hazards) {
+    const x = Math.round(h.x - camX), y = Math.round(h.y - camY);
+    const k = h.fired ? 1 : Math.min(1, h.t / Math.max(0.01, h.delay));
+    octx.save();
+    if (!h.fired) {
+      const rr = h.r * (1 + (1 - k) * 0.45);
+      octx.globalAlpha = 0.30 + k * 0.55;
+      octx.strokeStyle = h.color; octx.lineWidth = 2;
+      octx.beginPath(); octx.arc(x, y, rr, 0, Math.PI * 2); octx.stroke();
+      octx.globalAlpha = 0.10 + k * 0.20;
+      octx.fillStyle = h.color;
+      octx.beginPath(); octx.arc(x, y, h.r, 0, Math.PI * 2); octx.fill();
+    } else {
+      octx.globalAlpha = h.life > 0 ? 0.30 + Math.sin(time * 9) * 0.10 : 0.55;
+      octx.fillStyle = h.color;
+      octx.beginPath(); octx.arc(x, y, h.r, 0, Math.PI * 2); octx.fill();
+      octx.globalAlpha = 0.85;
+      octx.strokeStyle = h.color; octx.lineWidth = 2;
+      octx.beginPath(); octx.arc(x, y, h.r, 0, Math.PI * 2); octx.stroke();
+    }
+    octx.restore();
+  }
+
   // 仙品 / 传世兵器掉在地上：品阶辉光 + 脚下光环，远远就能认出来
   for (const d of drops) {
     if (d.taken || !d.epic || !d.mesh) continue;
@@ -59232,7 +60344,7 @@ function drawOverlay(camX, camY) {
   // 原来写的是 aggro || hp<maxHp，两个条件都只会变真、不会变假，
   // 于是 boss 一被惊动血条就永远挂在屏幕顶上了。
   const boss = enemies.find(e => {
-    if (e.dead || (e.type !== 'boss' && e.type !== 'treant')) return false;
+    if (e.dead || !e.boss) return false;
     if (e.combatT > 0) return true;
     if (!e.aggro) return false;
     return Math.hypot(player.x - e.x, player.y - e.y) < 240;
@@ -59690,7 +60802,11 @@ window.__game = {
   debugArc(a0, a1, R) {
     drawArcFx(octx, 240, 135, a0 === undefined ? -2 : a0, a1 === undefined ? 1 : a1, R || 40, [C.red3, C.red2], 1, 1.5);
   },
-  MAPW, MAPH, SPAWN, camps, WEAPONS, MONSTERS, NODES, SLOTS,
+  MAPW, MAPH, SPAWN, camps, dens, WEAPONS, MONSTERS, NODES, SLOTS,
+  get solid() { return solid; }, REGION,
+  get objects() { return objects; },
+  get hazards() { return hazards; }, addHazard, clearHazards, UNIQUES, makeUnique,
+  killEnemy, execSkill, runBossSkills,
   spawnEnemy, save, load, startGame, attack, castQi, castWu, castThunder, dash, windStep,
   salvageBulk, equipItem, unequip, usePotion, renderInv, renderForge, forgeOpen, forgeClose,
   renderSkills, learnNode, toggleSkills,
