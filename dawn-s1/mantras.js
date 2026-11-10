@@ -106,7 +106,10 @@ export const MAIN = {
     mech: 'qiOnHurt', params: { pct: 0.20 },
     desc: '受击时，所受伤害的 20% 转为真气。',
     flaw: '要挨打才回气。血线压不住的时候，回的那点气救不了命。',
-    from: { kind: 'fame', n: 40, text: '侠名达 40' },
+    // P7 从"侠名达 40"改挂剧情节点。理由：侠名是刷出来的，剧情是走过来 ——
+    // 一条讲"把力卸掉"的心法，该由"看见守墓人怎么站着挨打"这种事教给你，
+    // 而不是由一条进度条发给你。40 点名望也正好卡在没人会刻意去刷的位置。
+    from: { kind: 'flag', id: 'mark1', text: '在坟地拿到无字木牌' },
   },
   wuchang: {
     id: 'wuchang', kind: 'main', name: '无常', school: '机',

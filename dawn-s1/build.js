@@ -32,6 +32,7 @@ const ORDER = [
   { id: 'arts', file: 'arts.js' },
   { id: 'mantras', file: 'mantras.js' },   // ← 新增
   { id: 'quests', file: 'quests.js' },
+  { id: 'story', file: 'story.js' },       // ← 纯数据层，不 import 任何东西
   { id: 'time', file: 'time.js' },
   { id: 'village', file: 'village.js' },
   { id: 'dungeon', file: 'dungeon.js' },

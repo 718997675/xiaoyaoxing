@@ -123,7 +123,12 @@ async function waitFor(fn, timeout, label) {
     // 传 PAGE=逍遥行.html 才能验打包产物 —— 单文件版走的是另一套代码路径
     // （build.js 把 ESM 拆成 __M.xxx），module 版绿了不代表它能跑。
     const page = process.env.PAGE || 'index.html';
-    const url = REMOTE || ('http://127.0.0.1:' + PORT + '/' + encodeURIComponent(page) + '?' + (process.env.QS || 'dev=1'));
+    // story=0 默认带上：剧情会自动播，播的时候世界暂停，而 8 个回归套件
+    // 都靠 tick() 手动步进世界 —— 不关掉的话失败现象会非常难查。
+    // 要验剧情就把 STORY=1 传进来（tools/story.js 就是这么跑的）。
+    const storyOff = process.env.STORY ? '' : '&story=0';
+    const url = REMOTE || ('http://127.0.0.1:' + PORT + '/' + encodeURIComponent(page) +
+      '?' + (process.env.QS || 'dev=1') + storyOff);
     await api.send('Page.navigate', { url });
     await sleep(500);
     await waitFor(() => api.send('Runtime.evaluate', { expression: '!!window.__game', returnByValue: true })

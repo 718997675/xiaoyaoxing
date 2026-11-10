@@ -327,10 +327,21 @@
         g.player.bossKills[b] = 1;
       }
       g.player.kills = 300; g.player.fame = 40; g.player.level = 18;
+      g.player.flags = {};
       g.checkMantraUnlocks();
-      T('8 个首领 + 3 个里程碑能解锁全部 12 条主心法',
+      // P7 起「卸力」不再挂侠名 40，改挂剧情标记 mark1（坟地拿到无字木牌）。
+      // 所以"只刷数值"确实拿不到全部 12 条 —— 这是有意的：
+      // 一条讲"把力卸掉"的心法，该由走过来的一件事教给你，而不是一条进度条。
+      T('只刷数值 + 侠名 40 时差一条（卸力已改挂剧情）',
+        g.MAIN_IDS.filter(id => !g.player.mantrasOwned[id]).join(',') === 'xieli',
+        g.MAIN_IDS.filter(id => !g.player.mantrasOwned[id]).join(',') || '（全解锁了）');
+      g.setFlag('mark1', 1);
+      g.checkMantraUnlocks();
+      T('补上剧情标记后 12 条主心法全解锁',
         g.MAIN_IDS.every(id => g.player.mantrasOwned[id]),
         Object.keys(g.player.mantrasOwned).length + '/12');
+      // 把标记清掉，别让它漏到后面几节 —— 状态泄漏会让失败现象跑到很远的地方
+      g.setFlag('mark1', false);
       // 首领那一格真的从 killEnemy 走一遍
       clean(20);
       g.player.mantrasOwned = {};

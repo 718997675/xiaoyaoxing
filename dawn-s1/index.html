@@ -289,6 +289,40 @@
   #quest .qRelic div.on{background:#E2E9C8;border-color:#2F6E6A}
   #quest .qRelic b{display:block;font:bold 12px SimSun;color:#12161F}
   #quest .qRelic span{font:9px SimSun;color:#8A8268}
+
+  /* ---------- 剧情覆盖层 ---------- */
+  /* 满屏压暗 + 居中一张纸条。刻意不用 .panel —— panel 是"弹出来的工具"，
+     剧情是"你正站着读的一段字"，两者分量不一样，长得一样就分不出来。 */
+  #story{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+    background:rgba(8,10,16,.72);cursor:pointer}
+  #story .sBox{width:min(560px,84vw);background:#E8DFC8;border:3px solid #000;
+    box-shadow:0 0 0 2px #8A6520,0 8px 40px rgba(0,0,0,.6);
+    padding:16px 22px 10px;text-align:left}
+  #story .sPage{font:9px SimSun;letter-spacing:4px;color:#8A6520;margin-bottom:6px}
+  #story .sName{font:bold 13px SimSun;letter-spacing:3px;color:#C8453B;margin-bottom:4px}
+  /* 固定两行高：字数一变盒子就跳，读的人眼睛要重新找位置。
+     两句以上会自己撑开，但短句之间不会来回抖。 */
+  #story .sLine{font:14px/1.95 SimSun;color:#12161F;min-height:3.9em}
+  #story .sDots{display:flex;gap:4px;margin-top:6px}
+  #story .sDots i{width:5px;height:5px;background:#B6AB8F;display:block}
+  #story .sDots i.on{background:#C8453B}
+  #story .sHint{font:9px SimSun;color:#8A8268;letter-spacing:1px;text-align:right;margin-top:2px}
+
+  /* ---------- 旧事（剧情日志） ---------- */
+  #storyPage{text-align:left;max-height:62vh;overflow:auto}
+  #storyPage .sSec{font:bold 11px SimSun;letter-spacing:3px;color:#8A6520;
+    border-bottom:1px solid #8A8268;margin:10px 0 6px;padding-bottom:3px}
+  #storyPage .sItem{background:#E8DFC8;border:1px solid #8A6520;padding:5px 8px;margin-bottom:5px}
+  #storyPage .sItem.locked{background:#DCD2B8;border-style:dashed;opacity:.55}
+  #storyPage .sItem .t{font:bold 12px SimSun;color:#12161F;letter-spacing:1px}
+  #storyPage .sItem .q{font:10px/1.55 SimSun;color:#4A5568;margin-top:2px}
+  #storyPage .sItem .lock{font:9px SimSun;color:#8A8268;margin-top:2px}
+  /* 三条线索横排：形状本身就在说"一共三条"，比写一行"1/3"有效 */
+  #storyPage .sClue{display:flex;gap:6px;margin-bottom:4px}
+  #storyPage .sClue div{flex:1;background:#DCD2B8;border:1px solid #8A8268;padding:5px 4px;text-align:center}
+  #storyPage .sClue div.on{background:#E2E9C8;border-color:#2F6E6A}
+  #storyPage .sClue b{display:block;font:bold 11px SimSun;color:#12161F}
+  #storyPage .sClue span{font:9px SimSun;color:#8A8268}
 </style>
 </head>
 <body>
@@ -322,6 +356,7 @@
     <div class="tabs">
       <button data-invpage="bag" class="on">行囊</button>
       <button data-invpage="mantra">心法</button>
+      <button data-invpage="story">旧事</button>
     </div>
     <div class="top" id="invStats"></div>
     <div class="body" id="invPage">
@@ -340,6 +375,7 @@
       </div>
     </div>
     <div id="mantraPage" class="hidden"></div>
+    <div id="storyPage" class="hidden"></div>
   </div>
 
   <div id="forge" class="panel hidden">
@@ -361,6 +397,19 @@
     <div class="say" id="talkLine"></div>
     <div class="opts" id="talkOpts"></div>
     <button id="btnTalkClose">作别（Esc）</button>
+  </div>
+
+  <!-- 剧情覆盖层：没有按钮、没有选项。整块可点，点一下翻一句。
+       刻意不复用 #talk —— 对话面板有"接任务 / 打听 / 作别"三个按钮，
+       剧情一旦有了按钮，玩家就会去点，而剧情最值钱的是"读完这一句"。 -->
+  <div id="story" class="hidden">
+    <div class="sBox">
+      <div class="sPage" id="storyAct"></div>
+      <div class="sName hidden" id="storyName"></div>
+      <div class="sLine" id="storyLine"></div>
+      <div class="sDots" id="storyDots"></div>
+      <div class="sHint">点击 / 空格 · 继续</div>
+    </div>
   </div>
 
   <div id="skills" class="panel hidden">

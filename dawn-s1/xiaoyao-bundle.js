@@ -55441,7 +55441,10 @@ const MAIN = {
     mech: 'qiOnHurt', params: { pct: 0.20 },
     desc: '受击时，所受伤害的 20% 转为真气。',
     flaw: '要挨打才回气。血线压不住的时候，回的那点气救不了命。',
-    from: { kind: 'fame', n: 40, text: '侠名达 40' },
+    // P7 从"侠名达 40"改挂剧情节点。理由：侠名是刷出来的，剧情是走过来 ——
+    // 一条讲"把力卸掉"的心法，该由"看见守墓人怎么站着挨打"这种事教给你，
+    // 而不是由一条进度条发给你。40 点名望也正好卡在没人会刻意去刷的位置。
+    from: { kind: 'flag', id: 'mark1', text: '在坟地拿到无字木牌' },
   },
   wuchang: {
     id: 'wuchang', kind: 'main', name: '无常', school: '机',
@@ -55763,6 +55766,508 @@ function questsOfGiver(npcId) {
 }
 
 return { QUEST_ITEMS, RELICS_TRIPLE, QUESTS, QUEST_IDS, MAIN_ORDER, questById, objDone, objText, tripleReady, tripleMissing, relicName, questsOfGiver };
+})();
+
+/* ==================== story.js ==================== */
+__M.story = (function () {
+// story.js · 剧情数据层
+// 纯数据 + 纯函数，无 DOM / 无 three.js 依赖，可单测。
+//
+// 为什么单独一个模块：
+// 剧情要引用地图坐标、NPC、怪物、信物、时辰 —— 和 quests.js 一样是**跨系统**的。
+// 塞进 village.js 会让 village 知道怪物，塞进 game.js 会让运行时被文案淹没。
+// 只被 game.js 单向引用，谁都不脏。
+//
+// ---------- 触发器只有六种 ----------
+//   boot   开局第一次（序章专用：玩家一睁眼就在土地庙里，没有"走进去"这回事）
+//   enter  走进某个地标（POI 圆形范围）
+//   kill   击杀某类怪 / 某个首领
+//   item   持有某件信物
+//   time   到某个时辰（可叠加前置 flag）
+//   triple 三物齐（阴土 + 竹心 + 石髓）
+//
+// 为什么不做 talk 触发器：
+// 对话触发的剧情会和"接任务 / 复命"抢同一个点击位 —— 玩家点一下，要么接任务
+// 要么播剧情，永远猜不到是哪个。剧情统一走"条件满足就自动播"，
+// 对话里只放任务与打听。**一个点击位只做一件事。**
+//
+// ---------- 节点结构 ----------
+// {
+//   id, act, title,
+//   trigger: { type, ... },
+//   need: ['flag'],         // 全部满足才播（可省）
+//   minFame: n,             // 侠名门槛（可省）
+//   lines: [{ who, name, text }],   // who=null 旁白 / 'narrator' 旁白 / NPC id
+//   onEnd: { flag, clue, fame, msg },
+// }
+//
+// 已读记录在 player.readLog（存进存档）。once 默认 true —— 剧情节点播一次就该过去，
+// 能反复播的"节点"其实是系统提示，不该放在这张表里。
+
+// ============ 地标 ============
+// 坐标一律用世界像素（一格 16px），和 quests.js 的 reach / camps / dens 同一套。
+// r 是触发半径：宁可给大一点，玩家不该为了"踩准某个点"来回蹭。
+const POI = {
+  temple:     { x: 1896, y: 1544, r: 60,  name: '土地庙' },
+  village:    { x: 1900, y: 1330, r: 150, name: '青云集' },
+  seal:       { x: 1152, y: 640,  r: 90,  name: '封碑' },
+  graveEdge:  { x: 1600, y: 192,  r: 160, name: '北坡乱葬岗' },
+  graveHut:   { x: 1952, y: 512,  r: 90,  name: '守墓人小屋' },
+  bambooEdge: { x: 700,  y: 900,  r: 130, name: '南岭竹海' },
+  hunterHut:  { x: 256,  y: 1120, r: 90,  name: '猎户棚' },
+  qinglin:    { x: 288,  y: 1408, r: 110, name: '青鳞潭' },
+  workshop:   { x: 864,  y: 1216, r: 100, name: '废弃机坊' },
+  caveMouth:  { x: 192,  y: 320,  r: 120, name: '矿口' },
+  collapse:   { x: 576,  y: 544,  r: 110, name: '塌方矿道' },
+  shimu:      { x: 144,  y: 544,  r: 110, name: '石母洞' },
+  huoya:      { x: 640,  y: 320,  r: 110, name: '火鸦绝壁' },
+};
+
+// ============ 幕 ============
+// 幕只用来分组与排序，不参与任何判定 —— 判定一律看节点自己的 trigger。
+const ACTS = [
+  { id: 'prologue', name: '序章 · 破庙',       place: '青云集' },
+  { id: 'act1',     name: '第一幕 · 北坡',     place: '北坡乱葬岗' },
+  { id: 'act2',     name: '第二幕 · 竹海',     place: '南岭竹海' },
+  { id: 'act3',     name: '第三幕 · 石窟',     place: '西荒石窟' },
+  { id: 'final',    name: '终章 · 古洞',       place: '青云古洞' },
+];
+
+// ============ 剧情节点 ============
+// 语气约定：句子短，能不说就不说。这个世界的 NPC 不会为主角解释自己。
+const STORY = {
+  // ---------------- 序章（3）----------------
+  s_pro_wake: {
+    id: 's_pro_wake', act: 'prologue', title: '香灰还是温的',
+    trigger: { type: 'boot' },
+    lines: [
+      { who: null, text: '……' },
+      { who: 'narrator', text: '你在一座破庙里醒来。香灰还是温的。' },
+      { who: 'narrator', text: '身上的伤结了痂，痂下面还是热的。你不记得怎么来的。' },
+      { who: 'narrator', text: '手里的刀还在。刀鞘上有三道刻纹，磨得快平了 —— 那是你自己磨的。' },
+      { who: 'narrator', text: '供桌上立着一块碑，碑上的字被人凿掉了。凿痕是新的。' },
+      { who: 'narrator', text: '庙外有风。风里有人走动的声音，不急，也不躲。' },
+      { who: null, text: '（往南是青云集。按 E 与人说话。）' },
+    ],
+    onEnd: { flag: 'woke' },
+  },
+  s_pro_liu: {
+    id: 's_pro_liu', act: 'prologue', title: '命真硬',
+    trigger: { type: 'enter', at: 'village' },
+    need: ['woke'],
+    lines: [
+      { who: 'inn', text: '醒了？命真硬。' },
+      { who: 'narrator', text: '她没问你叫什么。' },
+      { who: 'inn', text: '庙里那摊血，我拿草木灰盖了三回。' },
+      { who: 'inn', text: '你这身伤，不像山贼打的。' },
+      { who: 'narrator', text: '灶上的水开了。她背过身去下面，没再说话。' },
+      { who: 'inn', text: '住下吧。房钱先记着，等你砍得动东西了再说。' },
+      { who: 'narrator', text: '楼上最里那间，窗对着北。她说那间空着，一直空着。' },
+    ],
+    onEnd: { flag: 'met_liu', fame: 1 },
+  },
+  s_pro_mark: {
+    id: 's_pro_mark', act: 'prologue', title: '墙上的记号',
+    trigger: { type: 'time', phase: 'zi' },
+    need: ['met_liu'],
+    lines: [
+      { who: 'narrator', text: '子时。村口墙上有个记号，白灰画的，像半截剑。' },
+      { who: 'narrator', text: '你回头看了一眼来路，再转回来时，记号淡了一半。' },
+      { who: 'narrator', text: '街上没有人。更夫的灯笼在巷子那头，晃了一下就不见了。' },
+      { who: null, text: '（第二天再去看，墙上什么也没有。灰是新的。）' },
+    ],
+    onEnd: { flag: 'saw_mark' },
+  },
+
+  // ---------------- 三物线索（7）----------------
+  // 线索系统的设计：三件东西不是"顺路打怪掉的"，每拿一件，木牌上就多一道纹，
+  // 多出来的那道纹指出下一件在哪。玩家不需要看任务列表也知道该往哪走。
+  s_clue_dig: {
+    id: 's_clue_dig', act: 'act1', title: '他们挖的不是陪葬',
+    trigger: { type: 'enter', at: 'graveEdge' },
+    lines: [
+      { who: 'narrator', text: '坟地里的土是新翻的。' },
+      { who: 'narrator', text: '几十个坑，挖到棺木就停手。坑边的土堆得整整齐齐 —— 他们不是来偷陪葬的。' },
+      { who: 'narrator', text: '有个山贼直起腰，往坑底看了一会儿，又低头接着挖。' },
+      { who: 'narrator', text: '他挖得很慢。像是在挖什么会动的东西。' },
+      { who: null, text: '（挖的是坟底三尺的土。）' },
+    ],
+    onEnd: { flag: 'saw_dig', clue: 'dig' },
+  },
+  s_clue_hut: {
+    id: 's_clue_hut', act: 'act1', title: '碑，别碰',
+    trigger: { type: 'enter', at: 'graveHut' },
+    need: ['saw_dig'],
+    lines: [
+      { who: 'narrator', text: '守墓人的小屋，门是虚掩的。' },
+      { who: 'narrator', text: '屋里没有灯。屋后立着一块矮碑，碑前压着三枚铜钱。' },
+      { who: 'narrator', text: '有人在碑后站着。你看不清他的脸 —— 他背对着月光。' },
+      { who: 'w_stone', text: '土你拿去。' },
+      { who: 'w_stone', text: '碑，别碰。' },
+      { who: 'narrator', text: '他说话的时候没有回头。等你再看，碑后已经没人了。' },
+    ],
+    onEnd: { flag: 'met_gravekeeper' },
+  },
+  s_clue_soil: {
+    id: 's_clue_soil', act: 'act1', title: '木牌',
+    trigger: { type: 'item', relic: 'yin_soil' },
+    lines: [
+      { who: 'narrator', text: '阴土捏在手里是湿的，闻着却是干的。' },
+      { who: 'narrator', text: '土里裹着一枚木牌，无字。翻过来，牌背刻着三道纹。' },
+      { who: 'narrator', text: '三道。不是一道。' },
+      { who: 'narrator', text: '第一道纹是新的，刻痕里还有木屑。另外两道是旧的，旧得发黑。' },
+      { who: null, text: '（第一道纹指向西南 —— 南岭竹海。）' },
+    ],
+    onEnd: { flag: 'mark1', clue: 'mark1' },
+  },
+  s_clue_bamboo: {
+    id: 's_clue_bamboo', act: 'act2', title: '风里有哭声',
+    trigger: { type: 'enter', at: 'bambooEdge' },
+    need: ['mark1'],
+    lines: [
+      { who: 'narrator', text: '竹海。风穿过竹节，声音像有人在里面哭。' },
+      { who: 'narrator', text: '木牌上第一道纹的走向，和脚下这条溪涧一样。' },
+      { who: 'narrator', text: '顺着水走，走到水声听不见的地方。' },
+      { who: 'narrator', text: '林子里有脚印，不是野兽的。三拨人，三个方向。' },
+    ],
+    onEnd: { flag: 'saw_bamboo' },
+  },
+  s_clue_workshop: {
+    id: 's_clue_workshop', act: 'act2', title: '不该有的工坊',
+    trigger: { type: 'enter', at: 'workshop' },
+    need: ['mark1'],
+    lines: [
+      { who: 'narrator', text: '竹子最密的地方，立着一座工坊。' },
+      { who: 'narrator', text: '梁是新的，榫头对得极准，地上没有一根刨花 —— 它不是造出来的，是拼出来的。' },
+      { who: 'narrator', text: '墙上钉着一张图。图上是碑：碑座、碑身、碑顶，还有碑后的三道槽。' },
+      { who: 'narrator', text: '图角有落款，被人磨掉了。磨得很仔细，连笔画沟都填了。' },
+      { who: null, text: '（画的是封碑的结构。有人比你先到过这里。）' },
+    ],
+    onEnd: { flag: 'saw_blueprint', clue: 'blueprint' },
+  },
+  s_clue_bamboo_heart: {
+    id: 's_clue_bamboo_heart', act: 'act2', title: '第二道纹',
+    trigger: { type: 'item', relic: 'bamboo_heart' },
+    lines: [
+      { who: 'narrator', text: '竹心剖开是空的。风过会响。' },
+      { who: 'narrator', text: '木牌上的第二道纹亮了，纹路朝西北。' },
+      { who: 'narrator', text: '亮过的那一道，摸上去是温的。' },
+      { who: 'narrator', text: '第三道纹还是死的。它要等第三件东西。' },
+      { who: null, text: '（第二道纹指向西北 —— 西荒石窟。）' },
+    ],
+    onEnd: { flag: 'mark2', clue: 'mark2' },
+  },
+  s_clue_mine: {
+    id: 's_clue_mine', act: 'act3', title: '钉在梁上的剑痕',
+    trigger: { type: 'enter', at: 'caveMouth' },
+    need: ['mark2'],
+    lines: [
+      { who: 'narrator', text: '矿道往下走，越走越黑。' },
+      { who: 'narrator', text: '壁上有一道剑痕，钉在木梁上 —— 不是砍的，是钉进去的。' },
+      { who: 'narrator', text: '木梁还在渗水。剑痕是新的。' },
+      { who: 'narrator', text: '再往里，有火光。有人在下面活着。' },
+    ],
+    onEnd: { flag: 'saw_mine' },
+  },
+  s_clue_collapse: {
+    id: 's_clue_collapse', act: 'act3', title: '只差三尺',
+    trigger: { type: 'enter', at: 'collapse' },
+    need: ['mark2'],
+    lines: [
+      { who: 'narrator', text: '塌方区。石头堆了半人高，石头后面有声音。' },
+      { who: 'narrator', text: '有人在敲。三下，停一停，再三下。' },
+      { who: 'narrator', text: '石堆尽头是一道岩壁，壁上有一道细缝。缝里透出来的风是暖的。' },
+      { who: 'narrator', text: '缝那边有光。是火把的光。' },
+      { who: null, text: '（他们挖了三年，只差最后三尺。）' },
+    ],
+    onEnd: { flag: 'saw_gap', clue: 'gap' },
+  },
+  s_clue_marrow: {
+    id: 's_clue_marrow', act: 'act3', title: '三道纹齐了',
+    trigger: { type: 'item', relic: 'stone_marrow' },
+    lines: [
+      { who: 'narrator', text: '石髓是凉的，握着却烫手。' },
+      { who: 'narrator', text: '木牌上的第三道纹亮起来，三道并排，排成一个方向。' },
+      { who: 'narrator', text: '正北。' },
+      { who: 'narrator', text: '三道纹同时发烫，木牌在手里震了一下，像什么东西应了。' },
+      { who: null, text: '（三道纹皆指正北 —— 青云古洞。）' },
+    ],
+    onEnd: { flag: 'mark3', clue: 'mark3' },
+  },
+  s_clue_seal: {
+    id: 's_clue_seal', act: 'final', title: '封碑',
+    trigger: { type: 'triple' },
+    lines: [
+      { who: 'narrator', text: '封碑上的凿痕，和土地庙那块一模一样。' },
+      { who: 'narrator', text: '碑脚有三个槽，槽的形状和木牌上的三道纹对得上。' },
+      { who: 'narrator', text: '三件东西放上去，碑面裂开一道缝，往里吸气。' },
+      { who: 'narrator', text: '缝里有风。风是暖的。' },
+      { who: 'narrator', text: '碑后站着一个人。他没有脸，手里握着和你一样的兵器。' },
+      { who: null, text: '（碑后有路。往下。）' },
+    ],
+    onEnd: { flag: 'seal_open' },
+  },
+};
+
+const STORY_IDS = Object.keys(STORY);
+
+// 按幕分组，给剧情日志页用
+function storyByAct() {
+  const out = [];
+  for (const a of ACTS) {
+    const ids = STORY_IDS.filter(id => STORY[id].act === a.id);
+    if (ids.length) out.push({ act: a, ids });
+  }
+  return out;
+}
+
+// ============ 三物线索 ============
+// 线索不是任务：任务有"完成/未完成"，线索只有"知道/不知道"。
+// 玩家漏掉一条线索不该被卡住 —— 所以线索只影响木牌上有没有那道纹，
+// 不影响能不能打、能不能开门（开门看三物本身）。
+const CLUES = {
+  dig:   { name: '坟底三尺', text: '山贼不偷陪葬，只挖坟底三尺的土。土是湿的，闻着是干的。' },
+  mark1: { name: '木牌 · 第一道纹', text: '无字木牌，牌背三道纹。第一道朝西南。' },
+  blueprint: { name: '封碑图', text: '竹海工坊里的图纸：碑座、碑身、碑顶，碑后三道槽。落款被磨掉了。' },
+  mark2: { name: '木牌 · 第二道纹', text: '第二道朝西北。亮过的那道摸上去是温的。' },
+  gap:   { name: '只差三尺', text: '矿道最深处与另一侧只隔一道岩壁。缝里有暖风，也有火把的光。' },
+  mark3: { name: '木牌 · 第三道纹', text: '三道并排，皆指正北。' },
+};
+const CLUE_IDS = Object.keys(CLUES);
+
+// ============ 环境文本 ============
+// 碑文 / 木牌 / 刻字。不占对话，走近按 E 读，读完记进日志。
+// 单独一张表而不是塞进 STORY：这些可以反复读，STORY 的节点只播一次。
+const ENV_TEXTS = {
+  e_temple_stone: {
+    // 故意放在土地庙南侧 80 多像素外：庙门口（SPAWN 56px 内）是"打坐 / 铁匠台"的
+    // 交互位，同一块地不能既开面板又读碑 —— 一个点击位只做一件事。
+    at: { x: 1830, y: 1600, r: 32 }, name: '庙中残碑',
+    text: '碑上原本刻着一个名字，被人用凿子从中间劈开，凿到石心。'
+      + '凿痕的边还是白的 —— 石头要几十年才会旧成那样。这是这几年的事。'
+      + '碑座下压着半截香，还是新的。有人比你早来，也比你早走。',
+  },
+  e_grave_stone: {
+    at: { x: 1952, y: 486, r: 34 }, name: '守墓人的碑',
+    text: '一块矮碑，没有名字，只刻了四个字：'
+      + '「勿启勿视」。字是倒着刻的 —— 刻碑的人不想让躺着的人看见。'
+      + '碑背有更小的一行：「我在下面等了三百年，够了。」',
+  },
+  e_bamboo_stone: {
+    at: { x: 262, y: 1096, r: 34 }, name: '竹海残碑',
+    text: '半截石碑倒在竹根里。能认出的只有一行：'
+      + '「竹有节，人有骨，节断则竹死」。后半句被磨平了。'
+      + '磨口是圆的，不是凿的 —— 是有人日复一日用手掌擦掉的。',
+  },
+  e_mine_sign: {
+    at: { x: 200, y: 296, r: 34 }, name: '矿道木牌',
+    text: '木牌上写着「戌时收工，不得深入」。'
+      + '下面被人用炭补了一行小字：「第三层别去。去了回不来。」炭迹被水冲淡了。'
+      + '木牌背后钉着七枚牌位，每枚只有巴掌大。',
+  },
+  e_workshop_plate: {
+    at: { x: 872, y: 1196, r: 34 }, name: '工坊铭牌',
+    text: '铜牌上铸着「青云古洞 · 封碑制式 · 其三」。'
+      + '落款处本该有个名字，被人磨平了，磨得很仔细，连笔画沟都填了。'
+      + '铜牌的边沿还留着铸模的毛刺 —— 它是新铸的，却装在一座旧梁上。',
+  },
+  e_qinglin: {
+    at: { x: 296, y: 1382, r: 34 }, name: '潭边刻字',
+    text: '潭边石头上刻着一行字，被水泡得发黑：'
+      + '「此水通北」。往北看，只有竹子和雾。'
+      + '字下面还有一道深深的划痕，像是有人想把这行字划掉，划到一半停了。',
+  },
+};
+const ENV_IDS = Object.keys(ENV_TEXTS);
+
+// ============ 三层对话 ============
+// 「初见 / 熟识 / 深交」不是三段不同的台词，是**同一个人对同一个人**的态度变化。
+// 门槛用侠名（5 / 30），因为侠名是这个世界里唯一"别人怎么看你"的度量。
+//
+// 称呼是最便宜的信号：从「这位少侠」到「你」，一句话就能让人感觉被记住了。
+// 深交层不再称呼 —— 熟人之间不称呼。
+const NPC_LAYERS = [
+  { id: 'first', at: 0,  name: '初见' },
+  { id: 'known', at: 5,  name: '熟识' },
+  { id: 'close', at: 30, name: '深交' },
+];
+
+// 每个 NPC 三层。lines 是问候（轮着抽），ask 是「打听」。
+// 没有列在这里的 NPC 走 village.js 原有的 greet / ask，不强制迁移。
+const NPC_LINES = {
+  geng: {
+    first: {
+      lines: ['三更了，还不歇？', '这条街我走了四十年，闭着眼都不会撞墙。'],
+      ask: '野地里的东西，子时最凶，卯时最蠢。要打，趁天亮前后去。',
+    },
+    known: {
+      lines: ['又是你。夜里的村子，就我们俩醒着。', '灯笼我换过三回了，这条街还是这么黑。'],
+      ask: '坟地方向近来不太平。山贼不去抢粮，倒往坟里钻 —— 你说怪不怪。',
+    },
+    close: {
+      lines: ['来了。', '今晚风大，早些回。'],
+      ask: '你身上那股气，跟三十年前那个背刀的一个味儿。他没回来。',
+    },
+  },
+  hai: {
+    first: {
+      lines: ['你那把刀，真能砍妖怪吗？', '我娘不让我出村，说出村会被叼走。'],
+      ask: '井里有一次捞上来一把生锈的剑，村正说那是"有灵性的"，后来就不见了。',
+    },
+    known: {
+      lines: ['我给你看我藏的石头——只有三块，不给你。', '你砍过几只了？我数到七。'],
+      ask: '我跟你说，夜里村口墙上会多出个记号。我看了两回，第三回就没了。',
+    },
+    close: {
+      lines: ['你回来啦。', '我娘说你不是坏人。她很少说人好话。'],
+      ask: '我长大了也要拿刀。你别死啊，等我。',
+    },
+  },
+  yu: {
+    first: {
+      lines: ['灶上温着汤，你走这一趟，脸都白了。', '年轻人总以为自己不会死。'],
+      ask: '往东那片坟地，白昼也有东西在游。别一个人去。',
+    },
+    known: {
+      lines: ['坐会儿吧，不急这一时。', '汤还热。喝完了再走。'],
+      ask: '我这把年纪，见过的死人比活人多。坟地那帮人挖土的样子，不像贼。',
+    },
+    close: {
+      lines: ['回来了就好。', '……手怎么这么凉。'],
+      ask: '你要真想去北边那个洞，先去庙里看看那块碑。字是被人凿掉的，不是磨掉的。',
+    },
+  },
+  qiao: {
+    first: {
+      lines: ['柴越来越难砍了。', '这条腿是去年被山魈啃的，你别学我。'],
+      ask: '山里那窝山魈，就在西北坡上。它们怕火，不怕刀。',
+    },
+    known: {
+      lines: ['后山的树，去年还是好好的。', '你砍柴不？我教你，三刀一棵。'],
+      ask: '竹海那边的竹子，砍了会流红水。老辈人不让砍，说里面有东西。',
+    },
+    close: {
+      lines: ['你来得正好，帮我抬一下。', '这条腿废了，可眼睛还认得路。'],
+      ask: '我爷爷说过，北边那个洞里有块碑，碑开了就有人要死。他讲这话时在发抖。',
+    },
+  },
+  shuo: {
+    first: {
+      lines: ['坐下听一段？不收钱，收个脸熟。', '江湖上的人来来去去，只有故事留得住。'],
+      ask: '你身上这股气，不像久居此地的人。外头的事，我知道一些。',
+    },
+    known: {
+      lines: ['今日讲的是黑风寨，明日许就讲你。', '你来晚了，刚讲完一段。'],
+      ask: '三十年前有个背刀的从东边进村，往北去了。我那会儿还年轻，记得他刀鞘上有三道纹。',
+    },
+    close: {
+      lines: ['今天不讲别人的事。', '你坐。我说个没跟人讲过的。'],
+      ask: '我讲了三千年故事，只有一个不敢讲完 —— 那个背刀的，是我放进去的。',
+    },
+  },
+  dao: {
+    first: {
+      lines: ['此地阴气自地底上来，子时莫在野外停留。', '你这面相，是要走远路的。'],
+      ask: '阴物惧清心。带一包清心散，胜过带十把刀。',
+    },
+    known: {
+      lines: ['道不远人，人自远道。', '又见面了。今日不画符，只说话。'],
+      ask: '阴土、竹心、石髓 —— 这三样东西凑齐，北边那个洞才开得。你信不信，我不劝。',
+    },
+    close: {
+      lines: ['你来了。', '贫道等你很久了。'],
+      ask: '你身上那三道纹，不是纹。是疤。',
+    },
+  },
+  zui: {
+    first: {
+      lines: ['……嗝。', '别、别扶我，我自己能站。'],
+      ask: '我告诉你个秘密——那口井，通到地底下去。他们不信，你信不信？',
+    },
+    known: {
+      lines: ['你也知道那口井底下……算了，不说了。', '来，喝一口。就一口。'],
+      ask: '井底那块石头，我摸过。凉的。上面有凿痕，从里往外凿的 —— 有人想出来。',
+    },
+    close: {
+      lines: ['……你还没走啊。', '（他把酒碗推过来，没说话。）'],
+      ask: '我不醉。我装醉。装醉的人说什么都没人当真，所以我什么都敢看。',
+    },
+  },
+  w_herbboy: {
+    first: {
+      lines: ['师父出诊去了，药我自己会抓。', '别站门口，挡光。'],
+      ask: '蛇胆要现取的才镇得住惊。你身上那股血腥味，是刚杀过吧？',
+    },
+    known: {
+      lines: ['你要蛇胆吗？我攒了两枚，不够。', '师父说我抓错药，其实我没抓错。'],
+      ask: '竹海的竹子，节里是空的。空的才响。人也一样。',
+    },
+    close: {
+      lines: ['你来了。药我给你留了。', '别谢。谢了我还得再留。'],
+      ask: '我数过：进竹海的人，十个回来三个。回来的三个，有两个不说话。',
+    },
+  },
+};
+
+// 按侠名挑一层。纯函数 —— 自检要能在不碰 game.js 的情况下验它。
+function npcLayer(fame) {
+  let out = NPC_LAYERS[0];
+  for (const l of NPC_LAYERS) if ((fame || 0) >= l.at) out = l;
+  return out;
+}
+function npcLines(npcId, fame) {
+  const t = NPC_LINES[npcId];
+  if (!t) return null;
+  return t[npcLayer(fame).id] || null;
+}
+
+// ============ 纯判定 ============
+// ctx 是运行时快照，只带判定要用的字段。这样自检可以随手造一个 ctx 跑遍所有节点，
+// 不用起游戏、不用等时辰。
+//   { flags, relics, read, fame, phase, kills, bossKills, triple }
+function storyReady(s, ctx) {
+  if (!s || !ctx) return false;
+  if (ctx.read && ctx.read[s.id]) return false;
+  if (s.need && !s.need.every(f => ctx.flags && ctx.flags[f])) return false;
+  if (s.minFame && (ctx.fame || 0) < s.minFame) return false;
+  const t = s.trigger || {};
+  switch (t.type) {
+    case 'boot': return true;
+    case 'enter': {
+      const p = POI[t.at];
+      if (!p || !ctx.pos) return false;
+      return Math.hypot(ctx.pos.x - p.x, ctx.pos.y - p.y) <= p.r;
+    }
+    case 'kill': {
+      if (t.lord) return !!(ctx.bossKills && ctx.bossKills[t.lord]);
+      if (!t.types) return false;
+      const k = ctx.kills || {};
+      return t.types.some(ty => (k[ty] || 0) >= (t.count || 1));
+    }
+    case 'item': return !!(ctx.relics && ctx.relics[t.relic] > 0);
+    case 'time': return ctx.phase === t.phase;
+    case 'triple': return !!ctx.triple;
+    default: return false;
+  }
+}
+
+// 一句话说明"这个节点在等什么"，给日志页显示未解锁的节点用。
+// 不写会剧透的细节 —— 只写条件，不写内容。
+function storyHint(s) {
+  const t = (s && s.trigger) || {};
+  const need = (s && s.need || []).length ? '（需前情）' : '';
+  switch (t.type) {
+    case 'boot': return '开局';
+    case 'enter': return '去' + ((POI[t.at] || {}).name || t.at) + need;
+    case 'kill': return t.lord ? '斩「' + t.lord + '」' + need : '杀敌' + need;
+    case 'item': return '得信物' + need;
+    case 'time': return '夜半' + need;
+    case 'triple': return '三物齐' + need;
+    default: return '未知';
+  }
+}
+
+return { POI, ACTS, STORY, STORY_IDS, storyByAct, CLUES, CLUE_IDS, ENV_TEXTS, ENV_IDS, NPC_LAYERS, NPC_LINES, npcLayer, npcLines, storyReady, storyHint };
 })();
 
 /* ==================== time.js ==================== */
@@ -56935,6 +57440,7 @@ const { QUESTS, QUEST_IDS, QUEST_ITEMS, RELICS_TRIPLE, MAIN_ORDER, questById, ob
 const { DG, DGT, DG_FLOORS, FLOOR_MOBS, inDungeon, genFloor, paintDungeon, dungeonArt } = __M.dungeon;
 const { ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_SLOT_LABEL, ART_FX, PROF_MAX, PROF_WEIGHT, artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower } = __M.arts;
 const { MAIN, SUB, MANTRAS, MAIN_IDS, SUB_IDS, MANTRA_IDS, MANTRA_MAX_LV, SUB_SLOTS, mantraById, isMain, emptyMod, mantraMod, mainOf, install: mantraInstall, uninstall: mantraUninstall, sanitize: mantraSanitize, lvOf, mantraBrief } = __M.mantras;
+const { POI, ACTS, STORY, STORY_IDS, CLUES, CLUE_IDS, ENV_TEXTS, ENV_IDS, NPC_LAYERS, NPC_LINES, storyByAct, npcLayer, npcLines, storyReady, storyHint } = __M.story;
 
 const LW = 480, LH = 270, TILE = 16, MAPW = 144, MAPH = 104;
 const SAVE_KEY = 'xiaoyao-save-v5';
@@ -58179,6 +58685,12 @@ const player = {
   // 允许叠两条的话，玩家一定会去找"哪两条乘起来最爆"，最后收敛成一个答案。
   mantras: { main: null, sub: [null, null] },
   mantrasOwned: {},   // { pojun: 1 } 已学 + 注解等级（1~3）
+  // 剧情：flags 是"玩家知道 / 发生过什么"，readLog 是已播节点，clues 是三条线索。
+  // 三者都进存档 —— 读档后剧情不该重播一遍，那会把"一次性的事"变成循环。
+  flags: {}, readLog: {}, clues: {},
+  // 按怪 type 记击杀数。任务只看"当前这一步攒了多少"，剧情要看"这辈子杀过几只某类"，
+  // 两者口径不同，不能共用 —— 任务进度会随步骤重置，累计击杀不会。
+  typeKills: {},
 };
 const pMesh = quad(playerTex.down[0], 16, 18);
 pMesh.visible = false;
@@ -58967,6 +59479,10 @@ function mantraCondMet(f) {
   if (f.kind === 'kills') return (player.kills || 0) >= f.n;
   if (f.kind === 'fame') return (player.fame || 0) >= f.n;
   if (f.kind === 'level') return player.level >= f.n;
+  // 剧情标记：P7 起心法可以挂在"你经历过什么"上，而不是只挂在数值上。
+  // 这是心法与剧情之间唯一的一根线 —— 不再加第二种挂钩方式，
+  // 否则以后每加一条心法都要先想"它该挂在哪个系统上"。
+  if (f.kind === 'flag') return !!(player.flags && player.flags[f.id]);
   return false;
 }
 
@@ -59203,6 +59719,9 @@ function killEnemy(e) {
   e.dead = true; scene.remove(e.mesh); if (e.ring) scene.remove(e.ring); if (e.shadow) scene.remove(e.shadow);
   const m = MONSTERS[e.type];
   player.kills = (player.kills || 0) + 1;
+  // 按 type 累计。剧情节点用它判"杀过几只某类怪"，
+  // 跟任务进度（会随步骤归零）是两套账，不能混。
+  if (e.type) player.typeKills[e.type] = (player.typeKills[e.type] || 0) + 1;
   player.xp += m.xp;
   // 专精：按"最后一下是谁打的"给。普通 1 / 精英 3 / 首领 12 —— 首领一次顶一轮小怪，
   // 免得玩家为了练专精一直在营地刷杂兵。
@@ -60451,15 +60970,74 @@ function renderInv() {
 // 行囊面板加第二页，而不是另开一个面板 —— 同一件事（"我这套东西怎么配"）
 // 分成两个入口，玩家会忘记另一个的存在。
 let invPageOn = 'bag';
+const INV_PAGES = ['bag', 'mantra', 'story'];
 function showInvPage(page) {
-  invPageOn = page === 'mantra' ? 'mantra' : 'bag';
-  const bag = document.getElementById('invPage');
-  const mp = document.getElementById('mantraPage');
-  if (bag) bag.classList.toggle('hidden', invPageOn !== 'bag');
-  if (mp) mp.classList.toggle('hidden', invPageOn !== 'mantra');
+  invPageOn = INV_PAGES.indexOf(page) >= 0 ? page : 'bag';
+  for (const p of INV_PAGES) {
+    const el = document.getElementById(p === 'bag' ? 'invPage' : p + 'Page');
+    if (el) el.classList.toggle('hidden', invPageOn !== p);
+  }
   const tabs = document.querySelectorAll('#inv .tabs button');
   for (const b of tabs) b.classList.toggle('on', b.dataset.invpage === invPageOn);
   if (invPageOn === 'mantra') renderMantras();
+  if (invPageOn === 'story') renderStoryLog();
+}
+
+// ============ 旧事（剧情日志） ============
+// 两个作用：一是让玩家回看读过的字，二是让"还没发生的事"有一个形状 ——
+// 未解锁的节点只显示条件、不显示内容，玩家知道还有东西在前面，但不会被剧透。
+function renderStoryLog() {
+  const box = document.getElementById('storyPage');
+  if (!box) return;
+  const read = player.readLog || {};
+  const rows = [];
+
+  // 线索：三条横排，得到一条亮一条
+  const cl = player.clues || {};
+  const nClue = CLUE_IDS.filter(id => cl[id]).length;
+  rows.push('<div class="sSec">线 索 ' + nClue + '/' + CLUE_IDS.length + '</div>');
+  rows.push('<div class="sClue">' + CLUE_IDS.map(id => {
+    const on = !!cl[id];
+    return '<div class="' + (on ? 'on' : '') + '"><b>' +
+      (on ? CLUES[id].name : '？') + '</b><span>' +
+      (on ? '已知' : '未得') + '</span></div>';
+  }).join('') + '</div>');
+  for (const id of CLUE_IDS) {
+    if (cl[id]) rows.push('<div class="sItem"><div class="q">' + CLUES[id].text + '</div></div>');
+  }
+
+  // 剧情：按幕分组。已读显示标题，未读显示条件
+  for (const g of storyByAct()) {
+    const got = g.ids.filter(id => read[id]).length;
+    rows.push('<div class="sSec">' + g.act.name + '　' + got + '/' + g.ids.length + '</div>');
+    for (const id of g.ids) {
+      const s = STORY[id];
+      if (read[id]) {
+        // 摘要取最长的那一句，而不是第一句 —— 序章第一句是「……」，
+        // 拿它当摘要等于每条都写着省略号。
+        let best = s.lines[0].text;
+        for (const l of s.lines) if (l.text.length > best.length) best = l.text;
+        rows.push('<div class="sItem"><div class="t">' + s.title + '</div>' +
+          '<div class="q">' + best + '</div></div>');
+      } else {
+        rows.push('<div class="sItem locked"><div class="t">？？</div>' +
+          '<div class="lock">' + storyHint(s) + '</div></div>');
+      }
+    }
+  }
+
+  // 旧物：碑文一类，可反复读
+  const envGot = ENV_IDS.filter(id => read[id]);
+  rows.push('<div class="sSec">旧 物 ' + envGot.length + '/' + ENV_IDS.length + '</div>');
+  if (!envGot.length) {
+    rows.push('<div class="sItem locked"><div class="lock">走近碑石，按 E 读。</div></div>');
+  } else {
+    for (const id of envGot) {
+      rows.push('<div class="sItem"><div class="t">' + ENV_TEXTS[id].name + '</div>' +
+        '<div class="q">' + ENV_TEXTS[id].text + '</div></div>');
+    }
+  }
+  box.innerHTML = rows.join('');
 }
 
 function mSlotHtml(slot, id, label) {
@@ -60865,6 +61443,8 @@ function doRest() {
   renderInv();
 }
 function interact() {
+  // 剧情正在播的时候，E 只用来翻页 —— 否则玩家一边读一边把面板开出来
+  if (storyPlaying()) { storyNext(); return; }
   // 洞里没有柜台也没有村民，先认箱子与地脉裂口
   const dgo = nearDg();
   if (dgo) { dgUse(dgo); return; }
@@ -60875,6 +61455,10 @@ function interact() {
   if (v && (!id || Math.hypot(player.x - v.x, player.y - v.y) <=
     Math.hypot(player.x - SHOPS[id].x, player.y - SHOPS[id].y))) { talkTo(v); return; }
   if (id) { shopOpen(id); return; }
+  // 环境文本排在告示牌之前：碑文是定点物，告示牌在村里，
+  // 两者不可能同时进范围，但"定点物优先"这条规则更好记。
+  const env = nearEnvText();
+  if (env) { envRead(env.id); return; }
   if (nearNotice()) { boardRead(); return; }
   if (nearSeal()) {
     const miss = tripleMissing(player.relics).map(relicName).join('、');
@@ -61043,6 +61627,186 @@ function questTurnInAt(npcId) {
 // 三物：齐了才能下古洞
 function tripleState() { return { ok: tripleReady(player.relics), miss: tripleMissing(player.relics) }; }
 
+// ============ 剧情 ============
+// 与任务的边界：任务是"别人让你做的事"，剧情是"你身上发生的事"。
+// 任务要玩家去接、去交；剧情条件满足就自己播，玩家不点也不会错过。
+//
+// 播放模型刻意做成"覆盖层 + 一行一句"而不是复用对话面板：
+// 对话面板有选项按钮（接任务 / 打听 / 作别），剧情不能有 —— 一旦有按钮，
+// 玩家就会去点，而剧情里最值钱的是"读完这一句"这件事本身。
+const storyEl = document.getElementById('story');
+const storyNameEl = document.getElementById('storyName');
+const storyLineEl = document.getElementById('storyLine');
+// 注意 id 是 storyAct 不是 storyPage —— storyPage 是行囊里的「旧事」页容器。
+// 两个都用 storyPage 的话，getElementById 只会拿到先出现的那个，
+// 表现是覆盖层里显示出整页剧情日志、而旧事页永远是空的。
+const storyPageEl = document.getElementById('storyAct');
+const storyDotsEl = document.getElementById('storyDots');
+// ?story=0 关掉剧情的"自动播放"。
+// 为什么要这个开关：无头回归里有 8 个套件靠 tick() 手动步进世界，
+// 而剧情一播世界就暂停 —— 表现是"某个断言莫名失败"，这是最难查的一类问题。
+// 只关自动触发，storyPlay() 仍然可用，所以 tools/story.js 能直接点名播。
+const STORY_OFF = /[?&]story=0/.test(location.search);
+let storyCur = null;        // 正在播的节点
+let storyIdx = 0;           // 第几行
+let storyTimer = null, storyFull = '', storyShown = 0;
+let storyPending = [];      // 同一帧触发的多个节点，排队播
+
+function storyCtx() {
+  return {
+    flags: player.flags || {}, relics: player.relics || {},
+    read: player.readLog || {}, fame: player.fame || 0,
+    phase: clock.phase.id, kills: player.typeKills || {},
+    bossKills: player.bossKills || {},
+    triple: tripleReady(player.relics),
+    pos: { x: player.x, y: player.y },
+  };
+}
+function storyPlaying() { return !!storyCur; }
+
+// 台词里的 who 决定显示什么名字：null / narrator 是旁白（不显示名字条），
+// 其余按 NPC id 去两张表里找 —— 街面村民 + 野外游荡者，都是 ALL_TALKERS。
+function whoName(who) {
+  if (!who || who === 'narrator') return '';
+  const v = ALL_TALKERS.find(t => t.id === who);
+  if (v) return v.name;
+  const n = NPCS.find(t => t.id === who);
+  return n ? n.name : who;
+}
+
+function storyPlay(id) {
+  const s = STORY[id];
+  if (!s || player.readLog[id]) return false;
+  storyShow({
+    id: s.id,
+    page: (ACTS.find(a => a.id === s.act) || {}).name || '',
+    lines: s.lines,
+    onEnd: s.onEnd,
+  });
+  return true;
+}
+// 真正的播放器。单独拆出来是为了让环境文本（碑文）也能用同一个覆盖层 ——
+// 碑文用飘字显示两秒根本读不完，而"读一段字"这件事本来就该有它自己的界面。
+function storyShow(node) {
+  storyCur = node; storyIdx = 0;
+  storyEl.classList.remove('hidden');
+  storyPageEl.textContent = node.page || '';
+  // 圆点：这一节有几句。玩家能看见"还有两下就完了"，才会愿意读完。
+  storyDotsEl.innerHTML = node.lines.map(() => '<i></i>').join('');
+  storyLine(node.lines[0]);
+}
+function storyLine(l) {
+  if (!l) { storyEnd(); return; }
+  const n = whoName(l.who);
+  storyNameEl.textContent = n;
+  storyNameEl.classList.toggle('hidden', !n);
+  storyFull = l.text; storyShown = 0;
+  if (storyTimer) { clearInterval(storyTimer); storyTimer = null; }
+  storyLineEl.textContent = '';
+  // 打字机比对话面板快一点：剧情是"读"的，不是"听"的，等太久会烦。
+  storyTimer = setInterval(() => {
+    storyShown += 3;
+    storyLineEl.textContent = storyFull.slice(0, storyShown);
+    if (storyShown >= storyFull.length) { clearInterval(storyTimer); storyTimer = null; }
+  }, 22);
+  const dots = storyDotsEl.children;
+  for (let i = 0; i < dots.length; i++) dots[i].className = i === storyIdx ? 'on' : '';
+}
+// 点一下：没吐完就直接给全（急着看的人不该被动画拖住），吐完了就翻下一句。
+function storyNext() {
+  if (!storyCur) return false;
+  if (storyShown < storyFull.length) {
+    if (storyTimer) { clearInterval(storyTimer); storyTimer = null; }
+    storyShown = storyFull.length; storyLineEl.textContent = storyFull;
+    return true;
+  }
+  storyIdx++;
+  if (storyIdx >= storyCur.lines.length) { storyEnd(); return true; }
+  storyLine(storyCur.lines[storyIdx]);
+  return true;
+}
+function storyEnd() {
+  const s = storyCur;
+  if (!s) return;
+  if (storyTimer) { clearInterval(storyTimer); storyTimer = null; }
+  storyEl.classList.add('hidden');
+  storyCur = null;
+  player.readLog[s.id] = 1;
+  const e = s.onEnd || {};
+  if (e.flag) player.flags[e.flag] = 1;
+  if (e.clue && CLUES[e.clue]) {
+    player.clues[e.clue] = 1;
+    msg('线索 · ' + CLUES[e.clue].name, C.pur3);
+  }
+  if (e.fame) addFame(e.fame);
+  if (e.msg) msg(e.msg, C.gold3);
+  AUDIO.play('rare');
+  // flag 可能正好是某条心法的解锁条件（卸力挂在 mark1 上）——
+  // 不在这里补一次，玩家得等到下次升级才会"突然"悟到。
+  if (e.flag) checkMantraUnlocks();
+  // 剧情会改 flag / 线索 / 侠名，而这三样都能满足别的节点的条件 —— 播完再扫一遍。
+  storyScan();
+}
+function storyClose() { storyEnd(); }
+
+// 每帧扫一次"有没有该播的节点"。节点总数是十几个，全表扫比维护事件订阅简单得多，
+// 也不会出现"某个钩子忘了调用导致某条剧情永远不播"这种最难查的 bug。
+// boot 节点单独处理：它只在"这一局刚开始"成立，不能每帧都成立。
+let storyBootDone = false;
+function storyScan() {
+  if (STORY_OFF) return false;
+  if (storyPlaying() || state !== 'play') return false;
+  const ctx = storyCtx();
+  for (const id of STORY_IDS) {
+    const s = STORY[id];
+    if (s.trigger.type === 'boot' && !storyBootDone) continue;
+    if (storyReady(s, ctx)) { storyPlay(id); return true; }
+  }
+  return false;
+}
+// 开局第一个 tick 才允许播 boot —— 进游戏和读档都走这里，
+// 但读档时 readLog 里已经有它，storyReady 会挡掉。
+function storyOnBoot() {
+  storyBootDone = true;
+  if (STORY_OFF) return;
+  const ctx = storyCtx();
+  const s = STORY_IDS.map(id => STORY[id]).find(n => n.trigger.type === 'boot' && storyReady(n, ctx));
+  if (s) storyPlay(s.id);
+}
+// 重开一局：把播放器与 boot 闸门归零。不清的话第二周目再也看不到序章。
+function storyReset() {
+  if (storyTimer) { clearInterval(storyTimer); storyTimer = null; }
+  storyCur = null; storyIdx = 0; storyFull = ''; storyShown = 0;
+  storyBootDone = false;
+  if (storyEl) storyEl.classList.add('hidden');
+}
+
+// 环境文本：走近按 E 读。可反复读，读完记进日志（readLog 用 e_ 前缀区分）。
+function nearEnvText() {
+  let best = null, bd = 1e9;
+  for (const id of ENV_IDS) {
+    const t = ENV_TEXTS[id];
+    const d = Math.hypot(player.x - t.at.x, player.y - t.at.y);
+    if (d <= t.at.r && d < bd) { bd = d; best = { id, t }; }
+  }
+  return best;
+}
+function envRead(id) {
+  const t = ENV_TEXTS[id];
+  if (!t) return;
+  player.readLog[id] = 1;
+  // 碑文走剧情覆盖层，不走飘字 —— 飘字两秒就没了，而碑文是要停下来读的。
+  storyShow({
+    id,
+    page: '旧 物',
+    lines: [
+      { who: null, text: t.name },
+      { who: 'narrator', text: t.text },
+    ],
+    onEnd: {},
+  });
+}
+
 // ---- 地宫里的三件事：开箱、深入地脉、回地面 ----
 function dgUse(o) {
   if (o.kind === 'rift') { o.home ? dgHome() : dgDescend(); return; }
@@ -61106,6 +61870,9 @@ const talkEl = document.getElementById('talk');
 const talkLineEl = document.getElementById('talkLine');
 const talkOptsEl = document.getElementById('talkOpts');
 let talkNpc = null, talkTimer = null, talkFull = '', talkShown = 0, talkAsked = false;
+// 当前这一层的台词。三层对话（初见 / 熟识 / 深交）按侠名挑，
+// 挑中的这一层在这次对话里固定住 —— 中途升级换口吻会让玩家以为点错了人。
+let talkLayer = null;
 
 function phaseOn(phases) {
   if (!phases || phases === 'always') return true;
@@ -61140,13 +61907,20 @@ function talkTo(v) {
   talkNpc = v; talkAsked = false;
   questOnTalk(v.id);
   const o = vilObjs.find(x => x.villager === v.id);
+  // 三层对话：story.js 里写了就用它，没写的（店主等）继续走 village.js 的老台词。
+  // 强制迁移所有 NPC 会让店主那句"营业 / 打烊"两个状态丢掉，不值得。
+  talkLayer = npcLines(v.id, player.fame || 0);
   const n = o ? o.spoke : 0;
-  if (o) o.spoke = (n + 1) % v.greet.length;
+  const lines = talkLayer ? talkLayer.lines : v.greet;
+  if (o) o.spoke = (n + 1) % lines.length;
   document.getElementById('talkName').textContent = v.name;
-  document.getElementById('talkRole').textContent = v.role + '　·　' + clock.phase.name;
+  // 把层名挂在这一行上：玩家能看见"这个人现在怎么看你"，
+  // 而不用去猜为什么台词变了。
+  document.getElementById('talkRole').textContent = v.role + '　·　' + clock.phase.name +
+    (talkLayer ? '　·　' + npcLayer(player.fame || 0).name : '');
   talkEl.classList.remove('hidden');
   // 见过几面之后，台词换口气 —— 这是最便宜的"他记得你"
-  renderTalk(v.greet[n % v.greet.length]);
+  renderTalk(lines[n % lines.length]);
 }
 function renderTalk(line) {
   say(line);
@@ -61157,7 +61931,10 @@ function renderTalk(line) {
     b.onclick = fn;
     talkOptsEl.appendChild(b);
   };
-  if (!talkAsked) add('打听', () => { talkAsked = true; renderTalk(talkNpc.ask); });
+  if (!talkAsked) add('打听', () => {
+    talkAsked = true;
+    renderTalk((talkLayer && talkLayer.ask) || talkNpc.ask);
+  });
   // 任务：先复命，再接新。店主走的是店铺面板，村民走这里。
   for (const q of questTurnInAt(talkNpc.id)) {
     add('复命 · ' + q.title, () => {
@@ -61486,6 +62263,11 @@ function save() {
     // 玩家手动排过装配格：读档后别再被 autoLoadout 自动补位
     loadoutManual: !!player.loadoutManual,
     mantras: player.mantras, mantrasOwned: player.mantrasOwned || {},
+    // 剧情：flags / 已读节点 / 线索 / 按 type 的累计击杀。
+    // 已读节点必须存 —— 不存的话读档会把"一次性的事"变成循环，
+    // 玩家每次读档都要重看一遍序章。
+    flags: player.flags || {}, readLog: player.readLog || {},
+    clues: player.clues || {}, typeKills: player.typeKills || {},
     clock: clock.serialize(),
   }));
 }
@@ -61567,6 +62349,10 @@ function load() {
       }
       return own;
     })(),
+    // 剧情：老存档没有这几样，给空对象。空 readLog 意味着序章会在读档后补播一次 ——
+    // 这是好事（P7 之前的档也该看到序章），而且只播一次。
+    flags: s.flags || {}, readLog: s.readLog || {},
+    clues: s.clues || {}, typeKills: s.typeKills || {},
   });
   player.mantras = mantraSanitize(s.mantras, player.mantrasOwned);
   invalidateStats();
@@ -61595,6 +62381,7 @@ function resetWorld() {
   clearHazards();   // 地面危险区不属于上面任何一类，忘了清就会跨局残留
   clearArts();      // 飞剑环绕的 mesh 也不属于上面任何一类
   mantraResetCombat();   // 追命连击 / 藏锋层数 / 铁衣层数：跨局残留会让玩家一出生就带着 +40%
+  storyReset();          // 剧情播放器状态 + boot 闸门：重开一局序章要能再播
   seedCamps();
 }
 function startGame(cont) {
@@ -61615,6 +62402,7 @@ function startGame(cont) {
       loadoutManual: false,
       artBuffs: [], forceCrit: 0, nextDmg: 0,
       mantras: { main: null, sub: [null, null] }, mantrasOwned: {},
+      flags: {}, readLog: {}, clues: {}, typeKills: {},
     });
     invalidateStats();
   }
@@ -61633,6 +62421,9 @@ function startGame(cont) {
   combo = 0; comboT = 0; hitstop = 0; shakeX = shakeY = 0;
   msg(cont ? '继续闯荡 · 第一章 青云野' : '第一章 · 青云野', C.gold3);
   renderInv(); renderSkills(); renderQuests(); renderArts();
+  // 序章：玩家一睁眼就在土地庙里，没有"走进去"这回事 —— 只能在这里手动放一次。
+  // 读档时 readLog 里已经有它，storyReady 会挡掉，所以不会每局都重播。
+  storyOnBoot();
 }
 
 // ============ 输入 ============
@@ -61645,6 +62436,13 @@ addEventListener('keydown', e => {
       const has = !!(localStorage.getItem(SAVE_KEY) || LEGACY_KEYS.some(k => localStorage.getItem(k)));
       startGame(has);
     }
+    return;
+  }
+  // 剧情播放中：只认"翻页"。其余键一律吞掉 ——
+  // 否则玩家一边读一边往前走、一边放招，回来发现自己已经死了。
+  if (storyPlaying()) {
+    if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter' ||
+      e.code === 'KeyE' || e.code === 'Escape') storyNext();
     return;
   }
   if (e.code === 'Space' || e.code === 'KeyJ') attack();
@@ -61717,6 +62515,9 @@ document.getElementById('btnTalkClose').onclick = talkClose;
 document.getElementById('talkLine').onclick = sayAll;   // 点正文 = 跳过打字机
 document.getElementById('btnSkillClose').onclick = () => toggleSkills(false);
 document.getElementById('btnQuestClose').onclick = () => toggleQuests(false);
+// 剧情覆盖层整块都能点：读的人手指落在哪都行，不该逼他去瞄准一个"继续"按钮。
+const storyBox = document.getElementById('story');
+if (storyBox) storyBox.onclick = () => storyNext();
 document.getElementById('btnCont').disabled = !(localStorage.getItem(SAVE_KEY) || localStorage.getItem(LEGACY_KEYS[0]));
 
 // 技能栏点击（画布上直接点技能格）
@@ -62074,6 +62875,9 @@ function tickSwing(dt) {
 function update(dt) {
   time += dt;
   if (state !== 'play') return;
+  // 剧情播放时整个世界暂停。读碑的时候被山魈咬死，是这游戏最不该发生的事；
+  // 而且剧情里有"回头看了一眼来路"这种叙述，人还在走就对不上了。
+  if (storyPlaying()) return;
 
   // 时辰推进。顿帧时也照走 —— 天色与钟声不该被一次砍击的停顿卡住。
   clock.advance(dt);
@@ -62124,6 +62928,9 @@ function update(dt) {
   }
   // 任务：reach / dg / item / have 四种目标每帧现算，kill 与 talk 走事件
   questTick(dt);
+  // 剧情：同样每帧扫全表。节点只有十几个，全表扫比维护事件订阅简单得多，
+  // 也不会出现"某个钩子忘了调用导致某条剧情永远不播"这种最难查的 bug。
+  storyScan();
 
   if (hitstop > 0) { hitstop -= dt; tickSwing(dt); return; }
 
@@ -63291,6 +64098,7 @@ function drawOverlay(camX, camY) {
       const ds = sid ? Math.hypot(player.x - SHOPS[sid].x, player.y - SHOPS[sid].y) : 1e9;
       if (vv && dv <= ds) { hint = 'E 与 ' + vv.name + ' 说话'; hot = true; }
       else if (sid) { hint = 'E ' + SHOPS[sid].title + (shopOpenNow(sid) ? '' : '（已打烊）'); hot = true; }
+      else if (nearEnvText()) { hint = 'E 读' + nearEnvText().t.name; hot = true; }
       else if (nearNotice()) { hint = 'E 告示牌'; hot = true; }
       else if (nearSeal()) { hint = 'E 封碑（未启）'; hot = true; }
       else if (nearForge) { hint = 'E 铁匠台  F 打坐'; hot = true; }
@@ -63769,7 +64577,7 @@ window.__game = {
   get objects() { return objects; },
   get hazards() { return hazards; }, addHazard, clearHazards, UNIQUES, makeUnique,
   killEnemy, execSkill, runBossSkills,
-  QUESTS, QUEST_IDS, QUEST_ITEMS, WANDERERS, ALL_TALKERS,
+  QUESTS, QUEST_IDS, QUEST_ITEMS, WANDERERS, ALL_TALKERS, NPCS,
   questAccept, questTurnIn, questReady, questOffered, questTurnInAt, questOnKill, questOnTalk,
   refreshSeal, tripleState, relicName, renderQuests, toggleQuests,
   get sealOn() { return sealOn; },
@@ -63802,6 +64610,26 @@ window.__game = {
   updateMantras, resetOneCd, mantraOnCast, mantraOnHit, mantraHurtMul, mantraOnDodge,
   hitEnemy, hurtPlayer, rollDamage, attackInterval,
   get mantraPageOn() { return invPageOn; },
+  // 剧情
+  STORY, STORY_IDS, POI, ACTS, CLUES, CLUE_IDS, ENV_TEXTS, ENV_IDS,
+  NPC_LAYERS, NPC_LINES, storyByAct, npcLayer, npcLines, storyReady, storyHint,
+  storyPlay, storyNext, storyPlaying, storyScan, storyReset, renderStoryLog,
+  nearEnvText, envRead,
+  get storyCur() { return storyCur; },
+  get storyIdx() { return storyIdx; },
+  // 当前这一句的完整文本（打字机还没吐完时也拿得到全句）
+  get storyText() { return storyFull; },
+  // 测试用：直接把剧情播完（不用等打字机）
+  finishStory() {
+    let guard = 0;
+    while (storyCur && guard++ < 200) {
+      if (storyShown < storyFull.length) { storyShown = storyFull.length; storyLineEl.textContent = storyFull; }
+      else storyNext();
+    }
+    return { playing: !!storyCur, guard };
+  },
+  setFlag(id, v) { player.flags[id] = v === false ? 0 : 1; return player.flags; },
+  setRelic(id, n) { player.relics[id] = n || 1; return player.relics; },
   get mantraMods() { return mantraMod(player.mantras, player.mantrasOwned); },
   // 测试用：直接设定装配 / 已学，绕过 UI
   setMantras(main, subs) {

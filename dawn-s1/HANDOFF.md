@@ -37,9 +37,14 @@ node tools/run.js eval tools/camps.js     # 营地生态（巡逻/吹哨/食物�
 node tools/run.js eval tools/bosses.js    # 首领（招式表/巢穴/危险区/首杀专属），当前 23 pass / 0 fail
 node tools/run.js eval tools/quests.js    # 任务（10 条全通/三物门禁/存档），当前 29 pass / 0 fail
 node tools/run.js eval tools/arts.js      # 招式（64 招/十种原语/专精/装配/平衡/存档），当前 77 pass / 0 fail
-node tools/run.js eval tools/mantras.js   # 心法（22 条/互斥/12 个机制/200 组 DPS 分布），当前 74 pass / 0 fail
+node tools/run.js eval tools/mantras.js   # 心法（22 条/互斥/12 个机制/200 组 DPS 分布），当前 75 pass / 0 fail
+STORY=1 QS=x=1 node tools/run.js eval tools/story.js   # 剧情（10 节点/六种触发/三层对话/旧事页/存档），当前 54 pass / 0 fail
 node tools/run.js shot out.png 1440 900   # 截图
 ```
+
+> **`STORY=1` 不能省。** `tools/run.js` 默认给 URL 加 `story=0`，
+> 关掉剧情的自动播放 —— 剧情一播世界就暂停，而所有回归套件都靠 `tick()` 手动步进世界。
+> 不关的话失败现象是"某个断言莫名失败"，最难查的一类。只有剧情自检要打开它。
 
 **改完记得验一次单文件版**（`逍遥行.html` 走的是另一套代码路径：`build.js` 把 ESM
 拆成 `__M.xxx`，module 版绿了不代表它能跑）：
@@ -108,13 +113,14 @@ for(let i=0;i<25;i++)g.tick(0.016)" \
 | **P5 招式系统：`arts.js` 16 招 + 六种效果原语 + 兵器专精 0→10 + 状态系统 + 招式页** | ✅ 2026-11-10 |
 | **P5.5 心法系统：`mantras.js` 22 条 + 一主二辅互斥 + 五个机制钩子 + 心法页 + 游方道人** | ✅ 2026-11-10 |
 | **P6 招式系统补齐：`arts.js` 16 → 64 招 + 十种效果原语 + 六槽装配 UI + 平衡口径统一** | ✅ 2026-11-10 |
+| **P7 剧情框架：`story.js` 10 节点 + 六种触发器 + 剧情覆盖层 + 旧事页 + 三层对话 + 三物线索** | ✅ 2026-11-10 |
 | 双渠道发布（GitHub Pages + workbuddy） | ✅ |
 
 ### 未完成（按顺序）
 
 | 批次 | 内容 | 文档 |
 |---|---|---|
-| **P7~P9** | 剧情框架 + 三幕 + 终章 | `SKILLS-STORY-PLAN.md` §四 |
+| **P8~P9** | 第一幕 / 第二幕 / 第三幕 + 终章（约 18 个剧情节点） | `SKILLS-STORY-PLAN.md` §四 |
 
 ---
 
@@ -144,6 +150,7 @@ dawn-s1/
 ├── arts.js        兵器招式（64 个，数据层）+ 专精曲线 + 平衡口径 artPower()
 ├── mantras.js     心法（12 主 + 10 辅）+ 一主二辅装配 + 数值汇总，纯数据层
 ├── quests.js      任务定义表（10 条）+ 信物 + 纯函数
+├── story.js       剧情节点（10 个）+ 地标 + 线索 + 环境文本 + 三层对话，纯数据层
 ├── village.js     青云集：建筑、NPC、摆件、店铺（坐标都是村内绝对像素）
 ├── dungeon.js     青云古洞（占地图上一块矩形，进洞时重写该块的 tiles）
 ├── pixel.js       调色板 C 与精灵工具
@@ -160,6 +167,7 @@ dawn-s1/
     ├── quests.js  任务线自检
     ├── arts.js    招式与专精自检
     ├── mantras.js 心法与 200 组组合的 DPS 分布
+    ├── story.js   剧情（六种触发器 / 三层对话 / 旧事页 / 存档不重播）
     └── play.js / shot.js / touch.js  交互与截图工具
 ```
 
@@ -327,13 +335,35 @@ dawn-s1/
   绝对值在飘的时候任何一次调参都看不出效果。平衡段要把 `Math.random` 整个换成固定序列，
   跑完再还回去。凡是要跨次比较的测量，先把所有随机源钉死。
 
+### 剧情 P7 踩的
+
+- **剧情一播世界就暂停，而所有回归套件都靠 `tick()` 手动步进世界。**
+  第一次接进去，`devtest` 直接超时 —— `#devout` 是 `runDevTests()` 最后一行才创建的，
+  测试在中途就抛了，于是连结果框都没有。失败现象是"测试没跑"，不是"某条断言失败"。
+  解法是 `?story=0` 关掉自动播放，`tools/run.js` 默认给每个 URL 都加上，
+  只有 `tools/story.js` 用 `STORY=1` 打开。**凡是有"全局暂停"的机制，都要给测试留一个开关。**
+- **两个元素用了同一个 `id="storyPage"`**：剧情覆盖层的章节小字和行囊里的「旧事」页容器。
+  `getElementById` 只返回先出现的那个，表现是覆盖层里显示整页剧情日志、旧事页永远空白，
+  而 `#story .sPage` 的样式一条都没生效（id 选择器命中了另一个元素）。
+  `tools/story.js` 现在有一条断言遍历所有 `[id]` 查重 —— 这类错看截图发现不了。
+- **剧情触发别做成 `talk`。** 对话面板那一个点击位已经给了"接任务 / 复命 / 打听 / 作别"，
+  再塞剧情进去，玩家点一下永远猜不到会发生什么。剧情统一走"条件满足自动播"，
+  **一个点击位只做一件事**。
+- **环境文本不能用飘字。** `msg()` 只有 2.4 秒，碑文两行还没读完就没了。
+  碑文走同一个剧情覆盖层（`storyShow()` 直接吃一个临时节点），
+  所以"读一段字"这件事只有一套界面。
+- **旧事页的条目摘要要取最长那句，不能取第一句。** 序章第一句是「……」，
+  拿它当摘要等于每条都写着省略号。
+- **`build.js` 的 `ORDER` 必须加 `story.js`。** 这个漏加过一次（P4 的 `quests.js`），
+  表现是 module 版全绿、单文件版白屏。`verifyOrder()` 现在会拿 import 反查并直接让 build 失败。
+
 ---
 
 ## 7. 下次开工的第一件事
 
-按 `SKILLS-STORY-PLAN.md` 的 **P7 · 剧情框架 + 三幕** 往下做。
+按 `SKILLS-STORY-PLAN.md` 的 **P8 · 第一幕（乱葬岗）+ 第二幕（竹海）** 往下做。
 
-P1~P6 已经把第一章的骨架、战斗的构筑层全部铺完了：
+P1~P7 已经把第一章的骨架、战斗的构筑层、剧情的地基全部铺完了：
 
 - 地图 144×104，四区地貌，12 营地 + 4 巢穴，路网与溪涧竹桥
 - 怪会巡逻、吹哨叫援、追猎物、按时辰睡觉；8 个首领各有一套招式表
@@ -344,21 +374,26 @@ P1~P6 已经把第一章的骨架、战斗的构筑层全部铺完了：
 - **22 条心法**：12 主 + 10 辅，一主二辅互斥，540 种组合，P95/P50 实测 1.24
 - **五个机制钩子**：`fullHpBonus` / `chainBonus` / `idleStack` / `qiOnHurt` / `critResetCd`，
   全部折进 `hitEnemy` / `hurtPlayer` / `update` 三条路径，没有另起一套战斗逻辑
+- **10 个剧情节点**：序章 3 + 三物线索 7，六种触发器，剧情覆盖层 + 旧事页 + 三层对话
+- **三物线索链**：木牌三道纹依次点亮，每道纹指出下一件在哪，不靠任务列表导航
 
-**P6 做完后的现状**：`arts.js` 64 招齐了，`execArt()` 支持十种原语，
-装配 UI 是"点格子 → 点招式"，平衡口径统一在 `artPower()`。
-自检 `tools/arts.js` 77 pass（原来 53），心法 74 pass（原来 72）。
+**P7 做完后的现状**：`story.js` 的框架是完整的（六种触发器 / 播放器 / 日志 / 三层对话），
+缺的只是"三幕各自的正文"。序章与三物线索已经写完并能真的走通。
+自检 `tools/story.js` 54 pass；`tools/run.js` 默认带 `story=0`，别忘 `STORY=1`。
 
-**P7 怎么接**：`SKILLS-STORY-PLAN.md` §四 是三幕剧情框架。
-这一步是纯内容 + 少量运行时挂点（对白 / 章节切换 / 幕间结算），
-战斗层已经齐了，不用再动招式与心法的数值。
+**P8 怎么接**：`SKILLS-STORY-PLAN.md` §四 的叙事骨架，第一幕（乱葬岗）与第二幕（竹海）。
+这一步是纯内容 —— 往 `story.js` 的 `STORY` 表里加节点、往 `POI` 里加地标、
+往 `NPC_LINES` 里加深交层。**运行时一行都不用改**，除非遇到新的触发类型。
+每幕的验收就看 `tools/story.js` 里那几条（定义齐全 / 触发可达 / 文本量）。
 
 **动手前先读**：
-- `SKILLS-STORY-PLAN.md` §四（三幕结构与每幕的交付物）
-- `SKILLS-STORY-PLAN.md` §2.6（P5 实施记录）、§2.7（P6 实施记录：64 招清单与平衡实测）
+- `SKILLS-STORY-PLAN.md` §四（三幕结构与每幕的交付物）、§4.7（P7 实施记录）
+- `SKILLS-STORY-PLAN.md` §2.6（P5）、§2.7（P6：64 招清单与平衡实测）
 
 **三个命名提醒**：
 - `game.js` 里 `skills` 已经被"气/舞/雷"三个通用主动占用了。
 - 兵器招式叫 `arts`（`arts.js` / `player.loadout` / `artCds`）。
 - 心法叫 `mantra`（`mantras.js` / `player.mantras` / `player.mantrasOwned`）。
   三层成长刻意分了三套命名，别再往 `skills` 上叠第四个。
+- 剧情叫 `story`（`story.js` / `player.flags` / `player.readLog` / `player.clues`）。
+  **`flags` 是"玩家经历过什么"，不是任务进度** —— 别拿它当 quests 的第二份状态。

@@ -30,6 +30,10 @@ import {
   mantraById, isMain, emptyMod, mantraMod, mainOf, install as mantraInstall,
   uninstall as mantraUninstall, sanitize as mantraSanitize, lvOf, mantraBrief,
 } from './mantras.js';
+import {
+  POI, ACTS, STORY, STORY_IDS, CLUES, CLUE_IDS, ENV_TEXTS, ENV_IDS,
+  NPC_LAYERS, NPC_LINES, storyByAct, npcLayer, npcLines, storyReady, storyHint,
+} from './story.js';
 
 const LW = 480, LH = 270, TILE = 16, MAPW = 144, MAPH = 104;
 const SAVE_KEY = 'xiaoyao-save-v5';
@@ -1274,6 +1278,12 @@ const player = {
   // 允许叠两条的话，玩家一定会去找"哪两条乘起来最爆"，最后收敛成一个答案。
   mantras: { main: null, sub: [null, null] },
   mantrasOwned: {},   // { pojun: 1 } 已学 + 注解等级（1~3）
+  // 剧情：flags 是"玩家知道 / 发生过什么"，readLog 是已播节点，clues 是三条线索。
+  // 三者都进存档 —— 读档后剧情不该重播一遍，那会把"一次性的事"变成循环。
+  flags: {}, readLog: {}, clues: {},
+  // 按怪 type 记击杀数。任务只看"当前这一步攒了多少"，剧情要看"这辈子杀过几只某类"，
+  // 两者口径不同，不能共用 —— 任务进度会随步骤重置，累计击杀不会。
+  typeKills: {},
 };
 const pMesh = quad(playerTex.down[0], 16, 18);
 pMesh.visible = false;
@@ -2062,6 +2072,10 @@ function mantraCondMet(f) {
   if (f.kind === 'kills') return (player.kills || 0) >= f.n;
   if (f.kind === 'fame') return (player.fame || 0) >= f.n;
   if (f.kind === 'level') return player.level >= f.n;
+  // 剧情标记：P7 起心法可以挂在"你经历过什么"上，而不是只挂在数值上。
+  // 这是心法与剧情之间唯一的一根线 —— 不再加第二种挂钩方式，
+  // 否则以后每加一条心法都要先想"它该挂在哪个系统上"。
+  if (f.kind === 'flag') return !!(player.flags && player.flags[f.id]);
   return false;
 }
 
@@ -2298,6 +2312,9 @@ function killEnemy(e) {
   e.dead = true; scene.remove(e.mesh); if (e.ring) scene.remove(e.ring); if (e.shadow) scene.remove(e.shadow);
   const m = MONSTERS[e.type];
   player.kills = (player.kills || 0) + 1;
+  // 按 type 累计。剧情节点用它判"杀过几只某类怪"，
+  // 跟任务进度（会随步骤归零）是两套账，不能混。
+  if (e.type) player.typeKills[e.type] = (player.typeKills[e.type] || 0) + 1;
   player.xp += m.xp;
   // 专精：按"最后一下是谁打的"给。普通 1 / 精英 3 / 首领 12 —— 首领一次顶一轮小怪，
   // 免得玩家为了练专精一直在营地刷杂兵。
@@ -3546,15 +3563,74 @@ function renderInv() {
 // 行囊面板加第二页，而不是另开一个面板 —— 同一件事（"我这套东西怎么配"）
 // 分成两个入口，玩家会忘记另一个的存在。
 let invPageOn = 'bag';
+const INV_PAGES = ['bag', 'mantra', 'story'];
 function showInvPage(page) {
-  invPageOn = page === 'mantra' ? 'mantra' : 'bag';
-  const bag = document.getElementById('invPage');
-  const mp = document.getElementById('mantraPage');
-  if (bag) bag.classList.toggle('hidden', invPageOn !== 'bag');
-  if (mp) mp.classList.toggle('hidden', invPageOn !== 'mantra');
+  invPageOn = INV_PAGES.indexOf(page) >= 0 ? page : 'bag';
+  for (const p of INV_PAGES) {
+    const el = document.getElementById(p === 'bag' ? 'invPage' : p + 'Page');
+    if (el) el.classList.toggle('hidden', invPageOn !== p);
+  }
   const tabs = document.querySelectorAll('#inv .tabs button');
   for (const b of tabs) b.classList.toggle('on', b.dataset.invpage === invPageOn);
   if (invPageOn === 'mantra') renderMantras();
+  if (invPageOn === 'story') renderStoryLog();
+}
+
+// ============ 旧事（剧情日志） ============
+// 两个作用：一是让玩家回看读过的字，二是让"还没发生的事"有一个形状 ——
+// 未解锁的节点只显示条件、不显示内容，玩家知道还有东西在前面，但不会被剧透。
+function renderStoryLog() {
+  const box = document.getElementById('storyPage');
+  if (!box) return;
+  const read = player.readLog || {};
+  const rows = [];
+
+  // 线索：三条横排，得到一条亮一条
+  const cl = player.clues || {};
+  const nClue = CLUE_IDS.filter(id => cl[id]).length;
+  rows.push('<div class="sSec">线 索 ' + nClue + '/' + CLUE_IDS.length + '</div>');
+  rows.push('<div class="sClue">' + CLUE_IDS.map(id => {
+    const on = !!cl[id];
+    return '<div class="' + (on ? 'on' : '') + '"><b>' +
+      (on ? CLUES[id].name : '？') + '</b><span>' +
+      (on ? '已知' : '未得') + '</span></div>';
+  }).join('') + '</div>');
+  for (const id of CLUE_IDS) {
+    if (cl[id]) rows.push('<div class="sItem"><div class="q">' + CLUES[id].text + '</div></div>');
+  }
+
+  // 剧情：按幕分组。已读显示标题，未读显示条件
+  for (const g of storyByAct()) {
+    const got = g.ids.filter(id => read[id]).length;
+    rows.push('<div class="sSec">' + g.act.name + '　' + got + '/' + g.ids.length + '</div>');
+    for (const id of g.ids) {
+      const s = STORY[id];
+      if (read[id]) {
+        // 摘要取最长的那一句，而不是第一句 —— 序章第一句是「……」，
+        // 拿它当摘要等于每条都写着省略号。
+        let best = s.lines[0].text;
+        for (const l of s.lines) if (l.text.length > best.length) best = l.text;
+        rows.push('<div class="sItem"><div class="t">' + s.title + '</div>' +
+          '<div class="q">' + best + '</div></div>');
+      } else {
+        rows.push('<div class="sItem locked"><div class="t">？？</div>' +
+          '<div class="lock">' + storyHint(s) + '</div></div>');
+      }
+    }
+  }
+
+  // 旧物：碑文一类，可反复读
+  const envGot = ENV_IDS.filter(id => read[id]);
+  rows.push('<div class="sSec">旧 物 ' + envGot.length + '/' + ENV_IDS.length + '</div>');
+  if (!envGot.length) {
+    rows.push('<div class="sItem locked"><div class="lock">走近碑石，按 E 读。</div></div>');
+  } else {
+    for (const id of envGot) {
+      rows.push('<div class="sItem"><div class="t">' + ENV_TEXTS[id].name + '</div>' +
+        '<div class="q">' + ENV_TEXTS[id].text + '</div></div>');
+    }
+  }
+  box.innerHTML = rows.join('');
 }
 
 function mSlotHtml(slot, id, label) {
@@ -3960,6 +4036,8 @@ function doRest() {
   renderInv();
 }
 function interact() {
+  // 剧情正在播的时候，E 只用来翻页 —— 否则玩家一边读一边把面板开出来
+  if (storyPlaying()) { storyNext(); return; }
   // 洞里没有柜台也没有村民，先认箱子与地脉裂口
   const dgo = nearDg();
   if (dgo) { dgUse(dgo); return; }
@@ -3970,6 +4048,10 @@ function interact() {
   if (v && (!id || Math.hypot(player.x - v.x, player.y - v.y) <=
     Math.hypot(player.x - SHOPS[id].x, player.y - SHOPS[id].y))) { talkTo(v); return; }
   if (id) { shopOpen(id); return; }
+  // 环境文本排在告示牌之前：碑文是定点物，告示牌在村里，
+  // 两者不可能同时进范围，但"定点物优先"这条规则更好记。
+  const env = nearEnvText();
+  if (env) { envRead(env.id); return; }
   if (nearNotice()) { boardRead(); return; }
   if (nearSeal()) {
     const miss = tripleMissing(player.relics).map(relicName).join('、');
@@ -4138,6 +4220,186 @@ function questTurnInAt(npcId) {
 // 三物：齐了才能下古洞
 function tripleState() { return { ok: tripleReady(player.relics), miss: tripleMissing(player.relics) }; }
 
+// ============ 剧情 ============
+// 与任务的边界：任务是"别人让你做的事"，剧情是"你身上发生的事"。
+// 任务要玩家去接、去交；剧情条件满足就自己播，玩家不点也不会错过。
+//
+// 播放模型刻意做成"覆盖层 + 一行一句"而不是复用对话面板：
+// 对话面板有选项按钮（接任务 / 打听 / 作别），剧情不能有 —— 一旦有按钮，
+// 玩家就会去点，而剧情里最值钱的是"读完这一句"这件事本身。
+const storyEl = document.getElementById('story');
+const storyNameEl = document.getElementById('storyName');
+const storyLineEl = document.getElementById('storyLine');
+// 注意 id 是 storyAct 不是 storyPage —— storyPage 是行囊里的「旧事」页容器。
+// 两个都用 storyPage 的话，getElementById 只会拿到先出现的那个，
+// 表现是覆盖层里显示出整页剧情日志、而旧事页永远是空的。
+const storyPageEl = document.getElementById('storyAct');
+const storyDotsEl = document.getElementById('storyDots');
+// ?story=0 关掉剧情的"自动播放"。
+// 为什么要这个开关：无头回归里有 8 个套件靠 tick() 手动步进世界，
+// 而剧情一播世界就暂停 —— 表现是"某个断言莫名失败"，这是最难查的一类问题。
+// 只关自动触发，storyPlay() 仍然可用，所以 tools/story.js 能直接点名播。
+const STORY_OFF = /[?&]story=0/.test(location.search);
+let storyCur = null;        // 正在播的节点
+let storyIdx = 0;           // 第几行
+let storyTimer = null, storyFull = '', storyShown = 0;
+let storyPending = [];      // 同一帧触发的多个节点，排队播
+
+function storyCtx() {
+  return {
+    flags: player.flags || {}, relics: player.relics || {},
+    read: player.readLog || {}, fame: player.fame || 0,
+    phase: clock.phase.id, kills: player.typeKills || {},
+    bossKills: player.bossKills || {},
+    triple: tripleReady(player.relics),
+    pos: { x: player.x, y: player.y },
+  };
+}
+function storyPlaying() { return !!storyCur; }
+
+// 台词里的 who 决定显示什么名字：null / narrator 是旁白（不显示名字条），
+// 其余按 NPC id 去两张表里找 —— 街面村民 + 野外游荡者，都是 ALL_TALKERS。
+function whoName(who) {
+  if (!who || who === 'narrator') return '';
+  const v = ALL_TALKERS.find(t => t.id === who);
+  if (v) return v.name;
+  const n = NPCS.find(t => t.id === who);
+  return n ? n.name : who;
+}
+
+function storyPlay(id) {
+  const s = STORY[id];
+  if (!s || player.readLog[id]) return false;
+  storyShow({
+    id: s.id,
+    page: (ACTS.find(a => a.id === s.act) || {}).name || '',
+    lines: s.lines,
+    onEnd: s.onEnd,
+  });
+  return true;
+}
+// 真正的播放器。单独拆出来是为了让环境文本（碑文）也能用同一个覆盖层 ——
+// 碑文用飘字显示两秒根本读不完，而"读一段字"这件事本来就该有它自己的界面。
+function storyShow(node) {
+  storyCur = node; storyIdx = 0;
+  storyEl.classList.remove('hidden');
+  storyPageEl.textContent = node.page || '';
+  // 圆点：这一节有几句。玩家能看见"还有两下就完了"，才会愿意读完。
+  storyDotsEl.innerHTML = node.lines.map(() => '<i></i>').join('');
+  storyLine(node.lines[0]);
+}
+function storyLine(l) {
+  if (!l) { storyEnd(); return; }
+  const n = whoName(l.who);
+  storyNameEl.textContent = n;
+  storyNameEl.classList.toggle('hidden', !n);
+  storyFull = l.text; storyShown = 0;
+  if (storyTimer) { clearInterval(storyTimer); storyTimer = null; }
+  storyLineEl.textContent = '';
+  // 打字机比对话面板快一点：剧情是"读"的，不是"听"的，等太久会烦。
+  storyTimer = setInterval(() => {
+    storyShown += 3;
+    storyLineEl.textContent = storyFull.slice(0, storyShown);
+    if (storyShown >= storyFull.length) { clearInterval(storyTimer); storyTimer = null; }
+  }, 22);
+  const dots = storyDotsEl.children;
+  for (let i = 0; i < dots.length; i++) dots[i].className = i === storyIdx ? 'on' : '';
+}
+// 点一下：没吐完就直接给全（急着看的人不该被动画拖住），吐完了就翻下一句。
+function storyNext() {
+  if (!storyCur) return false;
+  if (storyShown < storyFull.length) {
+    if (storyTimer) { clearInterval(storyTimer); storyTimer = null; }
+    storyShown = storyFull.length; storyLineEl.textContent = storyFull;
+    return true;
+  }
+  storyIdx++;
+  if (storyIdx >= storyCur.lines.length) { storyEnd(); return true; }
+  storyLine(storyCur.lines[storyIdx]);
+  return true;
+}
+function storyEnd() {
+  const s = storyCur;
+  if (!s) return;
+  if (storyTimer) { clearInterval(storyTimer); storyTimer = null; }
+  storyEl.classList.add('hidden');
+  storyCur = null;
+  player.readLog[s.id] = 1;
+  const e = s.onEnd || {};
+  if (e.flag) player.flags[e.flag] = 1;
+  if (e.clue && CLUES[e.clue]) {
+    player.clues[e.clue] = 1;
+    msg('线索 · ' + CLUES[e.clue].name, C.pur3);
+  }
+  if (e.fame) addFame(e.fame);
+  if (e.msg) msg(e.msg, C.gold3);
+  AUDIO.play('rare');
+  // flag 可能正好是某条心法的解锁条件（卸力挂在 mark1 上）——
+  // 不在这里补一次，玩家得等到下次升级才会"突然"悟到。
+  if (e.flag) checkMantraUnlocks();
+  // 剧情会改 flag / 线索 / 侠名，而这三样都能满足别的节点的条件 —— 播完再扫一遍。
+  storyScan();
+}
+function storyClose() { storyEnd(); }
+
+// 每帧扫一次"有没有该播的节点"。节点总数是十几个，全表扫比维护事件订阅简单得多，
+// 也不会出现"某个钩子忘了调用导致某条剧情永远不播"这种最难查的 bug。
+// boot 节点单独处理：它只在"这一局刚开始"成立，不能每帧都成立。
+let storyBootDone = false;
+function storyScan() {
+  if (STORY_OFF) return false;
+  if (storyPlaying() || state !== 'play') return false;
+  const ctx = storyCtx();
+  for (const id of STORY_IDS) {
+    const s = STORY[id];
+    if (s.trigger.type === 'boot' && !storyBootDone) continue;
+    if (storyReady(s, ctx)) { storyPlay(id); return true; }
+  }
+  return false;
+}
+// 开局第一个 tick 才允许播 boot —— 进游戏和读档都走这里，
+// 但读档时 readLog 里已经有它，storyReady 会挡掉。
+function storyOnBoot() {
+  storyBootDone = true;
+  if (STORY_OFF) return;
+  const ctx = storyCtx();
+  const s = STORY_IDS.map(id => STORY[id]).find(n => n.trigger.type === 'boot' && storyReady(n, ctx));
+  if (s) storyPlay(s.id);
+}
+// 重开一局：把播放器与 boot 闸门归零。不清的话第二周目再也看不到序章。
+function storyReset() {
+  if (storyTimer) { clearInterval(storyTimer); storyTimer = null; }
+  storyCur = null; storyIdx = 0; storyFull = ''; storyShown = 0;
+  storyBootDone = false;
+  if (storyEl) storyEl.classList.add('hidden');
+}
+
+// 环境文本：走近按 E 读。可反复读，读完记进日志（readLog 用 e_ 前缀区分）。
+function nearEnvText() {
+  let best = null, bd = 1e9;
+  for (const id of ENV_IDS) {
+    const t = ENV_TEXTS[id];
+    const d = Math.hypot(player.x - t.at.x, player.y - t.at.y);
+    if (d <= t.at.r && d < bd) { bd = d; best = { id, t }; }
+  }
+  return best;
+}
+function envRead(id) {
+  const t = ENV_TEXTS[id];
+  if (!t) return;
+  player.readLog[id] = 1;
+  // 碑文走剧情覆盖层，不走飘字 —— 飘字两秒就没了，而碑文是要停下来读的。
+  storyShow({
+    id,
+    page: '旧 物',
+    lines: [
+      { who: null, text: t.name },
+      { who: 'narrator', text: t.text },
+    ],
+    onEnd: {},
+  });
+}
+
 // ---- 地宫里的三件事：开箱、深入地脉、回地面 ----
 function dgUse(o) {
   if (o.kind === 'rift') { o.home ? dgHome() : dgDescend(); return; }
@@ -4201,6 +4463,9 @@ const talkEl = document.getElementById('talk');
 const talkLineEl = document.getElementById('talkLine');
 const talkOptsEl = document.getElementById('talkOpts');
 let talkNpc = null, talkTimer = null, talkFull = '', talkShown = 0, talkAsked = false;
+// 当前这一层的台词。三层对话（初见 / 熟识 / 深交）按侠名挑，
+// 挑中的这一层在这次对话里固定住 —— 中途升级换口吻会让玩家以为点错了人。
+let talkLayer = null;
 
 function phaseOn(phases) {
   if (!phases || phases === 'always') return true;
@@ -4235,13 +4500,20 @@ function talkTo(v) {
   talkNpc = v; talkAsked = false;
   questOnTalk(v.id);
   const o = vilObjs.find(x => x.villager === v.id);
+  // 三层对话：story.js 里写了就用它，没写的（店主等）继续走 village.js 的老台词。
+  // 强制迁移所有 NPC 会让店主那句"营业 / 打烊"两个状态丢掉，不值得。
+  talkLayer = npcLines(v.id, player.fame || 0);
   const n = o ? o.spoke : 0;
-  if (o) o.spoke = (n + 1) % v.greet.length;
+  const lines = talkLayer ? talkLayer.lines : v.greet;
+  if (o) o.spoke = (n + 1) % lines.length;
   document.getElementById('talkName').textContent = v.name;
-  document.getElementById('talkRole').textContent = v.role + '　·　' + clock.phase.name;
+  // 把层名挂在这一行上：玩家能看见"这个人现在怎么看你"，
+  // 而不用去猜为什么台词变了。
+  document.getElementById('talkRole').textContent = v.role + '　·　' + clock.phase.name +
+    (talkLayer ? '　·　' + npcLayer(player.fame || 0).name : '');
   talkEl.classList.remove('hidden');
   // 见过几面之后，台词换口气 —— 这是最便宜的"他记得你"
-  renderTalk(v.greet[n % v.greet.length]);
+  renderTalk(lines[n % lines.length]);
 }
 function renderTalk(line) {
   say(line);
@@ -4252,7 +4524,10 @@ function renderTalk(line) {
     b.onclick = fn;
     talkOptsEl.appendChild(b);
   };
-  if (!talkAsked) add('打听', () => { talkAsked = true; renderTalk(talkNpc.ask); });
+  if (!talkAsked) add('打听', () => {
+    talkAsked = true;
+    renderTalk((talkLayer && talkLayer.ask) || talkNpc.ask);
+  });
   // 任务：先复命，再接新。店主走的是店铺面板，村民走这里。
   for (const q of questTurnInAt(talkNpc.id)) {
     add('复命 · ' + q.title, () => {
@@ -4581,6 +4856,11 @@ function save() {
     // 玩家手动排过装配格：读档后别再被 autoLoadout 自动补位
     loadoutManual: !!player.loadoutManual,
     mantras: player.mantras, mantrasOwned: player.mantrasOwned || {},
+    // 剧情：flags / 已读节点 / 线索 / 按 type 的累计击杀。
+    // 已读节点必须存 —— 不存的话读档会把"一次性的事"变成循环，
+    // 玩家每次读档都要重看一遍序章。
+    flags: player.flags || {}, readLog: player.readLog || {},
+    clues: player.clues || {}, typeKills: player.typeKills || {},
     clock: clock.serialize(),
   }));
 }
@@ -4662,6 +4942,10 @@ function load() {
       }
       return own;
     })(),
+    // 剧情：老存档没有这几样，给空对象。空 readLog 意味着序章会在读档后补播一次 ——
+    // 这是好事（P7 之前的档也该看到序章），而且只播一次。
+    flags: s.flags || {}, readLog: s.readLog || {},
+    clues: s.clues || {}, typeKills: s.typeKills || {},
   });
   player.mantras = mantraSanitize(s.mantras, player.mantrasOwned);
   invalidateStats();
@@ -4690,6 +4974,7 @@ function resetWorld() {
   clearHazards();   // 地面危险区不属于上面任何一类，忘了清就会跨局残留
   clearArts();      // 飞剑环绕的 mesh 也不属于上面任何一类
   mantraResetCombat();   // 追命连击 / 藏锋层数 / 铁衣层数：跨局残留会让玩家一出生就带着 +40%
+  storyReset();          // 剧情播放器状态 + boot 闸门：重开一局序章要能再播
   seedCamps();
 }
 function startGame(cont) {
@@ -4710,6 +4995,7 @@ function startGame(cont) {
       loadoutManual: false,
       artBuffs: [], forceCrit: 0, nextDmg: 0,
       mantras: { main: null, sub: [null, null] }, mantrasOwned: {},
+      flags: {}, readLog: {}, clues: {}, typeKills: {},
     });
     invalidateStats();
   }
@@ -4728,6 +5014,9 @@ function startGame(cont) {
   combo = 0; comboT = 0; hitstop = 0; shakeX = shakeY = 0;
   msg(cont ? '继续闯荡 · 第一章 青云野' : '第一章 · 青云野', C.gold3);
   renderInv(); renderSkills(); renderQuests(); renderArts();
+  // 序章：玩家一睁眼就在土地庙里，没有"走进去"这回事 —— 只能在这里手动放一次。
+  // 读档时 readLog 里已经有它，storyReady 会挡掉，所以不会每局都重播。
+  storyOnBoot();
 }
 
 // ============ 输入 ============
@@ -4740,6 +5029,13 @@ addEventListener('keydown', e => {
       const has = !!(localStorage.getItem(SAVE_KEY) || LEGACY_KEYS.some(k => localStorage.getItem(k)));
       startGame(has);
     }
+    return;
+  }
+  // 剧情播放中：只认"翻页"。其余键一律吞掉 ——
+  // 否则玩家一边读一边往前走、一边放招，回来发现自己已经死了。
+  if (storyPlaying()) {
+    if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter' ||
+      e.code === 'KeyE' || e.code === 'Escape') storyNext();
     return;
   }
   if (e.code === 'Space' || e.code === 'KeyJ') attack();
@@ -4812,6 +5108,9 @@ document.getElementById('btnTalkClose').onclick = talkClose;
 document.getElementById('talkLine').onclick = sayAll;   // 点正文 = 跳过打字机
 document.getElementById('btnSkillClose').onclick = () => toggleSkills(false);
 document.getElementById('btnQuestClose').onclick = () => toggleQuests(false);
+// 剧情覆盖层整块都能点：读的人手指落在哪都行，不该逼他去瞄准一个"继续"按钮。
+const storyBox = document.getElementById('story');
+if (storyBox) storyBox.onclick = () => storyNext();
 document.getElementById('btnCont').disabled = !(localStorage.getItem(SAVE_KEY) || localStorage.getItem(LEGACY_KEYS[0]));
 
 // 技能栏点击（画布上直接点技能格）
@@ -5169,6 +5468,9 @@ function tickSwing(dt) {
 function update(dt) {
   time += dt;
   if (state !== 'play') return;
+  // 剧情播放时整个世界暂停。读碑的时候被山魈咬死，是这游戏最不该发生的事；
+  // 而且剧情里有"回头看了一眼来路"这种叙述，人还在走就对不上了。
+  if (storyPlaying()) return;
 
   // 时辰推进。顿帧时也照走 —— 天色与钟声不该被一次砍击的停顿卡住。
   clock.advance(dt);
@@ -5219,6 +5521,9 @@ function update(dt) {
   }
   // 任务：reach / dg / item / have 四种目标每帧现算，kill 与 talk 走事件
   questTick(dt);
+  // 剧情：同样每帧扫全表。节点只有十几个，全表扫比维护事件订阅简单得多，
+  // 也不会出现"某个钩子忘了调用导致某条剧情永远不播"这种最难查的 bug。
+  storyScan();
 
   if (hitstop > 0) { hitstop -= dt; tickSwing(dt); return; }
 
@@ -6386,6 +6691,7 @@ function drawOverlay(camX, camY) {
       const ds = sid ? Math.hypot(player.x - SHOPS[sid].x, player.y - SHOPS[sid].y) : 1e9;
       if (vv && dv <= ds) { hint = 'E 与 ' + vv.name + ' 说话'; hot = true; }
       else if (sid) { hint = 'E ' + SHOPS[sid].title + (shopOpenNow(sid) ? '' : '（已打烊）'); hot = true; }
+      else if (nearEnvText()) { hint = 'E 读' + nearEnvText().t.name; hot = true; }
       else if (nearNotice()) { hint = 'E 告示牌'; hot = true; }
       else if (nearSeal()) { hint = 'E 封碑（未启）'; hot = true; }
       else if (nearForge) { hint = 'E 铁匠台  F 打坐'; hot = true; }
@@ -6864,7 +7170,7 @@ window.__game = {
   get objects() { return objects; },
   get hazards() { return hazards; }, addHazard, clearHazards, UNIQUES, makeUnique,
   killEnemy, execSkill, runBossSkills,
-  QUESTS, QUEST_IDS, QUEST_ITEMS, WANDERERS, ALL_TALKERS,
+  QUESTS, QUEST_IDS, QUEST_ITEMS, WANDERERS, ALL_TALKERS, NPCS,
   questAccept, questTurnIn, questReady, questOffered, questTurnInAt, questOnKill, questOnTalk,
   refreshSeal, tripleState, relicName, renderQuests, toggleQuests,
   get sealOn() { return sealOn; },
@@ -6897,6 +7203,26 @@ window.__game = {
   updateMantras, resetOneCd, mantraOnCast, mantraOnHit, mantraHurtMul, mantraOnDodge,
   hitEnemy, hurtPlayer, rollDamage, attackInterval,
   get mantraPageOn() { return invPageOn; },
+  // 剧情
+  STORY, STORY_IDS, POI, ACTS, CLUES, CLUE_IDS, ENV_TEXTS, ENV_IDS,
+  NPC_LAYERS, NPC_LINES, storyByAct, npcLayer, npcLines, storyReady, storyHint,
+  storyPlay, storyNext, storyPlaying, storyScan, storyReset, renderStoryLog,
+  nearEnvText, envRead,
+  get storyCur() { return storyCur; },
+  get storyIdx() { return storyIdx; },
+  // 当前这一句的完整文本（打字机还没吐完时也拿得到全句）
+  get storyText() { return storyFull; },
+  // 测试用：直接把剧情播完（不用等打字机）
+  finishStory() {
+    let guard = 0;
+    while (storyCur && guard++ < 200) {
+      if (storyShown < storyFull.length) { storyShown = storyFull.length; storyLineEl.textContent = storyFull; }
+      else storyNext();
+    }
+    return { playing: !!storyCur, guard };
+  },
+  setFlag(id, v) { player.flags[id] = v === false ? 0 : 1; return player.flags; },
+  setRelic(id, n) { player.relics[id] = n || 1; return player.relics; },
   get mantraMods() { return mantraMod(player.mantras, player.mantrasOwned); },
   // 测试用：直接设定装配 / 已学，绕过 UI
   setMantras(main, subs) {
