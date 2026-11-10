@@ -121,6 +121,8 @@ node tools/shot.js                # CDP 截图（SHOT_W/SHOT_H/MOBILE/DPR/WAIT �
 - [x] 第一章 · 青云野（兵器 / 道行 / 刷宝 / 打击感）
 - [x] 昼夜系统 · 青云集村庄 · NPC 生态与侠名
 - [x] 青云古洞（三层地牢 + 洞主）
+- [ ] **第一章扩容**：地图 ×2（四区）、营地 6→12 带生态、首领 3→8、NPC 5→9、任务线 0→10
+      → 施工图见 [`dawn-s1/CHAPTER-1-EXPANSION.md`](dawn-s1/CHAPTER-1-EXPANSION.md)
 - [ ] 洞内专属词缀（地宫掉落带标记，可交易 / 献祭）
 - [ ] 每层一个房间事件（陷阱宝箱 / 行脚商人 / 祭坛）
 - [ ] 第二章
