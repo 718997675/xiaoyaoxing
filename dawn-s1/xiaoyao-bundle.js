@@ -54959,6 +54959,257 @@ function artBrief(a) {
 return { PROF_MAX, PROF_NEED, PROF_WEIGHT, profLevel, profLeft, profFrac, ARTS, ART_IDS, ART_SLOTS, ART_KEYS, artById, artsOfWeapon, artUnlocked, unlockedArts, ART_SLOT_LABEL, artBrief };
 })();
 
+/* ==================== mantras.js ==================== */
+__M.mantras = (function () {
+// 心法 —— 一主二辅，12 主 + 10 辅 = 540 种组合。
+//
+// 为什么不叫 skills.js：那个文件是"道行树"（境界给的通用被动，人人都会点满）。
+// 心法是**互斥选择**：一局只能带一条主心法，逼玩家在"这一趟要什么"上做取舍。
+// 为什么也不叫 arts.js：那个已经被 P5 的兵器招式占了（换刀就没有剑招）。
+//
+// 本文件只有数据 + 纯函数，不碰 DOM、不碰 three —— 心法的运行时钩子全在 game.js，
+// 因为那些钩子要读写战斗状态（连击、受击、蓄力），放在这里会把纯数据层弄脏。
+
+const MANTRA_MAX_LV = 3;     // 藏经阁残卷「注解」最高 3 级
+const MANTRA_LV_STEP = 0.30; // 每级注解 +30% 效果
+const SUB_SLOTS = 2;
+
+// 强化只放大**好处**，不放大代价。
+// 血河 -15% 气血如果跟着等级走，练到 3 级反而更脆，玩家会觉得越练越亏。
+function lvMul(lv) { return 1 + MANTRA_LV_STEP * (Math.max(1, Math.min(MANTRA_MAX_LV, lv)) - 1); }
+
+// ---------------------------------------------------------------- 12 条主心法
+// 设计硬约束（写在这里，改数值前先读一遍）：
+//   1. 每条都必须有代价。没有代价的那条会变成所有人的默认答案。
+//   2. 伤害加成走同一加法区，单一来源上限 40%。所以追命 / 藏锋都压在 40% 顶格。
+//   3. 不能只对某一类兵器有效 —— 那就变回职业系统了。
+const MAIN = {
+  pojun: {
+    id: 'pojun', kind: 'main', name: '破军', school: '刚',
+    mech: 'fullHpBonus', params: { up: 0.25, down: -0.10 },
+    desc: '对满血之敌伤害 +25%；对半血以下之敌 -10%。',
+    flaw: '收尾最难受 —— 越打越软，残血目标得靠普攻磨。',
+    from: { kind: 'boss', id: 'qingshe', text: '击败「青鳞蟒」（首杀）' },
+  },
+  guiyuan: {
+    id: 'guiyuan', kind: 'main', name: '归元', school: '生',
+    mech: 'idleRegen', params: { delay: 3, pct: 4 },
+    desc: '脱战 3 秒后，每秒回复 4% 最大气血。',
+    flaw: '开打就断。硬碰硬的场合等于没带。',
+    from: { kind: 'boss', id: 'treant', text: '击败「千年树妖」（首杀）' },
+  },
+  zhuiming: {
+    id: 'zhuiming', kind: 'main', name: '追命', school: '杀',
+    // 上限从 +40% 压到 +32%：P95/P50 实测 1.39，超了 1.35 的线。
+    // 中位数组合里有一半是防御类主心法（归元 / 铁衣 / 卸力），DPS 等于裸装，
+    // 所以"最强的那条"能加多少，直接就是分布的比值。
+    mech: 'chainBonus', params: { per: 0.04, cap: 0.32, window: 3 },
+    desc: '连续命中同一目标，每击递增 +4%，最多 +32%。换目标或停手 3 秒清零。',
+    flaw: '只咬一个。被围住时加成全废。',
+    from: { kind: 'kills', n: 300, text: '累计斩敌 300' },
+  },
+  xuehe: {
+    id: 'xuehe', kind: 'main', name: '血河', school: '杀',
+    mech: null, mods: { lifesteal: 8, hpPct: -15 },
+    desc: '造成伤害的 8% 转为气血；最大气血 -15%。',
+    flaw: '血薄。一刀换一刀的打法，遇到高爆发就亏。',
+    from: { kind: 'boss', id: 'boss', text: '击败「黑风寨主」（首杀）' },
+  },
+  tieyi: {
+    id: 'tieyi', kind: 'main', name: '铁衣', school: '守',
+    mech: 'hitReduce', params: { pct: 0.30, dur: 2, max: 2 },
+    desc: '受击后 2 秒内减伤 30%，可叠 2 层。',
+    flaw: '第一下永远白挨。怕的是"很久才打你一下"的对手。',
+    from: { kind: 'boss', id: 'shimu', text: '击败「石母」（首杀）' },
+  },
+  jifeng: {
+    id: 'jifeng', kind: 'main', name: '疾风', school: '速',
+    mech: 'dashBurst', mods: { spd: 12 }, params: { dur: 1.5, mul: 0.40 },
+    desc: '移速 +12%；闪避成功后 1.5 秒内，下一击伤害 +40%。',
+    flaw: '得先挨到闪避那一下。站桩输出完全吃不到。',
+    from: { kind: 'boss', id: 'wumian', text: '击败「无面剑客」（首杀）' },
+  },
+  fenxin: {
+    id: 'fenxin', kind: 'main', name: '焚心', school: '烈',
+    // 注意 qi 是 5 不是 2：命中本身会回 3 点真气，写成 2 的话"净 +1"，
+    // 这条心法的代价就凭空消失了 —— 实测时才发现，账面 -2 实际在回气。
+    mech: 'burnOnHit', params: { pct: 0.30, dur: 3, qi: 5 },
+    desc: '攻击附带灼烧 3 秒（每秒 30% 攻击力）；每次命中额外耗 5 真气。',
+    flaw: '吃真气。真气见底时就是一条白板心法。',
+    from: { kind: 'boss', id: 'huoya', text: '击败「火鸦王」（首杀）' },
+  },
+  hantan: {
+    id: 'hantan', kind: 'main', name: '寒潭', school: '阴',
+    // 原来写 15% / 2 秒，实测减速几乎常驻（攻速够快时 2 秒窗口叠得上），
+    // "靠概率"这个代价根本不存在，等于一条常驻 +20%。压到 10% / 1.5 秒才有真实空窗。
+    mech: 'slowOnHit', params: { chance: 0.10, pct: 0.40, dur: 1.5, bonus: 0.18 },
+    desc: '命中时 10% 概率减速 40%/1.5 秒；对被减速的目标伤害 +18%。',
+    flaw: '全靠概率。脸黑的时候就是没有。',
+    from: { kind: 'boss', id: 'yaowang', text: '击败「岩魈 · 洞主」（首杀）' },
+  },
+  kongming: {
+    id: 'kongming', kind: 'main', name: '空明', school: '虚',
+    mech: null, mods: { qiMaxPct: 40, qiRegenPct: 50, skillDmgPct: -10 },
+    desc: '真气上限 +40%、回复 +50%；术法伤害 -10%。',
+    flaw: '普攻流派带了纯亏，只有靠招式的人才吃得下。',
+    from: { kind: 'boss', id: 'kuilei', text: '击败「机关傀儡」（首杀）' },
+  },
+  cangfeng: {
+    id: 'cangfeng', kind: 'main', name: '藏锋', school: '刚',
+    mech: 'idleStack', params: { max: 5, per: 0.08 },
+    desc: '不出招时每秒蓄 1 层「锋」（上限 5 层）；出招时每层 +8% 伤害并清空。',
+    flaw: '蓄力就是不打。打快了等于没蓄。',
+    from: { kind: 'level', n: 18, text: '境界达 18 级' },
+  },
+  xieli: {
+    id: 'xieli', kind: 'main', name: '卸力', school: '柔',
+    mech: 'qiOnHurt', params: { pct: 0.20 },
+    desc: '受击时，所受伤害的 20% 转为真气。',
+    flaw: '要挨打才回气。血线压不住的时候，回的那点气救不了命。',
+    from: { kind: 'fame', n: 40, text: '侠名达 40' },
+  },
+  wuchang: {
+    id: 'wuchang', kind: 'main', name: '无常', school: '机',
+    mech: 'critResetCd', mods: { crit: 15, critDmg: -30 }, params: { chance: 0.20 },
+    // 冷却**减半**而不是清零。清零那版实测能把 30 秒的大招变成几秒一发，
+    // 最强组合的 DPS 冲到中位数的 2.3 倍 —— 一条心法顶掉整个构筑的差异。
+    desc: '暴击率 +15%、暴击伤害 -30%；暴击时 20% 概率让一个技能的剩余冷却减半。',
+    flaw: '暴伤砍掉三成。不暴击的时候，这条心法什么都没做。',
+    from: { kind: 'bosses', n: 3, text: '斩落 3 位不同的首领' },
+  },
+};
+
+// ---------------------------------------------------------------- 10 条辅心法
+// 纯数值、无代价。刻意留了贪狼 / 拾遗两条"不打架"的 ——
+// 有些玩家就是喜欢刷，不该逼他全点战斗。
+const SUB = {
+  mingmu: { id: 'mingmu', kind: 'sub', name: '明目', mods: { crit: 8 },
+    desc: '暴击率 +8%。', price: 1200 },
+  chenjian: { id: 'chenjian', kind: 'sub', name: '沉肩', mods: { iframeMul: 18 },
+    desc: '受击后的无敌时间 +18%。', price: 900 },
+  changxi: { id: 'changxi', kind: 'sub', name: '长息', mods: { qiRegenPct: 25 },
+    desc: '真气回复 +25%。', price: 1000 },
+  mofeng: { id: 'mofeng', kind: 'sub', name: '磨锋', mods: { atkPct: 6 },
+    desc: '攻击力 +6%。', price: 800 },
+  qingshen: { id: 'qingshen', kind: 'sub', name: '轻身', mods: { spd: 8 },
+    desc: '移速 +8%。', price: 700 },
+  houtu: { id: 'houtu', kind: 'sub', name: '厚土', mods: { hpPct: 15 },
+    desc: '最大气血 +15%。', price: 1100 },
+  ruijin: { id: 'ruijin', kind: 'sub', name: '锐金', mods: { pierce: 10 },
+    desc: '破防 +10%（无视目标一成防御）。', price: 1400 },
+  jingshui: { id: 'jingshui', kind: 'sub', name: '静水', mods: { cdr: 10 },
+    desc: '技能冷却 -10%。', price: 1500 },
+  tanlang: { id: 'tanlang', kind: 'sub', name: '贪狼', mods: { goldMul: 20 },
+    desc: '银两掉落 +20%。', price: 600 },
+  shiyi: { id: 'shiyi', kind: 'sub', name: '拾遗', mods: { dropMul: 8 },
+    desc: '装备掉落率 +8%。', price: 1000 },
+};
+
+const MANTRAS = Object.assign({}, MAIN, SUB);
+const MAIN_IDS = Object.keys(MAIN);
+const SUB_IDS = Object.keys(SUB);
+const MANTRA_IDS = MAIN_IDS.concat(SUB_IDS);
+
+function mantraById(id) { return MANTRAS[id] || null; }
+function isMain(id) { return !!(MAIN[id]); }
+
+// 空的 mods 模板。每个字段都是**加法**语义 —— 心法之间、心法与道行树之间
+// 全部先加后乘，绝不出现"乘算叠乘算"（那会让两条 +20% 变成 +44%）。
+function emptyMod() {
+  return {
+    atkPct: 0, hpPct: 0, crit: 0, critDmg: 0, spd: 0, cdr: 0,
+    qiMaxPct: 0, qiRegenPct: 0, lifesteal: 0, skillDmgPct: 0,
+    pierce: 0, goldMul: 0, dropMul: 0, iframeMul: 0, dmgReduce: 0,
+  };
+}
+
+// 把当前装配的三条心法折成一个修正对象。
+// loadout = { main: id|null, sub: [id|null, id|null] }，owned = { id: lv }
+function mantraMod(loadout, owned) {
+  const m = emptyMod();
+  if (!loadout) return m;
+  const list = [loadout.main].concat(loadout.sub || []).filter(Boolean);
+  const seen = {};
+  for (const id of list) {
+    const a = MANTRAS[id];
+    // 读档降级：id 被删过 / 手改过存档 → 直接跳过，不抛错
+    if (!a || !a.mods) continue;
+    // 同一条心法不能在主辅两个位置各算一遍（主心法本来就不在 SUB 里，防的是手改存档）
+    if (seen[id]) continue;
+    seen[id] = 1;
+    const k = lvMul((owned && owned[id]) || 1);
+    for (const key in a.mods) {
+      if (!(key in m)) continue;      // 未知字段忽略，老存档不会炸
+      m[key] += a.mods[key] * k;
+    }
+  }
+  // 数值统一取整到 0.1，避免 8.000000000000002 这种脏数进 UI
+  for (const key in m) m[key] = Math.round(m[key] * 10) / 10;
+  return m;
+}
+
+// 当前生效的主心法 id（最多一条 —— 互斥规则在 install 里保证）
+function mainOf(loadout) { return (loadout && loadout.main) || null; }
+
+// 装配：主心法互斥，装第二条自动顶掉第一条；辅心法两格满了就顶掉第一格。
+// 返回 { ok, replaced } —— 让调用方能说一句"「归元」已替下「破军」"。
+function install(loadout, id) {
+  const a = MANTRAS[id];
+  if (!a) return { ok: false, replaced: null };
+  if (a.kind === 'main') {
+    const old = loadout.main;
+    loadout.main = id;
+    return { ok: true, replaced: old && old !== id ? old : null };
+  }
+  if (!Array.isArray(loadout.sub)) loadout.sub = [null, null];
+  while (loadout.sub.length < SUB_SLOTS) loadout.sub.push(null);
+  const at = loadout.sub.indexOf(id);
+  if (at >= 0) { loadout.sub[at] = null; return { ok: true, replaced: null, removed: id }; }  // 再点一次卸下
+  const empty = loadout.sub.indexOf(null);
+  if (empty >= 0) { loadout.sub[empty] = id; return { ok: true, replaced: null }; }
+  const old = loadout.sub[0];
+  loadout.sub[0] = id;
+  return { ok: true, replaced: old };
+}
+
+function uninstall(loadout, id) {
+  if (loadout.main === id) { loadout.main = null; return true; }
+  const at = (loadout.sub || []).indexOf(id);
+  if (at >= 0) { loadout.sub[at] = null; return true; }
+  return false;
+}
+
+// 存档校验：把不认识 / 没学过的 id 清成 null，长度补到 2。
+// 不这么做的话，删一条心法就会让老存档读进来后永远空着一个槽。
+function sanitize(loadout, owned) {
+  const out = { main: null, sub: new Array(SUB_SLOTS).fill(null) };
+  const own = owned || {};
+  if (loadout && typeof loadout.main === 'string' && MAIN[loadout.main] && own[loadout.main]) out.main = loadout.main;
+  const sub = (loadout && Array.isArray(loadout.sub)) ? loadout.sub : [];
+  const used = {};
+  for (let i = 0; i < SUB_SLOTS; i++) {
+    const id = sub[i];
+    if (!id || !SUB[id] || !own[id] || used[id]) continue;
+    used[id] = 1;
+    out.sub[i] = id;
+  }
+  return out;
+}
+
+// 已学等级（没学返回 0）
+function lvOf(owned, id) { return (owned && owned[id]) || 0; }
+
+// 一句话摘要，给 HUD / tooltip 用
+function mantraBrief(a, lv) {
+  const parts = [];
+  if (a.desc) parts.push(a.desc);
+  if (lv && lv > 1) parts.push('注解 ' + lv + ' 级（效果 ×' + lvMul(lv).toFixed(1) + '）');
+  return parts.join(' · ');
+}
+
+return { MANTRA_MAX_LV, MANTRA_LV_STEP, SUB_SLOTS, MAIN, SUB, MANTRAS, MAIN_IDS, SUB_IDS, MANTRA_IDS, mantraById, isMain, emptyMod, mantraMod, mainOf, install, uninstall, sanitize, lvOf, mantraBrief };
+})();
+
 /* ==================== quests.js ==================== */
 __M.quests = (function () {
 // quests.js · 任务系统数据层
@@ -55812,6 +56063,10 @@ const NPCS = [
   { id: 'smith', art: 'npcZhang', x: 694, y: 890, name: '张五' },
   { id: 'tavern', art: 'npcQi', x: 898, y: 892, name: '阿七' },
   { id: 'pedlar', art: 'npcHuo', x: 800, y: 888, name: '赵四' },
+  // 云松：坐在街东的墙根下，褡裢摊在膝头。
+  // 不放街心 —— 街心那块地要给玩家走，而且井沿、客栈门口都挤满了人。
+  // 和午时才出现的玄阳子也不是一个人：那位在村里替人画符，这位是真正在路上走的。
+  { id: 'daoshi', art: 'npcDao', x: 938, y: 804, name: '云松' },
 ];
 
 // 街面上的人。作息用 phases 表示 —— 到点出现、到点消失。
@@ -55924,6 +56179,16 @@ const SHOPS = {
     openWhen: ['wu', 'you'],
     line: '“针头线脑，铜钱换命。看看？”',
     closed: '“担子收进客栈了，明儿赶早。”',
+  },
+  // 游方道人：不是坐商，是路过的人。他把褡裢摊在井沿上，
+  // 卖的东西别处买不到 —— 十条辅心法全在他这儿。
+  // 主心法**不卖**：构筑的核心得是打下来的，不是买来的。
+  daoshi: {
+    title: '墙根下的褡裢', keeper: '游方道人 · 云松',
+    x: 938, y: 804, r: 42,
+    openWhen: 'always',
+    line: '“心法不在多，在合。你带三条，我这儿有十条可挑。”',
+    closed: '“……”',
   },
 };
 
@@ -56294,6 +56559,7 @@ const { VILLAGE, inVillage, villageArt, BUILDINGS, PROPS, NPCS, VILLAGERS, SHOPS
 const { QUESTS, QUEST_IDS, QUEST_ITEMS, RELICS_TRIPLE, MAIN_ORDER, questById, objDone, objText, tripleReady, tripleMissing, relicName, questsOfGiver } = __M.quests;
 const { DG, DGT, DG_FLOORS, FLOOR_MOBS, inDungeon, genFloor, paintDungeon, dungeonArt } = __M.dungeon;
 const { ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_SLOT_LABEL, PROF_MAX, PROF_WEIGHT, artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief } = __M.arts;
+const { MAIN, SUB, MANTRAS, MAIN_IDS, SUB_IDS, MANTRA_IDS, MANTRA_MAX_LV, SUB_SLOTS, mantraById, isMain, emptyMod, mantraMod, mainOf, install: mantraInstall, uninstall: mantraUninstall, sanitize: mantraSanitize, lvOf, mantraBrief } = __M.mantras;
 
 const LW = 480, LH = 270, TILE = 16, MAPW = 144, MAPH = 104;
 const SAVE_KEY = 'xiaoyao-save-v5';
@@ -57526,6 +57792,10 @@ const player = {
   // 招式槽 6 格，存 art id。换兵器时只清掉"不属于当前兵器"的格子，
   // 同一件兵器内部的手动编排保留。
   loadout: new Array(ART_SLOTS).fill(null),
+  // 心法：一主二辅。主心法互斥（装第二条顶掉第一条），这是整个系统成立的关键 ——
+  // 允许叠两条的话，玩家一定会去找"哪两条乘起来最爆"，最后收敛成一个答案。
+  mantras: { main: null, sub: [null, null] },
+  mantrasOwned: {},   // { pojun: 1 } 已学 + 注解等级（1~3）
 };
 const pMesh = quad(playerTex.down[0], 16, 18);
 pMesh.visible = false;
@@ -57872,10 +58142,14 @@ function meditate() {
 let _stats = null;
 function computeStats() {
   const sk = computeSkillStats(player.skillLv);
+  // 心法：全部走加法区。和道行树的加成先加再乘一次，绝不出现"乘算叠乘算"。
+  const mm = mantraMod(player.mantras, player.mantrasOwned);
   const s = {
     atk: player.atkBase, def: 0, hp: player.maxHpBase,
     crit: 5, critDmg: 150, spd: 0, cdr: 0, lifesteal: 0, luck: 0,
     atkSpd: 0, qiMax: 60, qiRegen: 4, skillDmg: 0, comboPct: 0, qiOnHit: 0, dmgReduce: 0,
+    // 心法专用字段：pierce 破防 / goldMul 银两 / dropMul 掉落 / iframeMul 受击无敌
+    pierce: 0, goldMul: 0, dropMul: 0, iframeMul: 0,
   };
   for (const slot of SLOTS) {
     const it = player.equip[slot];
@@ -57887,13 +58161,27 @@ function computeStats() {
     s.qiMax += g.qiMax; s.qiRegen += g.qiRegen; s.skillDmg += g.skillDmg;
     s.comboPct += g.comboPct; s.qiOnHit += g.qiOnHit;
   }
-  s.atk = Math.round(s.atk * (1 + sk.atkPct / 100));
-  s.hp = Math.round(s.hp * (1 + sk.hpPct / 100));
+  s.atk = Math.round(s.atk * (1 + (sk.atkPct + mm.atkPct) / 100));
+  s.hp = Math.round(s.hp * (1 + (sk.hpPct + mm.hpPct) / 100));
   s.crit += sk.crit; s.critDmg += sk.critDmg; s.spd += sk.spd; s.atkSpd += sk.atkSpd;
   s.lifesteal += sk.lifesteal; s.luck += sk.luck; s.qiMax += sk.qiMax * 4;
   s.qiRegen += sk.qiRegen; s.skillDmg += sk.skillDmg; s.comboPct += sk.comboPct;
   s.qiOnHit += sk.qiOnHit; s.dmgReduce += sk.dmgReduce;
+  // 心法加法区
+  s.crit += mm.crit; s.critDmg += mm.critDmg; s.spd += mm.spd; s.cdr += mm.cdr;
+  s.lifesteal += mm.lifesteal; s.skillDmg += mm.skillDmgPct; s.dmgReduce += mm.dmgReduce;
+  s.pierce += mm.pierce; s.goldMul += mm.goldMul; s.dropMul += mm.dropMul;
+  s.iframeMul += mm.iframeMul;
+  // 真气上限/回复是"百分比放大"，放在最后乘一次 —— 否则装备给的 +真气 会被算漏
+  if (mm.qiMaxPct) s.qiMax = Math.round(s.qiMax * (1 + mm.qiMaxPct / 100));
+  if (mm.qiRegenPct) s.qiRegen = Math.round(s.qiRegen * (1 + mm.qiRegenPct / 100) * 10) / 10;
   return s;
+}
+// 当前主心法 id（没装返回 null）。钩子里到处要用，包一层省得到处解构。
+function mantraMain() { return mainOf(player.mantras); }
+function mantraParam(k) {
+  const a = MAIN[mantraMain()];
+  return a && a.params ? a.params[k] : undefined;
 }
 function stats() { if (!_stats) _stats = computeStats(); return _stats; }
 function invalidateStats() { _stats = null; }
@@ -58105,17 +58393,228 @@ function rollDamage(mul, opt) {
   if (crit) dmg *= s.critDmg / 100;
   return { dmg: Math.max(1, Math.round(dmg)), crit };
 }
+// ============ 心法运行时 ============
+// 心法**不新写一套战斗逻辑**：五个机制钩子全部折进已有的三条路径 ——
+//   hitEnemy（伤害乘区 / 命中后效果）、hurtPlayer（受击）、update（时间累积）
+// 改数值只动 mantras.js 的 params，这里不用碰。
+function mantraResetCombat() {
+  player.mChainE = null; player.mChainN = 0; player.mChainT = 0;
+  player.mCang = 0; player.mCangT = 0; player.mCangBonus = 0;
+  player.mTieyiN = 0; player.mTieyiT = 0;
+  player.mJiFengT = 0; player.mIdleT = 0;
+}
+
+// 乘区：破军 / 追命 / 寒潭 / 藏锋 / 疾风。
+// 全部**乘**在这里一次，不往 stats() 里塞 —— 那些是"站着不动就生效"的常驻值，
+// 这几个是"这一下打出去才算"的瞬时值，混在一起会让面板数字说谎。
+function mantraDmgMul(e) {
+  const id = mantraMain();
+  let m = 1;
+  if (id === 'pojun') {
+    const p = MAIN.pojun.params;
+    const r = e.maxHp ? e.hp / e.maxHp : 1;
+    if (r >= 0.999) m *= 1 + p.up;
+    else if (r <= 0.5) m *= 1 + p.down;
+  } else if (id === 'zhuiming') {
+    const p = MAIN.zhuiming.params;
+    m *= 1 + Math.min(p.cap, (player.mChainN || 0) * p.per);
+  } else if (id === 'hantan') {
+    if (e.slowT > 0) m *= 1 + MAIN.hantan.params.bonus;
+  }
+  // 藏锋 / 疾风是"一次性增益"，谁先打中谁吃掉 —— 见 mantraOnHit
+  if (player.mCangBonus) m *= 1 + player.mCangBonus;
+  if (player.mJiFengT > 0) m *= 1 + MAIN.jifeng.params.mul;
+  return m;
+}
+
+// 出招时结算藏锋：把攒的层数换成这一击的加成。
+// 在 attack() / castArt() 里调，不在 hitEnemy 里 —— 一记横扫打三只怪，
+// 加成只该给第一只，剩下的靠 mCangBonus 清零来保证。
+function mantraOnCast() {
+  // 出招就是"出招"—— 普攻与招式都算，否则蓄力流会变成"边打边蓄"
+  player.lastAtkT = time;
+  if (mantraMain() !== 'cangfeng') return;
+  const n = player.mCang || 0;
+  if (n <= 0) return;
+  player.mCangBonus = n * MAIN.cangfeng.params.per;
+  player.mCang = 0; player.mCangT = 0;
+}
+
+// 无常：让一个技能的剩余冷却减半。
+// 优先挑"剩得最久"的那个 —— 玩家体感上那才叫"终于能再放一次"。
+// 是减半不是清零：清零能让 30 秒的大招变成几秒一发，一条心法就顶掉了整个构筑的差异。
+function resetOneCd() {
+  let best = null, bestT = 0.5;
+  for (const k in artCds) if (artCds[k] > bestT) { best = k; bestT = artCds[k]; }
+  if (best) {
+    artCds[best] = artCds[best] / 2;
+    msg('无常 · 「' + (ARTS[best] ? ARTS[best].name : '招式') + '」冷却减半', C.gold3);
+    return true;
+  }
+  for (const k of ['thunder', 'wu', 'qi']) {
+    if (skills[k].cd > 0.5) {
+      skills[k].cd = skills[k].cd / 2;
+      msg('无常 · 冷却减半', C.gold3);
+      return true;
+    }
+  }
+  return false;
+}
+
+function mantraOnHit(e, dmg, info) {
+  const id = mantraMain();
+  // 一次性增益：无论装的是哪条主心法，打中了就得吃掉（换心法前的残留不该留着）
+  if (player.mCangBonus) player.mCangBonus = 0;
+  if (player.mJiFengT > 0) player.mJiFengT = 0;
+  player.mIdleT = 0;
+  if (!id) return;
+  if (id === 'zhuiming') {
+    // 递增从第二击开始：第一击只是"咬住了"，不加成
+    if (player.mChainE === e) player.mChainN = Math.min(9, (player.mChainN || 0) + 1);
+    else { player.mChainE = e; player.mChainN = 0; }
+    player.mChainT = MAIN.zhuiming.params.window;
+  } else if (id === 'fenxin') {
+    const p = MAIN.fenxin.params;
+    // 真气不够就点不着 —— 这就是"焚心"的代价，不是 bug
+    if (player.qi >= p.qi) {
+      player.qi -= p.qi;
+      const dps = Math.max(1, stats().atk * p.pct);
+      // 复用已有的 burn 状态机（dotTick 里结算），不新增状态
+      if ((e.burn || 0) < dps) e.burn = dps;
+      e.burnT = Math.max(e.burnT || 0, p.dur);
+    }
+  } else if (id === 'hantan') {
+    const p = MAIN.hantan.params;
+    if (Math.random() < p.chance) {
+      e.slowT = Math.max(e.slowT || 0, p.dur);
+      e.slowPct = Math.max(e.slowPct || 0, p.pct);
+    }
+  } else if (id === 'wuchang') {
+    if (info && info.crit && Math.random() < MAIN.wuchang.params.chance) resetOneCd();
+  }
+}
+
+// 铁衣：按当前层数减伤。**先算这一下，再叠层** —— 第一下永远白挨，
+// 那正是这条心法的代价。
+function mantraHurtMul() {
+  if (mantraMain() !== 'tieyi') return 1;
+  const p = MAIN.tieyi.params;
+  return 1 - p.pct * Math.min(p.max, player.mTieyiN || 0);
+}
+function mantraOnHurt(real) {
+  player.mIdleT = 0;
+  // 卸力：转气放在护盾结算之前 —— 罡气挡下来的那部分也是"受力"
+  if (mantraMain() === 'xieli') {
+    const gain = Math.round(real * MAIN.xieli.params.pct);
+    if (gain > 0) player.qi = Math.min(maxQi(), player.qi + gain);
+  }
+}
+function mantraAfterHurt() {
+  if (mantraMain() !== 'tieyi') return;
+  const p = MAIN.tieyi.params;
+  player.mTieyiN = Math.min(p.max, (player.mTieyiN || 0) + 1);
+  player.mTieyiT = p.dur;
+}
+// 闪避成功（不是格挡、不是硬吃）
+function mantraOnDodge() {
+  player.mIdleT = 0;
+  if (mantraMain() === 'jifeng') player.mJiFengT = MAIN.jifeng.params.dur;
+}
+
+function updateMantras(dt) {
+  const id = mantraMain();
+  // 脱战计时：所有主心法共用，命中/受击/闪避都会清零
+  player.mIdleT = (player.mIdleT || 0) + dt;
+
+  if (id === 'cangfeng') {
+    const p = MAIN.cangfeng.params;
+    // 「不出招」的判定用 lastAtkT：手一直在挥的时候不该攒层，
+    // 否则藏锋就变成一条"白给 +40%"的心法，代价凭空消失。
+    if ((player.mCang || 0) < p.max && time - player.lastAtkT > 0.6) {
+      player.mCangT = (player.mCangT || 0) + dt;
+      if (player.mCangT >= 1) {
+        player.mCang = Math.min(p.max, (player.mCang || 0) + 1);
+        player.mCangT -= 1;
+      }
+    }
+  } else { player.mCang = 0; player.mCangT = 0; }
+
+  if (player.mChainT > 0) {
+    player.mChainT -= dt;
+    if (player.mChainT <= 0) { player.mChainE = null; player.mChainN = 0; }
+  }
+  if (player.mTieyiT > 0) {
+    player.mTieyiT -= dt;
+    if (player.mTieyiT <= 0) player.mTieyiN = 0;
+  }
+  if (player.mJiFengT > 0) player.mJiFengT -= dt;
+
+  // 归元：脱战满 3 秒后持续回血。不做飘字，否则站着不动满屏 +N 数字
+  if (id === 'guiyuan' && player.mIdleT >= MAIN.guiyuan.params.delay && player.hp > 0 && player.hp < maxHp()) {
+    player.hp = Math.min(maxHp(), player.hp + maxHp() * MAIN.guiyuan.params.pct / 100 * dt);
+  }
+}
+
+// ============ 心法习得 ============
+// 主心法**不能全靠买**。它是构筑的核心，必须让玩家觉得"这条是我打下来的"。
+// 所以 8 条挂在首领首杀，4 条挂在已有里程碑上（主线做出来之后由 P7 改挂剧情节点）。
+function mantraCondMet(f) {
+  if (!f) return false;
+  if (f.kind === 'boss') return ((player.bossKills || {})[f.id] || 0) > 0;
+  if (f.kind === 'bosses') return Object.keys(player.bossKills || {}).length >= f.n;
+  if (f.kind === 'kills') return (player.kills || 0) >= f.n;
+  if (f.kind === 'fame') return (player.fame || 0) >= f.n;
+  if (f.kind === 'level') return player.level >= f.n;
+  return false;
+}
+
+function learnMantra(id, silent) {
+  const a = MANTRAS[id];
+  if (!a || player.mantrasOwned[id]) return false;
+  player.mantrasOwned[id] = 1;
+  // 辅心法学会就顺手装上（有空槽时）。空槽不用白不用，
+  // 让玩家学会之后还要跑去面板点一次，只会让人以为没生效。
+  if (a.kind === 'sub' && player.mantras.sub.indexOf(null) >= 0) mantraInstall(player.mantras, id);
+  invalidateStats();
+  if (!silent) msg('悟得心法「' + a.name + '」', C.gold3);
+  renderMantras();
+  return true;
+}
+
+// 判定只有这一份，调用点分散在杀敌 / 侠名 / 升级三处。
+// 分散写判定会出现"某条心法永远学不到"—— 归元那次就是这么漏的。
+function checkMantraUnlocks() {
+  for (const id of MAIN_IDS) {
+    if (player.mantrasOwned[id]) continue;
+    const f = MAIN[id].from;
+    if (!mantraCondMet(f)) continue;
+    learnMantra(id, true);
+    msg('心法现世 · 「' + MAIN[id].name + '」（' + (f.text || '') + '）', C.gold3);
+    AUDIO.play('rare');
+  }
+}
+
+// 藏经阁残卷「注解」：+1 级，上限 3 级。只放大好处，不放大代价。
+function upgradeMantra(id) {
+  if (!player.mantrasOwned[id] || player.mantrasOwned[id] >= MANTRA_MAX_LV) return false;
+  player.mantrasOwned[id]++;
+  invalidateStats();
+  renderMantras();
+  return true;
+}
+
 function hitEnemy(e, info, ang, kb) {
   const s = stats();
   // 破防 / 贯甲：招式可以按比例无视防御。放在这里而不是各自算一遍，
   // 是为了让"普攻 / 弹体 / 落雷 / 持续伤害"四条路径共用同一套减伤规则。
-  const def = Math.min(0.7, e.def || 0) * (1 - (info.pierceDef || 0));
+  // 锐金（辅心法）的破防也折进同一项，不另开一条减伤公式。
+  const def = Math.min(0.7, e.def || 0) * (1 - Math.min(0.9, (info.pierceDef || 0) + (s.pierce || 0) / 100));
   // 冻结期间受伤 +20%（冰封的代价就是"解冻前那一顿打"）
   const frozen = e.freezeT > 0 ? 1.2 : 1;
   // 晨雾偷袭 / 摸睡：还没察觉你的怪，第一下 ×1.5 —— 卯时与深夜清营地最划算
   const sneak = (clock.isDawn || e.sleep) && !e.aggro;
   const mul = sneak ? dawnStrike() : 1;
-  const dmg = Math.max(1, Math.round(info.dmg * mul * (1 - def) * frozen));
+  const dmg = Math.max(1, Math.round(info.dmg * mul * (1 - def) * frozen * mantraDmgMul(e)));
   e.hp -= dmg;
   // 记下"这一下是谁打的" —— 专精按最后命中的兵器算，杀敌时结算。
   // 不记的话，用剑把怪磨到一丝血、切锤补最后一刀，锤就白赚了全部专精。
@@ -58147,27 +58646,42 @@ function hitEnemy(e, info, ang, kb) {
     player.hp = Math.min(maxHp(), player.hp + heal);
     dmgNum(player.x + (Math.random() * 8 - 4), player.y - 18, '+' + heal, C.jade3);
   }
+  // 心法的"命中后"效果（焚心灼烧 / 寒潭减速 / 追命递增 / 无常重置 CD）
+  // 放在死亡判定之前：这一下打死人也该把状态挂上去（毒镖传染就是这么做的）
+  mantraOnHit(e, dmg, info);
   if (e.hp <= 0) killEnemy(e);
   return dmg;   // 返回实际伤害：自动化测试要拿它验证偷袭/减伤，运行时不依赖
 }
 function hurtPlayer(d) {
-  if (player.dashT > 0 || player.iframe > 0) { dmgNum(player.x, player.y - 16, '闪避', C.jade3); return; }
+  if (player.dashT > 0 || player.iframe > 0) {
+    dmgNum(player.x, player.y - 16, '闪避', C.jade3);
+    // 疾风：闪避成功才给那 1.5 秒窗口。格挡与硬吃不触发 —— 否则"站桩扛"也能吃到
+    mantraOnDodge();
+    return;
+  }
   const s = stats();
   let real = d * 22 / (22 + s.def);
   real *= 1 - Math.min(60, s.dmgReduce) / 100;
+  real *= mantraHurtMul();   // 铁衣：按**当前**层数减伤，这一下不算新层
   real = Math.max(1, Math.round(real));
+  // 卸力：转气放在护盾之前 —— 罡气挡下来的那部分也是"受力"
+  mantraOnHurt(real);
   if (player.shield > 0) {
     const ab = Math.min(player.shield, real);
     player.shield -= ab; real -= ab;
     dmgNum(player.x, player.y - 20, '罡气 -' + ab, C.jade3);
-    if (real <= 0) { AUDIO.play('shield'); return; }
+    if (real <= 0) { AUDIO.play('shield'); mantraAfterHurt(); return; }
   }
-  player.hp -= real; player.flash = 0.24; player.iframe = 0.62;
+  player.hp -= real; player.flash = 0.24;
+  // 沉肩（辅心法）：受击后的无敌帧拉长。0.62 是普攻节奏的下限，
+  // 再短玩家会觉得"刚站起来又挨一下"。
+  player.iframe = 0.62 * (1 + (s.iframeMul || 0) / 100);
   shakeX += (Math.random() - 0.5) * 4; shakeY += 2.5;
   player.hurtFlash = 0.18;
   dmgNum(player.x, player.y - 16, '-' + real, C.red3, true);
   burst(player.x, player.y - 8, C.red2, 8, 70);
   AUDIO.play('hurt');
+  mantraAfterHurt();
   if (player.hp <= 0) { player.hp = 0; showDead(); }
 }
 // 法杖 / 暗器的普攻：把弹体塞进现有 projectiles，命中、飞行、穿怪都复用同一套。
@@ -58205,6 +58719,7 @@ function attack() {
   else player.atkStep = 0;
   const sw = list[player.atkStep];
   player.lastAtkT = time;
+  mantraOnCast();   // 藏锋：把攒的层换成这一击的加成（顺手刷新出招计时）
   player.atkCd = attackInterval();
   player.atkBuf = 0;
   player.atkT = sw.dur; player.lunge = sw.lunge;
@@ -58305,6 +58820,7 @@ function killEnemy(e) {
     AUDIO.play('levelup');
     renderSkills();
   }
+  checkMantraUnlocks();   // 「藏锋」挂在境界 18 上
   if (e.type === 'boss' && !e.dg) {
     cleared = true; state = 'clear';
     document.getElementById('clear').classList.remove('hidden');
@@ -58312,6 +58828,9 @@ function killEnemy(e) {
   } else if (e.type === 'yaowang') {
     // 洞主：不通关，只在洞里兑现（清层 → 开箱）
     msg('洞主伏诛 · 石胎碎了一地', C.gold3);
+    // 心法来源要记在这里：树妖 / 洞主走的是自己的分支，进不了下面那个 e.boss 分支，
+    // 不补这一行，「归元」「寒潭」两条心法就永远学不到（第一次做就漏了）。
+    player.bossKills[e.type] = (player.bossKills[e.type] || 0) + 1;
     // 石胎碎了，里面那道剑痕才露出来 —— 三幕里最深的一笔。
     // 无面剑客作为"真正的洞主"在岩魈倒下后接手，玩家没有喘息的机会。
     const wm = spawnEnemy('wumian', e.x, e.y - 10, { x: e.x, y: e.y });
@@ -58328,6 +58847,7 @@ function killEnemy(e) {
     }
   } else if (e.type === 'treant') {
     msg('千年树妖伏诛 · 天材地宝现世', C.gold3);
+    player.bossKills[e.type] = (player.bossKills[e.type] || 0) + 1;
     for (let i = 0; i < 2; i++) addDrop('gear', makeGear(SLOTS[(Math.random() * 4) | 0], 3 + ((Math.random() * 2) | 0), player.level + 2));
   } else if (e.boss) {
     // 野外首领：不算通关，只把这一带打服。
@@ -58346,6 +58866,8 @@ function killEnemy(e) {
     }
     shakeX += 8; shakeY += 8;
   }
+  // 心法兑现放在最后：上面几个分支都会写 bossKills，早一步查会读到旧值
+  checkMantraUnlocks();
 }
 
 // ============ 行囊容量 ============
@@ -58406,7 +58928,10 @@ function dropLoot(e) {
   if (tier === 2 || Math.random() < (e.elite ? 0.85 : 0.22)) {
     addDrop('potion', { kind: 'potion', name: '回春丹', heal: 40, r: 0 });
   }
-  const chance = tier === 2 ? 1 : e.elite ? 0.85 : 0.17;
+  // 拾遗（辅心法）：只加"装备"的掉落概率，药与银两不受影响 ——
+  // 玩家要的是"多出装备"，不是"多出药"。
+  const dropK = 1 + (stats().dropMul || 0) / 100;
+  const chance = tier === 2 ? 1 : Math.min(1, (e.elite ? 0.85 : 0.17) * dropK);
   const count = tier === 2 ? 3 : (Math.random() < chance ? 1 : 0);
   for (let i = 0; i < count; i++) {
     let r = rollRarity(luck + nightLuck(), tier);
@@ -58756,6 +59281,7 @@ function castArt(slot) {
   if (player.qi < a.cost) { msg('真气不足', C.jade3); return false; }
   player.qi -= a.cost;
   artCds[id] = artMaxOf(a);
+  mantraOnCast();   // 藏锋：招式也算"出招"
   execArt(a);
   return true;
 }
@@ -58915,8 +59441,11 @@ function windStep() {
 }
 function pickup(d) {
   if (d.kind === 'coin') {
-    player.gold += d.item;
-    dmgNum(player.x, player.y - 16, '+' + d.item + '银两', C.gold3);
+    // 贪狼（辅心法）：银两加成。放在拾取这一处，不去改每一种掉落源 ——
+    // 掉落源有七八处，改一处漏一处，玩家会觉得"这心法时灵时不灵"。
+    const g = Math.round(d.item * (1 + (stats().goldMul || 0) / 100));
+    player.gold += g;
+    dmgNum(player.x, player.y - 16, '+' + g + '银两', C.gold3);
     AUDIO.play('coin');
     return true;
   }
@@ -59167,10 +59696,124 @@ function renderInv() {
     el.oncontextmenu = e => { e.preventDefault(); salvageItem(i); };
   });
 }
+// ============ 心法面板 ============
+// 行囊面板加第二页，而不是另开一个面板 —— 同一件事（"我这套东西怎么配"）
+// 分成两个入口，玩家会忘记另一个的存在。
+let invPageOn = 'bag';
+function showInvPage(page) {
+  invPageOn = page === 'mantra' ? 'mantra' : 'bag';
+  const bag = document.getElementById('invPage');
+  const mp = document.getElementById('mantraPage');
+  if (bag) bag.classList.toggle('hidden', invPageOn !== 'bag');
+  if (mp) mp.classList.toggle('hidden', invPageOn !== 'mantra');
+  const tabs = document.querySelectorAll('#inv .tabs button');
+  for (const b of tabs) b.classList.toggle('on', b.dataset.invpage === invPageOn);
+  if (invPageOn === 'mantra') renderMantras();
+}
+
+function mSlotHtml(slot, id, label) {
+  const a = id ? MANTRAS[id] : null;
+  const cls = 'ms ' + (slot === 'main' ? 'main ' : '') + (a ? '' : 'empty');
+  return '<div class="' + cls + '" data-mslot="' + slot + '" data-mid="' + (id || '') + '">' +
+    '<div class="k">' + label + '</div>' +
+    '<div class="n">' + (a ? a.name : '空') + '</div>' +
+    '<div class="lv">' + (a ? '注解 ' + lvOf(player.mantrasOwned, id) : '—') + '</div></div>';
+}
+
+function mCardHtml(id, learned) {
+  const a = MANTRAS[id];
+  const on = a.kind === 'main'
+    ? player.mantras.main === id
+    : (player.mantras.sub || []).indexOf(id) >= 0;
+  const lv = lvOf(player.mantrasOwned, id);
+  let html = '<div class="mCard' + (on ? ' on' : '') + (learned ? '' : ' off') + '"><div class="l">';
+  html += '<div class="t">' + a.name +
+    '<em class="' + (a.kind === 'main' ? 'm' : '') + '">' +
+    (a.kind === 'main' ? '主 · ' + a.school : '辅') + '</em>' +
+    (learned && lv > 1 ? '<em>注解 ' + lv + '</em>' : '') + '</div>';
+  html += '<div class="d">' + a.desc + '</div>';
+  // 代价必须写在卡面上，不能藏在 tooltip 里 —— 玩家是看着代价做选择的
+  if (a.flaw) html += '<div class="f">代价：' + a.flaw + '</div>';
+  if (!learned) {
+    const src = a.price ? '游方道人处购得（' + a.price + ' 两）' : (a.from ? a.from.text : '未知');
+    html += '<div class="src">得法：' + src + '</div>';
+  }
+  html += '</div>';
+  html += learned
+    ? '<button data-mtoggle="' + id + '"' + (on ? ' class="off"' : '') + '>' + (on ? '卸下' : '装配') + '</button>'
+    : '<button disabled>未得</button>';
+  return html + '</div>';
+}
+
+function renderMantras() {
+  const mp = document.getElementById('mantraPage');
+  if (!mp) return;
+  const L = player.mantras || { main: null, sub: [null, null] };
+  const own = player.mantrasOwned || {};
+  const slots = [mSlotHtml('main', L.main, '主')];
+  for (let i = 0; i < SUB_SLOTS; i++) slots.push(mSlotHtml('sub' + i, (L.sub || [])[i] || null, '辅'));
+
+  const rows = [];
+  rows.push('<div id="mantraSlots">' + slots.join('') + '</div>');
+  const nOwn = MANTRA_IDS.filter(id => own[id]).length;
+  rows.push('<div class="sp">一主二辅 · 主心法互斥，装第二条会顶掉第一条 · 已得 ' +
+    nOwn + '/' + MANTRA_IDS.length + ' 条</div>');
+
+  rows.push('<div class="msec">已 学</div>');
+  const learned = MANTRA_IDS.filter(id => own[id]);
+  if (!learned.length) {
+    rows.push('<div class="d" style="font:11px SimSun;color:#4A5568;padding:4px 2px">' +
+      '还没学过心法。斩首领可得意境，游方道人（青云集街西）处可买辅心法。</div>');
+  }
+  for (const id of learned) rows.push(mCardHtml(id, true));
+
+  const locked = MANTRA_IDS.filter(id => !own[id]);
+  if (locked.length) {
+    rows.push('<div class="msec">未 得</div>');
+    for (const id of locked) rows.push(mCardHtml(id, false));
+  }
+  mp.innerHTML = rows.join('');
+
+  mp.querySelectorAll('button[data-mtoggle]').forEach(b => {
+    b.onclick = () => toggleMantra(b.dataset.mtoggle);
+  });
+  // 点槽位也能卸下：装了之后"怎么拿下来"是最容易漏掉的交互
+  mp.querySelectorAll('[data-mslot]').forEach(el => {
+    el.onclick = () => { if (el.dataset.mid) toggleMantra(el.dataset.mid); };
+  });
+}
+
+function toggleMantra(id) {
+  const a = MANTRAS[id];
+  if (!a || !player.mantrasOwned[id]) return;
+  const on = a.kind === 'main'
+    ? player.mantras.main === id
+    : (player.mantras.sub || []).indexOf(id) >= 0;
+  if (on) {
+    mantraUninstall(player.mantras, id);
+    msg('已卸下「' + a.name + '」', C.paper1);
+  } else {
+    const r = mantraInstall(player.mantras, id);
+    if (r.replaced && MANTRAS[r.replaced]) msg('「' + MANTRAS[r.replaced].name + '」已替下', C.paper1);
+    else msg('装配「' + a.name + '」', C.jade3);
+  }
+  invalidateStats();
+  // 上限被心法改过（血河 -15% / 空明 +40%）：装完当场夹一次，
+  // 否则血条会停在"比上限还长"的位置，看起来像血溢出。
+  player.hp = Math.min(player.hp, maxHp());
+  player.qi = Math.min(player.qi, maxQi());
+  renderMantras(); renderInv();
+}
+
 function toggleInv(force) {
   const show = force !== undefined ? force : invEl.style.display !== 'block';
   invEl.style.display = show ? 'block' : 'none';
-  if (show) renderInv();
+  if (show) { renderInv(); showInvPage(invPageOn); }
+}
+
+// 页签绑定
+for (const b of document.querySelectorAll('#inv .tabs button')) {
+  b.onclick = () => showInvPage(b.dataset.invpage);
 }
 
 // 行囊右上角的关闭按钮
@@ -59339,6 +59982,23 @@ function renderShop() {
       '<button data-quest="' + q.id + '" data-act="take">接下</button></div>');
   }
   if (open) {
+    // 游方道人卖的是心法，不是货架上的东西 —— 单独一段，不塞进 SHOP_GOODS。
+    // 只卖辅心法：主心法是构筑的核心，得靠打，不能靠买。
+    if (shopId === 'daoshi') {
+      let left = 0;
+      for (const id of SUB_IDS) {
+        if (player.mantrasOwned[id]) continue;
+        left++;
+        const a = SUB[id];
+        const price = Math.max(1, Math.round(a.price * priceMul()));
+        const ok = player.gold >= price;
+        rows.push('<div class="goods"><div class="gn">' + a.name +
+          '<b>' + price + ' 银两</b></div>' +
+          '<div class="gd">' + a.desc + '</div>' +
+          '<button data-mantra="' + id + '"' + (ok ? '' : ' disabled') + '>学下</button></div>');
+      }
+      if (!left) rows.push('<div class="gd">“这一褡裢你都学全了。剩下的路，得自己走。”</div>');
+    }
     for (const g of SHOP_GOODS[shopId] || []) {
       const price = goodPrice(g);
       const ok = player.gold >= price;
@@ -59356,6 +60016,8 @@ function renderShop() {
   document.getElementById('shopBody').innerHTML = rows.join('');
   document.getElementById('shopBody').querySelectorAll('button[data-buy]')
     .forEach(b => { b.onclick = () => buyGood(b.dataset.buy); });
+  document.getElementById('shopBody').querySelectorAll('button[data-mantra]')
+    .forEach(b => { b.onclick = () => buyMantra(b.dataset.mantra); });
   document.getElementById('shopBody').querySelectorAll('button[data-quest]')
     .forEach(b => {
       b.onclick = () => {
@@ -59366,8 +60028,19 @@ function renderShop() {
       };
     });
 }
-function buyGood(id) {
-  if (!shopId) return;
+// 游方道人处学辅心法。学一次永久拥有，之后随便装 —— 不做"再买一遍"。
+function buyMantra(id) {
+  const a = SUB[id];
+  if (!a || player.mantrasOwned[id]) return;
+  const price = Math.max(1, Math.round(a.price * priceMul()));
+  if (player.gold < price) { msg('银两不够', C.red3); return; }
+  player.gold -= price;
+  learnMantra(id, true);
+  msg('学得心法「' + a.name + '」　-' + price + ' 两', C.gold3);
+  AUDIO.play('rare');
+  renderShop();
+}
+function buyGood(id) {  if (!shopId) return;
   const g = (SHOP_GOODS[shopId] || []).find(x => x.id === id);
   if (!g) return;
   if (id === 'forge') { shopClose(); forgeOpen(); AUDIO.play('forge'); return; }
@@ -59594,6 +60267,7 @@ function questTurnIn(id) {
     AUDIO.play('levelup');
     renderSkills();
   }
+  checkMantraUnlocks();   // 交任务升级也会跨境界门槛
   player.track = QUEST_IDS.find(k => player.quests[k] && player.quests[k].st === 'active') || null;
   refreshSeal();   // 拿到第三件三物时，封碑当场就该开
   AUDIO.play('rare');
@@ -59665,6 +60339,9 @@ function addFame(n, why) {
   const now = fameTier().name;
   if (now !== before) msg('侠名渐起 · ' + now, C.gold3);
   else if (why) msg(why, C.paper2);
+  // 「卸力」挂在侠名 40 上 —— 主线还没做出来之前，先用已有的里程碑兜住，
+  // 免得 22 条心法里有 4 条永远学不到（P7 会改挂剧情节点）。
+  checkMantraUnlocks();
 }
 // 名声换折扣：起步 10 点名望才有一点点让价，最多八五折。
 // 定这么淡是因为"买东西便宜"会直接改写刷装备的节奏，宁可少给。
@@ -60024,6 +60701,7 @@ function save() {
     bossKills: player.bossKills || {},
     quests: player.quests, relics: player.relics, track: player.track,
     prof: player.prof || {}, loadout: player.loadout || [],
+    mantras: player.mantras, mantrasOwned: player.mantrasOwned || {},
     clock: clock.serialize(),
   }));
 }
@@ -60090,7 +60768,20 @@ function load() {
     // 不能直接 undefined —— 后面 castArt 会读 player.loadout[slot]。
     loadout: Array.isArray(s.loadout) && s.loadout.length === ART_SLOTS
       ? s.loadout : new Array(ART_SLOTS).fill(null),
+    // 心法：先按"已学"过滤一遍再校验装配 —— 顺序反了的话，
+    // 存档里装着的某条心法只要在 ARTS 里被删过，sanitize 会连槽一起清掉。
+    mantrasOwned: (() => {
+      const own = {};
+      const src = s.mantrasOwned || {};
+      for (const id in src) {
+        if (!MANTRAS[id]) continue;            // 删过的心法：静默丢弃，不抛错
+        const lv = Math.max(1, Math.min(MANTRA_MAX_LV, src[id] | 0 || 1));
+        own[id] = lv;
+      }
+      return own;
+    })(),
   });
+  player.mantras = mantraSanitize(s.mantras, player.mantrasOwned);
   invalidateStats();
   // 地脉变动：96×72 扩到 144×104 之后，旧存档的坐标可能落在岩层里或地图外。
   // 与其让玩家一进游戏就卡在石头里，不如直接送回青云集门口。
@@ -60116,6 +60807,7 @@ function resetWorld() {
   dmgNums = []; messages = []; slashGhosts = []; bolts = [];
   clearHazards();   // 地面危险区不属于上面任何一类，忘了清就会跨局残留
   clearArts();      // 飞剑环绕的 mesh 也不属于上面任何一类
+  mantraResetCombat();   // 追命连击 / 藏锋层数 / 铁衣层数：跨局残留会让玩家一出生就带着 +40%
   seedCamps();
 }
 function startGame(cont) {
@@ -60133,10 +60825,12 @@ function startGame(cont) {
       poisonImmuneT: 0, drunkT: 0, drunk: 0, rested: false, fame: 0,
       rootT: 0, bossKills: {}, quests: {}, relics: {}, track: null,
       prof: {}, loadout: new Array(ART_SLOTS).fill(null),
+      mantras: { main: null, sub: [null, null] }, mantrasOwned: {},
     });
     invalidateStats();
   }
   autoLoadout();
+  checkMantraUnlocks();   // 老存档读进来时补发：这条心法的条件可能早就满足了
   document.getElementById('menu').classList.add('hidden');
   document.getElementById('dead').classList.add('hidden');
   document.getElementById('clear').classList.add('hidden');
@@ -60217,6 +60911,7 @@ function respawn() {
   // 死的时候如果正放着万剑归宗，飞剑的 mesh 会留在场上 —— update 在非 play 状态
   // 不再跑 updateArts，它们就永远停在那儿不消失。
   clearArts();
+  mantraResetCombat();
   // 死在洞里 = 这一趟白跑。下一趟下去是新的一层，别指望回来捡尸。
   dgReset(); wasInDg = false; dgDipT = 0; dgDipAct = null;
   document.getElementById('dead').classList.add('hidden');
@@ -60651,6 +61346,8 @@ function update(dt) {
   skills.qi.cd -= dt; skills.wu.cd -= dt; skills.thunder.cd -= dt; wuT -= dt;
   // 招式冷却 + 持续段（旋转 / 飞剑 / 连闪）统一在这里走
   updateArts(dt);
+  // 心法的时间累积段：藏锋蓄层 / 追命窗口 / 铁衣过期 / 归元回血
+  updateMantras(dt);
   shakeX *= Math.pow(0.0025, dt); shakeY *= Math.pow(0.0025, dt);
   if (Math.abs(shakeX) < 0.05) shakeX = 0;
   if (Math.abs(shakeY) < 0.05) shakeY = 0;
@@ -61330,6 +62027,27 @@ function drawArtBar() {
   }
 }
 
+// 藏锋的层数 / 追命的连击数必须看得见 —— 看不见的层数等于没有层数。
+// 只画这两个：其余主心法都是"打出去就知道生效"的，HUD 上再加东西只会更挤。
+function drawMantraHud() {
+  if (touch.enabled) return;
+  const id = mantraMain();
+  let n = 0, max = 0, col = C.gold3, label = '';
+  if (id === 'cangfeng') { n = player.mCang || 0; max = MAIN.cangfeng.params.max; label = '锋'; }
+  else if (id === 'zhuiming' && (player.mChainN || 0) > 0) { n = player.mChainN; max = 9; col = C.red3; label = '追'; }
+  else return;
+  const size = 20, gap = 3;
+  const x0 = Math.round(LW / 2 - (ART_SLOTS * (size + gap) - gap) / 2);
+  const y = LH - 44 - size - 6 - 15;
+  octx.font = 'bold 9px monospace';
+  octx.fillStyle = col;
+  octx.fillText(label, x0 - 13, y + 1);
+  for (let i = 0; i < max; i++) {
+    octx.fillStyle = i < n ? col : 'rgba(120,110,90,0.42)';
+    octx.fillRect(x0 + i * 9, y + 2, 7, 6);
+  }
+}
+
 function drawSkillBar() {
   // 触屏用右侧动作键，底部技能栏让位给摇杆
   if (touch.enabled) { skillRects = []; return; }
@@ -61697,6 +62415,7 @@ function drawOverlay(camX, camY) {
   octx.fillStyle = C.gold1;
   octx.fillRect(0, LH - barH, LW, 1);
   drawArtBar();
+  drawMantraHud();
   drawSkillBar();
 
   const nearForge = nearTemple();
@@ -62214,6 +62933,48 @@ window.__game = {
   get artCds() { return artCds; },
   get artPageOn() { return artPageOn; },
   profKills,
+  // 心法
+  MAIN, SUB, MANTRAS, MAIN_IDS, SUB_IDS, MANTRA_IDS, MANTRA_MAX_LV, SUB_SLOTS,
+  mantraById, isMain, mantraMod, mainOf, lvOf, mantraBrief, mantraCondMet,
+  learnMantra, checkMantraUnlocks, upgradeMantra, toggleMantra, renderMantras,
+  showInvPage, buyMantra, mantraMain, mantraParam, mantraDmgMul, mantraResetCombat,
+  updateMantras, resetOneCd, mantraOnCast, mantraOnHit, mantraHurtMul, mantraOnDodge,
+  hitEnemy, hurtPlayer, rollDamage, attackInterval,
+  get mantraPageOn() { return invPageOn; },
+  get mantraMods() { return mantraMod(player.mantras, player.mantrasOwned); },
+  // 测试用：直接设定装配 / 已学，绕过 UI
+  setMantras(main, subs) {
+    player.mantras = { main: main || null, sub: (subs || [null, null]).slice(0, SUB_SLOTS) };
+    while (player.mantras.sub.length < SUB_SLOTS) player.mantras.sub.push(null);
+    for (const id of [main].concat(player.mantras.sub)) {
+      if (id && MANTRAS[id]) player.mantrasOwned[id] = player.mantrasOwned[id] || 1;
+    }
+    invalidateStats();
+    player.hp = Math.min(player.hp, maxHp());
+    player.qi = Math.min(player.qi, maxQi());
+    return player.mantras;
+  },
+  // 平衡脚本用：只清战斗状态，不重建世界。
+  // 每组组合都 startGame 一次的话要重铺全图 90 只怪，200 组跑下来光重建就十几秒。
+  resetCombat() {
+    combo = 0; comboT = 0; comboPulse = 0; hitstop = 0; shakeX = 0; shakeY = 0;
+    player.atkCd = 0; player.atkT = 0; player.swing = null; player.dashT = 0;
+    player.iframe = 0; player.shield = 0; player.drunkT = 0; player.drunk = 0;
+    player.hp = maxHp(); player.qi = maxQi();
+    for (const e of enemies) { scene.remove(e.mesh); if (e.ring) scene.remove(e.ring); if (e.shadow) scene.remove(e.shadow); }
+    enemies.length = 0;
+    for (const p of projectiles) scene.remove(p.mesh);
+    projectiles.length = 0; drops.length = 0; dmgNums.length = 0;
+    particles.length = 0; sparks.length = 0; ghosts.length = 0;
+    slashGhosts.length = 0; bolts.length = 0; messages.length = 0;
+    clearArts(); mantraResetCombat();
+    for (const k in skills) skills[k].cd = 0;
+    // 把野怪刷新推远：平衡脚本一组要跑 8 秒，200 组就是 26 分钟的游戏时间，
+    // 野怪会源源不断刷出来被 AOE 打死 → 升级 → atkBase 一路涨，
+    // 后半个循环的数据比前半段高出七成，分布根本不能用。
+    spawnT = 9999; eliteT = 9999;
+    return true;
+  },
   addStatusTo(e, st, dmg) { applyStatus(e, st, dmg); },
   // 测试用：清场 / 放木桩 / 直接换兵器
   clearEnemies() {
@@ -62268,6 +63029,9 @@ window.__game = {
     renderer.render(scene, camera);
     drawOverlay(cx, cy);
   },
+  // 平衡脚本用：只推进逻辑，不渲染。tick() 每次都带一遍 WebGL + overlay 绘制，
+  // 200 组组合 × 6 秒会把测试拖到好几分钟。
+  tickLogic(dt) { update(dt); },
   capture() {
     renderer.render(scene, camera);
     const c = document.createElement('canvas');

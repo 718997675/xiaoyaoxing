@@ -30,6 +30,7 @@ const ORDER = [
   { id: 'items', file: 'items.js' },
   { id: 'skills', file: 'skills.js' },
   { id: 'arts', file: 'arts.js' },
+  { id: 'mantras', file: 'mantras.js' },   // ← 新增
   { id: 'quests', file: 'quests.js' },
   { id: 'time', file: 'time.js' },
   { id: 'village', file: 'village.js' },

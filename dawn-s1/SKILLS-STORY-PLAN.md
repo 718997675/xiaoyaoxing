@@ -379,8 +379,10 @@ export const PROF_NEED = [2,6,14,26,42,62,88,118,156,200];  // 到第 n 级所�
 ### 3.6 数据结构
 
 ```js
-// arts.js（新文件）
-export const ARTS = {
+// mantras.js（新文件）
+// 注意：文件名不是 arts.js —— 那个名字在 P5 已经被兵器招式占了。
+// 三层成长现在各有各的名字：skills（道行树）/ arts（兵器招式）/ mantras（心法）。
+export const MAIN = {
   pojun: { id:'pojun', kind:'main', name:'破军', school:'刚',
            mech:'fullHpBonus', params:{ up:0.25, down:-0.10 },
            desc:'对满血之敌伤害 +25%；对半血以下之敌 -10%。',
@@ -391,19 +393,19 @@ export const ARTS = {
 };
 
 // player 新增字段
-player.arts = { main: null, sub: [null, null] };   // 当前装配
-player.artsOwned = {};                             // { pojun: 2 } 已学 + 强化等级
+player.mantras = { main: null, sub: [null, null] };   // 当前装配
+player.mantrasOwned = {};                             // { pojun: 2 } 已学 + 注解等级
 ```
 
 **生效方式**：不新写一套战斗逻辑，把心法折进已有的 `stats()` 里。
 
 ```js
-function artsMod() {
-  const m = { atkMul: 1, hpMul: 1, critAdd: 0, spdMul: 1, qiMaxMul: 1, /* ... */ };
-  const all = [player.arts.main, ...player.arts.sub].filter(Boolean);
+function mantraMod(loadout, owned) {
+  const m = emptyMod();   // 15 个字段，全是加法语义
+  const all = [loadout.main, ...loadout.sub].filter(Boolean);
   for (const id of all) {
-    const a = ARTS[id], lv = player.artsOwned[id] || 1;
-    if (a.mods) for (const k in a.mods) { /* 加法区累加，再统一 clamp */ }
+    const a = MANTRAS[id], k = lvMul(owned[id] || 1);
+    if (a.mods) for (const key in a.mods) m[key] += a.mods[key] * k;
   }
   return m;
 }
@@ -411,7 +413,7 @@ function artsMod() {
 
 - **机制类**（破军 / 追命 / 藏锋 / 卸力 / 无常）在 `hitEnemy()` / `damagePlayer()` 里各插一个钩子，不改主流程
 - **状态类**（焚心 / 寒潭）复用已有 `burn` / `slow` 状态，不新增状态机
-- 存档：`player.arts`、`player.artsOwned`，读档时校验 id 是否还在 `ARTS` 里（删过的心法要能优雅降级）
+- 存档：`player.mantras`、`player.mantrasOwned`，读档时校验 id 是否还在 `MANTRAS` 里（删过的心法要能优雅降级）
 
 ### 3.7 UI
 
@@ -434,14 +436,14 @@ function artsMod() {
 
 ### 3.8 施工单（P5.5，夹在 P5 与 P6 之间）
 
-- [ ] `arts.js`：22 条心法数据表
-- [ ] `player.arts` / `player.artsOwned` + 存档读写 + 降级校验
-- [ ] `artsMod()` 折进 `stats()`，跑一遍旧测试确认没有回归
-- [ ] 五个机制钩子：`fullHpBonus` / `chainBonus` / `stackOnIdle` / `qiOnHurt` / `critResetCd`
-- [ ] 心法页 UI + 装卸 + tooltip
-- [ ] 游方道人 NPC + 商店（只卖辅心法）
-- [ ] 8 个首领首杀掉落挂到 `ARTS.from`
-- [ ] 平衡脚本：540 种组合里随机抽 200 组，跑同一段木桩，输出 DPS 分布
+- [x] `mantras.js`：22 条心法数据表
+- [x] `player.mantras` / `player.mantrasOwned` + 存档读写 + 降级校验
+- [x] `mantraMod()` 折进 `stats()`，跑一遍旧测试确认没有回归
+- [x] 五个机制钩子：`fullHpBonus` / `chainBonus` / `idleStack` / `qiOnHurt` / `critResetCd`
+- [x] 心法页 UI + 装卸 + tooltip（行囊面板加「心法」页签）
+- [x] 游方道人 NPC + 商店（只卖辅心法）
+- [x] 8 个首领首杀掉落挂到 `MAIN.from`
+- [x] 平衡脚本：540 种组合里随机抽 200 组，跑同一段木桩，输出 DPS 分布
       —— 要求 **P95 / P50 ≤ 1.35**（最强组合不能比中位数强太多），否则回去改数值
 
 **验收**：
@@ -449,6 +451,78 @@ function artsMod() {
 - 主心法互斥（装第二条自动顶掉第一条）
 - 读档后装配状态一致
 - 随机 200 组组合的 DPS 分布满足 P95/P50 ≤ 1.35
+
+### 3.9 P5.5 实施记录（2026-11-10）
+
+#### 做了什么
+
+| 层 | 落点 |
+|---|---|
+| 数据 | `mantras.js`：`MAIN`（12）+ `SUB`（10）+ `mantraMod()` / `install()` / `sanitize()` / `lvOf()`，纯函数无 DOM |
+| 玩家字段 | `player.mantras = { main, sub:[null,null] }`、`player.mantrasOwned = { id: lv }` |
+| 折进 stats | `computeStats()` 里 `mm = mantraMod(...)`，15 个字段全部加法累加；`qiMaxPct` / `qiRegenPct` 最后乘一次 |
+| 机制钩子 | `mantraDmgMul()` / `mantraOnHit()` / `mantraHurtMul()` / `mantraOnHurt()` / `mantraOnDodge()` / `updateMantras()` |
+| 接入点 | `hitEnemy`（伤害乘区 + 命中后效果）、`hurtPlayer`（减伤 + 转气 + 无敌帧）、`update`（时间累积） |
+| UI | 行囊面板加「行囊 / 心法」页签；三条槽 + 已学 / 未得两段卡片；代价直接写在卡面上 |
+| NPC | 游方道人 · 云松，街东墙根（`SHOPS.daoshi`），只卖辅心法，随侠名打折 |
+| 来源 | 8 个首领首杀 + 3 条里程碑（斩敌 300 / 侠名 40 / 境界 18）+ 1 条（斩落 3 位首领） |
+| 自检 | `tools/mantras.js`，72 条断言（含 200 组组合的 DPS 分布） |
+
+#### 12 条主心法的机制落点
+
+| 心法 | 钩子 | 落在哪 |
+|---|---|---|
+| 破军 | `fullHpBonus` | `mantraDmgMul`：按 `e.hp / e.maxHp` 判满血 / 半血以下 |
+| 归元 | `idleRegen` | `updateMantras`：`player.mIdleT` 满 3 秒后按 dt 回血 |
+| 追命 | `chainBonus` | `mantraDmgMul` 读 `player.mChainN`，`mantraOnHit` 维护窗口 |
+| 血河 | 纯数值 | `mods: { lifesteal: 8, hpPct: -15 }`，走已有吸血路径 |
+| 铁衣 | `hitReduce` | `mantraHurtMul` 按**当前**层数减伤，`mantraAfterHurt` 再叠层 |
+| 疾风 | `dashBurst` | `mantraOnDodge` 开窗口，`mantraDmgMul` 吃一次即清 |
+| 焚心 | `burnOnHit` | `mantraOnHit` 复用已有 `burn` 状态，扣 5 真气（净 -2） |
+| 寒潭 | `slowOnHit` | `mantraOnHit` 挂 `slowT`，`mantraDmgMul` 对被减速目标加成 |
+| 空明 | 纯数值 | `mods: { qiMaxPct: 40, qiRegenPct: 50, skillDmgPct: -10 }` |
+| 藏锋 | `idleStack` | `updateMantras` 蓄层（`time - lastAtkT > 0.6` 才算"不出招"），`mantraOnCast` 换加成 |
+| 卸力 | `qiOnHurt` | `mantraOnHurt`：转气放在护盾结算**之前** |
+| 无常 | `critResetCd` | `mantraOnHit` 暴击时掷骰，`resetOneCd()` 把最长的剩余冷却减半 |
+
+#### 与原计划的 6 处差异
+
+| 项 | 原设计 | 实做 | 为什么 |
+|---|---|---|---|
+| 文件 / 字段名 | `arts.js` / `player.arts` | `mantras.js` / `player.mantras` | `arts` 在 P5 已被兵器招式占用 |
+| 追命上限 | 每击 +6%，上限 +60% | 每击 +4%，上限 +32% | 违反自己定的"单一来源 ≤40%"；实测 1.39 超线 |
+| 藏锋上限 | 每层 +12%，5 层 = +60% | 每层 +8%，5 层 = +40% | 同上 |
+| 寒潭 | 15% / 2 秒，+20% | 10% / 1.5 秒，+18% | 攻速够快时减速几乎常驻，"靠概率"的代价根本不存在 |
+| 空明 | 术法 -15% | 术法 -10% | -15% 让它在爆发窗口里垫底，但它本该是"真气流"的答案 |
+| 无常 | 25% 概率**清零**冷却 | 20% 概率**减半** | 清零能让 30 秒大招变成几秒一发，一条心法顶掉整个构筑的差异 |
+| 沉肩 | 受击硬直 -20%，击退抗性 +12% | 受击后无敌帧 +18% | 玩家没有硬直与击退这两个状态，原效果是两条死属性 |
+| 4 条主心法来源 | 主线节点 | 斩敌 300 / 侠名 40 / 境界 18 / 斩落 3 位首领 | 主线（P7）还没做，先用已有里程碑兜住，否则 4 条永远学不到 |
+
+#### 平衡实测
+
+`tools/mantras.js` 第 10 节：200 组随机组合（固定随机种子），同一把剑、同一根 20 万血木桩、
+8 秒窗口、正午、关顿帧、`Math.random` 换成固定序列。
+
+| 指标 | 数值 |
+|---|---|
+| P50 | 3433 |
+| P95 | 4268 |
+| **P95 / P50** | **1.24**（要求 ≤ 1.35） |
+| 裸装（不带心法） | 3287 |
+| 最强组合 | 追命 + 磨锋 + 轻身 4666 |
+| 最弱组合 | 空明 + 贪狼 + 锐金 3058 |
+| 同组合连跑五次极差 | 3%（要求 ≤ 20%） |
+
+连跑两次输出逐位一致。**绝对 DPS 只有在钉死随机源之后才有意义** ——
+`equipFam()` 内部是 `makeGear(..., Math.random, ...)`，兵器词条随机滚，
+不钉种子时整条基线能差四成（连跑四次 P50 = 2943 / 3856 / 4208 / 3331）。
+比值不受影响（同一次运行内自己比自己），但"改完数值有没有用"只能看绝对值。
+
+**测这组数踩了 6 个坑**（都写进 `HANDOFF.md` §6 了）：
+命中回 3 真气把焚心的代价抵消、寒潭概率型代价在实战里不存在、
+`hitstop` 冻结整帧让攻速不稳（同组合能差 55%）、
+升级累积 `atkBase`、野怪刷新与时辰漂移（26 分钟游戏时间足够跨昼夜）、
+`equipFam()` 随机词条让绝对值不可比。
 
 ---
 
@@ -574,7 +648,7 @@ export const STORY = {
 | 批次 | 内容 | 依赖 | 状态 |
 |---|---|---|---|
 | **P5** | 技能框架 + 专精系统 + 每武器 2 个技能（16 个，够验证） | P1 完成 | ✅ 2026-11-10 |
-| **P5.5** | 心法系统（22 条 + 一主二辅 + 心法页 UI + 游方道人） | P5 | 待做 |
+| **P5.5** | 心法系统（22 条 + 一主二辅 + 心法页 UI + 游方道人） | P5 | ✅ 2026-11-10 |
 | **P6** | 补齐剩余 48 个技能 + 装配 UI | P5 | 待做 |
 | **P7** | 剧情框架（触发器 / 日志 / 三层对话） + 序章 + 三物线索系统 | P4（NPC 扩充） | 待做 |
 | **P8** | 第一幕（乱葬岗）+ 第二幕（竹海） | P7 + P2/P3 | 待做 |

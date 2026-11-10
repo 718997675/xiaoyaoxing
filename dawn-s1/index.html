@@ -173,13 +173,15 @@
 
   /* 道行 / 招式两页：用页签而不是两个面板 —— 同一件事（"我这套东西怎么配"）
      分成两个入口，玩家会忘记另一个的存在 */
-  #skills .tabs{display:flex;gap:6px;margin:0 0 8px;justify-content:center}
-  #skills .tabs button{
+  #skills .tabs,#inv .tabs{display:flex;gap:6px;margin:0 0 8px;justify-content:center}
+  #skills .tabs button,#inv .tabs button{
     font:bold 12px SimSun;letter-spacing:3px;padding:3px 18px;cursor:pointer;
     background:#DCD2B8;color:#6B6248;border:2px solid #8A6520;box-shadow:2px 2px 0 #000;
+    /* .panel button 是 width:100% 的整行按钮，页签必须显式改回自适应宽度 */
+    display:inline-block;width:auto;flex:0 0 auto;
   }
-  #skills .tabs button.on{background:#2F6E6A;color:#F2E9CE;border-color:#1D4A46}
-  #skills .tabs button:active{transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
+  #skills .tabs button.on,#inv .tabs button.on{background:#2F6E6A;color:#F2E9CE;border-color:#1D4A46}
+  #skills .tabs button:active,#inv .tabs button:active{transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
 
   /* ---------- 招式 ---------- */
   #artPage{text-align:left}
@@ -222,6 +224,44 @@
   }
   #artPage .artCard button:disabled{background:#B6AB8F;color:#6B6248;border-color:#8A8268;cursor:not-allowed}
   #artPage .artCard button:active:not(:disabled){transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
+
+  /* ---------- 心法 ---------- */
+  #mantraPage{text-align:left;max-height:62vh;overflow:auto}
+  /* 三个槽并排：一主二辅的形状本身就在说"只能带三条"，比写一行说明有效 */
+  #mantraSlots{display:flex;gap:6px;margin:2px 0 10px}
+  #mantraSlots .ms{
+    flex:1;background:#E8DFC8;border:2px solid #8A6520;padding:5px 6px;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:46px;
+  }
+  #mantraSlots .ms.main{border-color:#C8453B;background:#F0E4C8}
+  #mantraSlots .ms.empty{background:#DCD2B8;border-style:dashed;color:#A99F84}
+  #mantraSlots .ms .k{font:9px SimSun;color:#8A6520;letter-spacing:2px}
+  #mantraSlots .ms.main .k{color:#C8453B}
+  #mantraSlots .ms .n{font:bold 12px SimSun;color:#12161F;letter-spacing:2px}
+  #mantraSlots .ms .lv{font:9px monospace;color:#8A6520}
+  #mantraPage .msec{font:bold 11px SimSun;letter-spacing:3px;color:#8A6520;
+    border-bottom:1px solid #8A8268;margin:8px 0 6px;padding-bottom:3px}
+  #mantraPage .mCard{
+    background:#E8DFC8;border:1px solid #8A6520;padding:5px 7px 6px;margin-bottom:5px;
+    display:flex;gap:8px;align-items:flex-start;
+  }
+  #mantraPage .mCard.off{opacity:.5}
+  #mantraPage .mCard.on{border-color:#C8453B;background:#F0E4C8}
+  #mantraPage .mCard .l{flex:1;min-width:0}
+  #mantraPage .mCard .t{font:bold 12px SimSun;letter-spacing:1px;color:#12161F}
+  #mantraPage .mCard .t em{font:9px SimSun;font-style:normal;color:#F2E9CE;background:#8A6520;padding:0 4px;margin-left:5px;letter-spacing:0}
+  #mantraPage .mCard .t em.m{background:#C8453B}
+  #mantraPage .mCard .d{font:10px/1.4 SimSun;color:#4A5568;margin:2px 0}
+  #mantraPage .mCard .f{font:10px/1.35 SimSun;color:#A8452F}
+  #mantraPage .mCard .src{font:9px monospace;color:#8A6520}
+  #mantraPage .mCard button{
+    display:inline-block;width:auto;flex:0 0 auto;margin:0;
+    font:bold 11px SimSun;padding:4px 10px;cursor:pointer;white-space:nowrap;
+    background:#2F6E6A;color:#F2E9CE;border:2px solid #1D4A46;box-shadow:2px 2px 0 #000;
+  }
+  #mantraPage .mCard button.off{background:#8A8268;border-color:#5A5344}
+  #mantraPage .mCard button:disabled{background:#B6AB8F;color:#6B6248;border-color:#8A8268;cursor:not-allowed}
+  #mantraPage .mCard button:active:not(:disabled){transform:translate(1px,1px);box-shadow:1px 1px 0 #000}
 
   /* ---------- 任务 ---------- */
   #quest{z-index:13;width:520px;max-height:80vh;overflow:auto}
@@ -275,8 +315,12 @@
 
   <div id="inv" class="panel">
     <button id="btnInvClose" class="xclose" title="关闭（Tab / Esc）">×</button>
+    <div class="tabs">
+      <button data-invpage="bag" class="on">行囊</button>
+      <button data-invpage="mantra">心法</button>
+    </div>
     <div class="top" id="invStats"></div>
-    <div class="body">
+    <div class="body" id="invPage">
       <div class="eqCol">
         <div class="hd">装 备</div>
         <div id="eqSlots"></div>
@@ -291,6 +335,7 @@
         <div class="tip">左键：装备/服用　右键：分解　装备槽右键卸下　Tab 关闭</div>
       </div>
     </div>
+    <div id="mantraPage" class="hidden"></div>
   </div>
 
   <div id="forge" class="panel hidden">
