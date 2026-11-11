@@ -119,10 +119,12 @@ for(let i=0;i<25;i++)g.tick(0.016)" \
 | **P9 第三幕 + 终章：`story.js` 20 → 28 节点 · `floor` 触发器 · 终章「选择」分支 · 支线 7 → 9 · 第 4 个野外 NPC** | ✅ 2026-11-10 |
 | **P10 招式重做（锤试点）：`pose` 字段 + 12 种动作 · 刀光 3 → 11 形 · 四种新原语（boomerang/shockwave/charge/cleave）· 锤 8 招按名字重写 · 签名查重断言** | ✅ 2026-11-11 |
 | **P11 招式收口（其余七件）：56 招补齐四条签名 · 19 形 / 20 式 / 17 音 · 八兵器连拍 · 贯甲刺 → `cleave` · 跃棍 → `shockwave` · 欠账 7 → 0（arts.js 131 条）** | ✅ 2026-11-11 |
-| 双渠道发布（GitHub Pages + workbuddy） | ✅ |
+| **单一分发地址**：`https://718997675.github.io/xiaoyaoxing/`（2026-11-11 起，workbuddy 旧分享链接弃用） | ✅ |
 
 ### P11 发布验证（2026-11-11）
 
+- **分发约定（用户 2026-11-11 定）**：只维护 GitHub Pages 一个地址；旧的 workbuddy
+  分享链接不再更新、不再验证、不再修。README 的「在线试玩」已指向 Pages。
 - commit `547bfde`（11 个文件）。远端 / 本地 SHA 一致：`547bfde6789996c27243791bacd873b65c4f89e8`。
 - 线上 `dist/index.html` 与本地打包产物 **md5 一致**（`57f13fa9…`，1,987,692 字节）。
 - `URL="https://718997675.github.io/xiaoyaoxing/" node tools/run.js online`：`ok=true`，

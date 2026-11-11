@@ -16,7 +16,7 @@
 | 数据表 | `weapons.js`（兵器）、`monsters.js`（怪物）、`items.js`（装备）、`village.js`（村庄/NPC/店铺）、`dungeon.js`（古洞） |
 | 自动化测试 | `devtest.js`（137 条）+ `tools/` 五套专项：`map.js` 13 / `camps.js` 17 / `weapons.js` 32 / `bosses.js` 22 / `quests.js` 28 |
 | 构建 | `node build.js` |
-| 线上 | GitHub Pages `718997675.github.io/xiaoyaoxing` + workbuddy 分享链接 |
+| 线上 | GitHub Pages `https://718997675.github.io/xiaoyaoxing/`（唯一分发地址，workbuddy 旧链接已弃用） |
 
 **改完必须跑**：
 ```bash
@@ -381,7 +381,7 @@ T('名字', 条件, '实测值');
 1. `node build.js`
 2. 本地 devtest + 专项
 3. 各分辨率截图（1366 / 1920 / 手机横竖屏）
-4. 推 GitHub + 部署 workbuddy
+4. 推 GitHub（Pages 自动发布），再 `URL="https://718997675.github.io/xiaoyaoxing/" node tools/run.js online` 真开页面验证
 5. 更新本文档的勾选状态
 
 ---

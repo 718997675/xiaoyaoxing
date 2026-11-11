@@ -5,7 +5,10 @@
 一个可以直接在浏览器里跑的单机像素动作 RPG。手绘级程序化像素美术（24 色锁定板），
 武侠表达（银两 / 历练 / 境界 / 侠名 / 道行），砍杀、刷宝、昼夜流转、村庄 NPC 生态与三层地宫。
 
-**在线试玩**：https://wbapp-rr8ivulyupjzpv5mlwnkqs.apps.workbuddy.host/?sharecode=43IYY3J22B
+**在线试玩**：https://718997675.github.io/xiaoyaoxing/
+
+> 旧的 workbuddy 分享链接已弃用。以后只更新上面这一个地址：
+> `node build.js` → 提交 `dist/index.html` → `git push`，Pages 自动发布。
 
 ![青云集·正午](dawn-s1/screenshot-village-noon.png)
 
