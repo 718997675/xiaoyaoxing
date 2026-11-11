@@ -1,5 +1,5 @@
 import * as THREE from './lib/three.module.js';
-import { AUDIO } from './audio.js';
+import { AUDIO, sndVariant } from './audio.js';
 import { C, spriteCanvas, outlined, mirror, hexRgb, rgba } from './pixel.js';
 import {
   RARITY, SLOTS, SLOT_LABEL, makeGear, gearStats, itemScore, rollRarity, randomFam,
@@ -25,6 +25,7 @@ import {
   ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_SLOT_LABEL, ART_FX, PROF_MAX, PROF_WEIGHT,
   artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower,
   artShape, artPose, artColor, ART_SHAPES, ART_POSES, ART_SNDS,
+  ART_SHAPE_SPECS, ART_POSE_SPECS,
   artShapeSig, artMotionSig, artColorSig, artSoundSig,
 } from './arts.js';
 import {
@@ -3119,6 +3120,256 @@ function orbTexture(fam) {
 //   line  { ang, len, w } 一道有方向的刃光
 //   grow  [r0, r1] 环从 r0 长到 r1（冲击波）
 //   delay 秒数：先等这么久再开始淡出（依次裂开用）
+
+// ---------- P12-E：新刀光渲染器（17 类原子画法 → 61 种新刀光） ----------
+// 19 种老画法是「共享原型」，P12-E 之后每一招都有自己的一副长相。
+// 做法不是手写 61 条分支，而是把老画法拆出来的原子（弧 / 环 / 线 / 点 / 锥 / 尘）
+// 参数化之后重新组合：ART_SHAPE_SPECS[name] = { k: 原子名, ...参数 }。
+// 原子只落在老画法已经在用的 ghost 通道上（ring / line / thrust / dot / 弧 a0+a1+R），
+// 渲染管线一条都不用新开 —— 画法参数化了，长相还是同一套。
+function artShapeSpec(sp, ctx) {
+  const a = ctx.a, base = ctx.base, reach = ctx.reach;
+  const x = ctx.x, y = ctx.y;
+  const push = ctx.push, pushAt = ctx.pushAt;
+  const k = sp.k;
+  const num = (v, d) => (v === undefined ? d : v);
+
+  if (k === 'arc') {
+    // 弧：一段定向弧 + 几道从弧身射出的余光
+    const wide = num(sp.wide, 1), tilt = num(sp.tilt, 0);
+    const R = reach * wide * num(sp.r, 1);
+    const g0 = base - wide * 0.9 + tilt, g1 = base + wide * 0.9 + tilt;
+    push({ a0: g0, a1: g1, R, t: 0.30, max: 0.30 });
+    const n = num(sp.rays, 3);
+    for (let i = 0; i < n; i++) {
+      const ang = n === 1 ? (g0 + g1) / 2 : g0 + (g1 - g0) * (i / (n - 1));
+      push({ line: { ang, len: R * 0.62, w: 1.1 }, t: 0.22, max: 0.22, delay: i * 0.022 });
+    }
+  } else if (k === 'ring') {
+    // 环：多圈同心，粗细 / 螺旋 / 虚线各不相同
+    const cnt = num(sp.count, 1), R = reach * num(sp.r, 1) * 0.9;
+    for (let i = 0; i < cnt; i++) {
+      push({ ring: true, R: R * (1 + i * 0.17), w: num(sp.w, 1), t: 0.32, max: 0.32, delay: i * 0.05 });
+    }
+    if (sp.spiral) push({ a0: base - 0.5, a1: base + Math.PI * 1.45, R: R * 0.82, t: 0.30, max: 0.30 });
+    if (sp.dash) {
+      for (let i = 0; i < 12; i++) {
+        push({ line: { ang: base + i / 12 * Math.PI * 2, len: R * 0.34, w: 1.0 }, t: 0.20, max: 0.20 });
+      }
+    }
+  } else if (k === 'lance') {
+    // 枪 / 长刺：一道锥形气浪，锥尖落在最远端
+    const len = reach * num(sp.len, 1) * 1.05, w = num(sp.w, 2.2);
+    push({ thrust: base, len, t: 0.26, max: 0.26 });
+    push({ line: { ang: base, len: len * 0.9, w: w * 0.4 }, t: 0.22, max: 0.22 });
+    pushAt(x + Math.cos(base) * len, y + Math.sin(base) * len, { dot: 4, t: 0.20, max: 0.20 });
+    if (sp.twin) {
+      push({ thrust: base - 0.17, len: len * 0.92, t: 0.24, max: 0.24, delay: 0.03 });
+      push({ thrust: base + 0.17, len: len * 0.92, t: 0.24, max: 0.24, delay: 0.03 });
+    }
+    if (sp.spin) {
+      push({ thrust: base - 0.95, len: len * 0.74, t: 0.24, max: 0.24, delay: 0.05 });
+      push({ thrust: base + 0.95, len: len * 0.74, t: 0.24, max: 0.24, delay: 0.05 });
+    }
+  } else if (k === 'fan') {
+    // 扇面：n 道放射刃，中间最长两侧渐短
+    const n = num(sp.n, 5), spread = num(sp.spread, 0.9), len = reach * num(sp.len, 1);
+    for (let i = 0; i < n; i++) {
+      const u = n === 1 ? 0.5 : i / (n - 1);
+      const mid = Math.abs(u - 0.5) * 2;
+      const ang = base + (u - 0.5) * spread * 2 + (sp.arc ? (u - 0.5) * 0.7 : 0);
+      const l = len * (sp.star ? (0.34 + 0.66 * (1 - mid)) : (0.66 + 0.34 * (1 - mid)));
+      push({ line: { ang, len: l, w: 1.2 }, t: 0.26, max: 0.26, delay: i * 0.016 });
+      if (sp.split) {
+        push({ line: { ang: ang + spread * 0.55, len: l * 0.72, w: 0.9 }, t: 0.22, max: 0.22, delay: i * 0.016 + 0.03 });
+      }
+    }
+  } else if (k === 'cross') {
+    // 十字：n 道交错的刃，交点一个爆点
+    const n = num(sp.n, 2), spread = num(sp.spread, 0.55);
+    const len = reach * num(sp.len, 1), w = num(sp.w, 1.7);
+    for (let i = 0; i < n; i++) {
+      const ang = base + (i - (n - 1) / 2) * spread;
+      push({ line: { ang, len, w }, t: 0.28, max: 0.28 });
+      if (sp.split) {
+        push({ line: { ang: ang + spread * 0.62, len: len * 0.78, w: w * 0.65 }, t: 0.24, max: 0.24, delay: 0.04 });
+      }
+    }
+    push({ dot: 4.5, t: 0.22, max: 0.22 });
+  } else if (k === 'sigil') {
+    // 法阵：多层同心环 + 辐条；六芒 / 五芒 / 轮 / 缺口各有自己的记号
+    const R = Math.max(18, reach * num(sp.r, 1) * 0.62);
+    const layers = num(sp.layers, 2), spokes = num(sp.spokes, 6);
+    for (let i = 0; i < layers; i++) {
+      push({ ring: true, R: R * (1 - i * 0.26), t: 0.42, max: 0.42, delay: i * 0.06 });
+    }
+    for (let i = 0; i < spokes; i++) {
+      push({ line: { ang: base + i / spokes * Math.PI * 2, len: R * 0.5, w: 1.0 }, t: 0.34, max: 0.34, delay: i * 0.012 });
+    }
+    if (sp.hex) {
+      for (let tt = 0; tt < 2; tt++) {
+        for (let i = 0; i < 3; i++) {
+          const a1 = base + tt * Math.PI / 3 + i / 3 * Math.PI * 2;
+          const a2 = base + tt * Math.PI / 3 + (i + 1) / 3 * Math.PI * 2;
+          push({ line: { ang: Math.atan2(Math.sin(a2 - a1), Math.cos(a2 - a1)), len: R * 0.86, w: 1.3 }, t: 0.36, max: 0.36, delay: 0.05 });
+        }
+      }
+    }
+    if (sp.star) {
+      for (let i = 0; i < 5; i++) {
+        const a1 = base - Math.PI / 2 + i / 5 * Math.PI * 2;
+        const a2 = base - Math.PI / 2 + ((i + 2) % 5) / 5 * Math.PI * 2;
+        push({ line: { ang: Math.atan2(Math.sin(a2 - a1), Math.cos(a2 - a1)), len: R * 0.95, w: 1.2 }, t: 0.36, max: 0.36, delay: 0.05 });
+      }
+    }
+    if (sp.wheel) {
+      push({ ring: true, R: R * 1.24, t: 0.42, max: 0.42, delay: 0.08 });
+      for (let i = 0; i < 6; i++) {
+        push({ line: { ang: base + i / 6 * Math.PI * 2 + 0.26, len: R * 0.42, w: 0.9 }, t: 0.30, max: 0.30, delay: 0.10 });
+      }
+    }
+    if (sp.notch) {
+      for (let i = 0; i < 5; i++) {
+        push({ line: { ang: base + i / 5 * Math.PI * 2 + 0.3, len: R * 0.44, w: 1.1 }, t: 0.34, max: 0.34, delay: 0.08 });
+      }
+    }
+  } else if (k === 'trail') {
+    // 残影：多段递进，一段比一段远
+    const n = num(sp.n, 5), len = reach * num(sp.len, 1) * 0.5, spread = num(sp.spread, 0.14);
+    for (let i = 0; i < n; i++) {
+      const tt = (i + 1) / n;
+      const px = x + Math.cos(base) * reach * 0.55 * tt;
+      const py = y + Math.sin(base) * reach * 0.55 * tt;
+      let ang = base + (i % 2 ? spread : -spread);
+      if (sp.arc) ang = base + (tt - 0.5) * spread * 2.4;
+      else if (sp.zig) ang = base + (i % 2 ? spread * 3 : -spread * 3);
+      pushAt(px, py, { line: { ang, len, w: num(sp.w, 1.2) }, t: 0.28 - tt * 0.06, max: 0.28 - tt * 0.06 });
+      if (sp.dot) pushAt(px, py, { dot: 3, t: 0.24 - tt * 0.05, max: 0.24 - tt * 0.05 });
+    }
+  } else if (k === 'spiral') {
+    // 旋：一圈 + 一段大扫弧
+    const R = reach * num(sp.r, 1) * 0.7, turns = num(sp.turns, 2);
+    const dir = sp.reverse ? -1 : 1;
+    const wide = num(sp.wide, 1);
+    push({ ring: true, R, t: 0.34, max: 0.34 });
+    push({ a0: base, a1: base + dir * Math.PI * 2 * Math.min(turns, 3) * 0.6, R: R * wide, t: 0.30, max: 0.30 });
+    if (sp.double) {
+      push({ a0: base + Math.PI, a1: base + Math.PI + dir * Math.PI * 2 * Math.min(turns, 3) * 0.5, R: R * wide * 0.82, t: 0.30, max: 0.30, delay: 0.05 });
+    }
+    for (let i = 0; i < 4; i++) {
+      push({ line: { ang: base + i * Math.PI / 2, len: R * 0.55, w: 1.1 }, t: 0.24, max: 0.24 });
+    }
+  } else if (k === 'rain') {
+    // 天降：自上而下的短刃，按顺序点亮
+    const n = num(sp.n, 4), spacing = num(sp.spacing, 20), len = num(sp.len, 22);
+    const tilt = num(sp.angle, 0);
+    const rr = reach * 0.42 + spacing * 0.6;
+    for (let i = 0; i < n; i++) {
+      const ang = base + i / n * Math.PI * 2;
+      const dd = rr * (0.55 + (i % 3) * 0.30);
+      pushAt(x + Math.cos(ang) * dd, y + Math.sin(ang) * dd - 16,
+        { line: { ang: Math.PI / 2 + tilt, len, w: 1.3 }, t: 0.30, max: 0.30, delay: i * 0.035 });
+    }
+  } else if (k === 'point') {
+    // 落点爆：一点 + 放射碎屑
+    const px = x + Math.cos(base) * reach * 0.95, py = y + Math.sin(base) * reach * 0.95;
+    const n = num(sp.n, 6), r = num(sp.r, 16);
+    pushAt(px, py, { dot: 6, t: 0.20, max: 0.20 });
+    if (sp.cross) {
+      pushAt(px, py, { line: { ang: base, len: r * 1.9, w: 1.6 }, t: 0.22, max: 0.22 });
+      pushAt(px, py, { line: { ang: base + Math.PI / 2, len: r * 1.9, w: 1.6 }, t: 0.22, max: 0.22 });
+    } else if (sp.star) {
+      for (let i = 0; i < 5; i++) {
+        const a1 = base - Math.PI / 2 + i / 5 * Math.PI * 2;
+        const a2 = base - Math.PI / 2 + ((i + 2) % 5) / 5 * Math.PI * 2;
+        pushAt(px, py, { line: { ang: Math.atan2(Math.sin(a2 - a1), Math.cos(a2 - a1)), len: r * 1.05, w: 1.2 }, t: 0.22, max: 0.22, delay: i * 0.02 });
+      }
+    } else {
+      for (let i = 0; i < n; i++) {
+        pushAt(px, py, { line: { ang: base + i / n * Math.PI * 2, len: r, w: 1.2 }, t: 0.18, max: 0.18, delay: i * 0.012 });
+      }
+    }
+  } else if (k === 'hook') {
+    // 回勾：直出 + 末端折回来
+    const len = reach * num(sp.len, 1), turn = num(sp.turn, 1.95);
+    push({ line: { ang: base, len, w: 1.5 }, t: 0.30, max: 0.30 });
+    const hx = x + Math.cos(base) * len, hy = y + Math.sin(base) * len - (sp.up ? 9 : 0);
+    pushAt(hx, hy, { line: { ang: base + turn, len: len * 0.42, w: 1.5 }, t: 0.28, max: 0.28, delay: 0.04 });
+    pushAt(hx, hy, { dot: 4, t: 0.24, max: 0.24, delay: 0.04 });
+  } else if (k === 'crack') {
+    // 地裂：一段段亮起来的裂纹
+    const z = a.zone || {};
+    const n = num(sp.n, 4), step = (z.radius || 30) * num(sp.step, 0.9);
+    const stag = z.stagger || 0;
+    for (let i = 0; i < n; i++) {
+      const px = x + Math.cos(base) * step * (i + 1), py = y + Math.sin(base) * step * (i + 1);
+      const life = 0.30 - i * 0.03;
+      const jit = sp.straight ? 0 : (i % 2 ? 0.55 : -0.55) * (sp.branch ? 1 : 0.45);
+      const segs = sp.branch ? 3 : 1;
+      for (let s = 0; s < segs; s++) {
+        const ang = base + jit + (s % 2 ? 0.55 : -0.55) * (sp.branch ? 0.5 : 0);
+        pushAt(px, py, { line: { ang, len: step * 0.7, w: sp.wide ? 2.4 : 1.6 }, t: life, max: life, delay: i * stag + s * 0.03 });
+      }
+      pushAt(px, py, { dot: 4, t: life, max: life, delay: i * stag });
+    }
+  } else if (k === 'shock') {
+    // 冲击：一圈环 + 放射裂纹
+    const R = reach * num(sp.r, 1) * 0.85, cnt = num(sp.count, 8), w = num(sp.w, 1.2);
+    push({ ring: true, R, t: 0.30, max: 0.30 });
+    for (let i = 0; i < cnt; i++) {
+      push({ line: { ang: base + i / cnt * Math.PI * 2, len: R * 0.52, w }, t: 0.26, max: 0.26, delay: i * 0.015 });
+    }
+    if (sp.double) push({ ring: true, R: R * 1.32, t: 0.30, max: 0.30, delay: 0.06 });
+  } else if (k === 'cleave') {
+    // 长斩：一条巨刃 + 沿路的地缝
+    const len = reach * num(sp.len, 1) * 1.15, w = num(sp.w, 3.0);
+    push({ line: { ang: base, len, w }, t: 0.34, max: 0.34 });
+    push({ thrust: base, len: len * 0.95, t: 0.28, max: 0.28 });
+    if (sp.twin) {
+      push({ line: { ang: base + 0.24, len: len * 0.9, w: w * 0.6 }, t: 0.32, max: 0.32, delay: 0.04 });
+      push({ line: { ang: base - 0.24, len: len * 0.9, w: w * 0.6 }, t: 0.32, max: 0.32, delay: 0.04 });
+    }
+    for (let i = 1; i <= 3; i++) {
+      const d = len * i / 3;
+      pushAt(x + Math.cos(base) * d, y + Math.sin(base) * d,
+        { line: { ang: base + Math.PI / 2, len: len * 0.16, w: 1.4 }, t: 0.28, max: 0.28 });
+    }
+  } else if (k === 'boom') {
+    // 回旋：一段外凸的弧 + 飞行轨迹上的点
+    const dist = a.dist || 200, wide = num(sp.wide, 1);
+    push({ a0: base - 0.55 * wide, a1: base + 0.55 * wide, R: dist * 0.92, t: 0.30, max: 0.30 });
+    for (let i = 1; i <= 6; i++) {
+      const tt = i / 6;
+      pushAt(x + Math.cos(base) * dist * tt, y + Math.sin(base) * dist * tt,
+        { dot: 3 - tt, t: 0.24 - tt * 0.03, max: 0.24 - tt * 0.03 });
+    }
+    if (sp.flat) push({ line: { ang: base, len: dist * 0.85, w: 1.2 }, t: 0.24, max: 0.24 });
+    if (sp.high) push({ line: { ang: base - 1.05, len: dist * 0.5, w: 1.2 }, t: 0.24, max: 0.24 });
+  } else if (k === 'charge') {
+    // 冲锋：地上的擦痕 + 一路扬尘
+    const dist = a.dist || (a.dash && a.dash.dist) || 84;
+    push({ line: { ang: base, len: dist * num(sp.len, 1), w: num(sp.w, 1.2) }, t: 0.30, max: 0.30 });
+    for (let i = 1; i <= 5; i++) {
+      const tt = i / 5;
+      pushAt(x + Math.cos(base) * dist * tt, y + Math.sin(base) * dist * tt, { dot: 3, t: 0.26, max: 0.26 });
+    }
+    const dust = num(sp.dust, 0);
+    for (let i = 0; i < dust; i++) {
+      const tt = i / Math.max(1, dust);
+      pushAt(x + Math.cos(base) * dist * tt + (Math.random() - 0.5) * 12,
+        y + Math.sin(base) * dist * tt + (Math.random() - 0.5) * 8,
+        { dot: 2 + Math.random() * 2, t: 0.30, max: 0.30 });
+    }
+  }
+}
+
+// P12-E：插地类动作。老 plant + 三个新 plant（plantDeep / plantWide / plantTurn）走一把尺子。
+function isPlantPose(mode) {
+  if (mode === 'plant') return true;
+  const sp = ART_POSE_SPECS[mode];
+  return !!(sp && sp.k === 'plant');
+}
+
 function artSwingFx(a, base, reach, arc, ox, oy) {
   const W = WEAPONS[a.fam];
   const col = artColor(a, W.trail);
@@ -3128,6 +3379,8 @@ function artSwingFx(a, base, reach, arc, ox, oy) {
   const y = oy === undefined ? player.y - 8 : oy;
   const shape = artShape(a);
   const push = (g) => { slashGhosts.push(Object.assign({ x, y, colors: col }, g)); };
+  // P12-E：新刀光有的片段不在角色身上（在落点、在枪尖、在裂纹末端），要指定坐标
+  const pushAt = (px, py, g) => { slashGhosts.push(Object.assign({ x: px, y: py, colors: col }, g)); };
 
   if (shape === 'point') {
     // 落点：一个爆点 + 四道放射碎屑。打的是一个点，不是一片。
@@ -3295,6 +3548,9 @@ function artSwingFx(a, base, reach, arc, ox, oy) {
   } else if (shape === 'thrust') {
     push({ thrust: base, len: reach * 1.05, t: 0.24, max: 0.24 });
 
+  } else if (ART_SHAPE_SPECS[shape]) {
+    // P12-E：61 种新刀光。参数化的原子画法，和 19 种老画法共用同一套 ghost 通道
+    artShapeSpec(ART_SHAPE_SPECS[shape], { a, base, reach, arc, x, y, col, push, pushAt });
   } else {
     push({ a0: base - arc / 2, a1: base + arc / 2, R: reach * 0.85, t: 0.26, max: 0.26 });
   }
@@ -3384,7 +3640,7 @@ function execArt(a) {
     : { mode: a.fx === 'proj' ? 'thrust' : 'swing', a0: 0, a1: 0, dur: 0.22 };
   player.swing = { fam, base: aim, cast: true, sw: psw, t: psw.dur, dur: psw.dur };
   // 收招后的保持（地裂：落地后前倾 0.4 息不动）—— 收招空档也是重量的一部分
-  player.holdT = (ps && ps.mode !== 'plant' && ps.hold) ? ps.hold : 0;
+  player.holdT = (ps && !isPlantPose(ps.mode) && ps.hold) ? ps.hold : 0;
   // P11：起手音改由招式自带（snd）；没写的退回 P10 的按原语分派
   AUDIO.play(a.snd || (a.fx === 'bolt' ? 'thunder' : a.fx === 'proj' ? 'qi' :
     a.fx === 'buff' ? 'levelup' :
@@ -3693,7 +3949,7 @@ function execArt(a) {
     }
     // 铁壁：锤插在地上，人半蹲在它后面 —— 增益类招式以前完全没有表现，
     // 玩家看不出自己处于什么状态。这一招是这条规矩的样板。
-    if (a.pose && a.pose.mode === 'plant') player.plantT = dur;
+    if (a.pose && isPlantPose(a.pose.mode)) player.plantT = dur;
     if (a.shape) {
       artSwingFx(a, aim, 20, 1.6);
     } else {
@@ -7163,7 +7419,7 @@ function update(dt) {
           if (b.art) afterArtHit(e, b.art, dealt, ang);
         }
       }
-      AUDIO.play('thunder2');
+      AUDIO.play('thunderHit');
       spawnBoltFx(b.x, b.y);
     }
   }
@@ -7276,6 +7532,35 @@ function swingAng(sw, base, p) {
   if (sw.ease === 'in') e = Math.pow(q, 2.4);                    // 慢蓄猛落
   else if (sw.ease === 'both') e = q < 0.5 ? 2 * q * q : 1 - Math.pow(-2 * q + 2, 2) / 2;
   else e = 1 - Math.pow(1 - q, 2.2);                             // 快起慢收（原样）
+  // P12-E：60 个新动作走 ART_POSE_SPECS —— 17 类运动 × 参数。
+  // 新表里没有老动作的名字，两边不会撞；老动作的分支一个都没动。
+  // angAdd 是这一招专属的角度偏角（调参器用来把同兵器八招在 0.15 息时错开）。
+  const nsp = ART_POSE_SPECS[sw.mode];
+  if (nsp) {
+    const arcMul = nsp.arcMul === undefined ? 1 : nsp.arcMul;
+    const angAdd = nsp.angAdd || 0;
+    const sweepA = (sw.a0 + (sw.a1 - sw.a0) * e) * arcMul;
+    const off = nsp.off === undefined ? 0 : nsp.off;
+    switch (nsp.k) {
+      case 'swing': return { ang: base + sweepA + angAdd, off: off * e, cast: false };
+      case 'lunge': return { ang: base + sweepA + angAdd, off: off * e, cast: false };
+      case 'thrust': return { ang: base + (nsp.tilt || 0) + angAdd, off: off * e, cast: false };
+      case 'ring': return { ang: base - Math.PI * nsp.t1 + e * Math.PI * nsp.t2 + angAdd, off: 0, cast: false };
+      case 'cast': return { ang: base + (nsp.tilt || 0) + e * (nsp.sweep || 0.4) + angAdd, off: off * e, cast: true };
+      case 'over': return { ang: base + sweepA + angAdd, off: -nsp.up * (1 - e) + nsp.down * e * e, cast: false };
+      case 'side': return { ang: base + sweepA + angAdd, off: nsp.a * e + nsp.b, cast: false };
+      case 'throw': return { ang: base + sweepA + angAdd, off: off * e, cast: false };
+      case 'plant': return { ang: base + sweepA + angAdd, off: -off * e, cast: false };
+      case 'charge': return { ang: base + (sw.a0 || 0) * arcMul + angAdd, off: off * e, cast: false };
+      case 'flick': return { ang: base + sweepA + angAdd, off: off * e, cast: false };
+      case 'guard': return { ang: base + sweepA + angAdd, off: off * e, cast: true };
+      case 'chan': return { ang: base + sweepA + angAdd, off: off * e, cast: true };
+      case 'leap': return { ang: base + sweepA + angAdd, off: off * e, cast: false };
+      case 'rev': return { ang: base + sweepA + angAdd + Math.PI * (nsp.t || 0.5), off: -off * e, cast: false };
+      case 'spin': return { ang: base + sweepA + angAdd + e * Math.PI * (nsp.t === undefined ? 1 : nsp.t), off: 0, cast: false };
+      default: break;
+    }
+  }
   if (sw.mode === 'ring') return { ang: base - Math.PI * 1.1 + e * Math.PI * 2.2, off: 0, cast: false };
   if (sw.mode === 'thrust') return { ang: base, off: e * 9, cast: false };
   if (sw.mode === 'cast') return { ang: base - 0.62 + e * 0.42, off: e * 3, cast: true };
@@ -7737,7 +8022,7 @@ function drawOverlay(camX, camY) {
     if (g.ring) {
       // grow：从 r0 长到 r1（冲击波 / 扩散环）；否则是原来"由外收拢"的收势
       const R = g.grow ? g.grow[0] + (g.grow[1] - g.grow[0]) * (1 - a) : g.R * (1.4 - a * 0.4);
-      drawRingFx(octx, g.x - camX, g.y - camY, R, g.colors, a, 1);
+      drawRingFx(octx, g.x - camX, g.y - camY, R, g.colors, a, g.w || 1);
     }
     else if (g.thrust) drawThrustFx(octx, g.x - camX, g.y - camY, g.thrust, g.len, g.colors, a * 0.9, 1);
     else if (g.dot) drawDotFx(octx, g.x - camX, g.y - camY, g.dot * (0.5 + a * 0.8), g.colors, a);
@@ -8489,6 +8774,7 @@ window.__game = {
   ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_FX, ART_SLOT_LABEL, PROF_MAX,
   artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower,
   artShape, artPose, artColor, ART_SHAPES, ART_POSES, ART_SNDS, swingAng,
+  ART_SHAPE_SPECS, ART_POSE_SPECS, artShapeSpec, isPlantPose, sndVariant,
   artShapeSig, artMotionSig, artColorSig, artSoundSig,
   castArt, execArt, updateArts, clearArts, autoLoadout, addProf, applyStatus, afterArtHit,
   renderArts, showArtPage, artMaxOf, artCdOf,

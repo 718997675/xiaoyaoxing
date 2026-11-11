@@ -38,14 +38,21 @@ function env(c, node, t0, peak, dec, dest) {
   return g;
 }
 
+// P12-E：招式音色有 80 个（16 个原型 × 5 档），pitchMul / durMul 由 play()
+// 按名字后缀临时设定。放在模块级而不是传参 —— 十几个预设分支都直接调
+// tone()/hiss()，改一处比给每个分支加参数省事得多。
+let pitchMul = 1, durMul = 1;
+
 function tone(c, type, f0, f1, dur, peak, dest) {
   const o = c.createOscillator();
   o.type = type;
   const t0 = c.currentTime;
-  o.frequency.setValueAtTime(f0, t0);
-  if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
-  env(c, o, t0, peak, dur, dest);
-  o.start(t0); o.stop(t0 + dur + 0.02);
+  const a0 = f0 * pitchMul, a1 = f1 * pitchMul;
+  const d = dur * durMul;
+  o.frequency.setValueAtTime(a0, t0);
+  if (a1 !== a0) o.frequency.exponentialRampToValueAtTime(Math.max(1, a1), t0 + d);
+  env(c, o, t0, peak, d, dest);
+  o.start(t0); o.stop(t0 + d + 0.02);
   return o;
 }
 
@@ -61,6 +68,23 @@ function hiss(c, type, f0, f1, dur, peak, q) {
   s.start(t0); s.stop(t0 + dur + 0.02);
 }
 
+// P12-E：招式音色名 = 原型 + 档位（slash1..slash5 / qi1..qi5 ……）。
+// 16 个原型 × 5 档 = 80 个，全表 80 招的 snd / hitSnd 各自用满 80 个不同值。
+// 档位换算成音高与时长：1 档最低最长，5 档最高最短，中间 3 档是原音。
+const SND_BASES = ['slash', 'qi', 'wu', 'dash', 'windup', 'thunder', 'forge', 'quake',
+  'boomerang', 'levelup', 'bell', 'shield', 'boss', 'rare', 'hit', 'crit'];
+const SND_RE = new RegExp('^(' + SND_BASES.join('|') + ')([1-5])$');
+// 档位 → 音高倍率（半音）与时长倍率
+const SND_PITCH = [0.794, 0.891, 1, 1.122, 1.26];
+const SND_DUR = [1.18, 1.09, 1, 0.92, 0.85];
+
+export function sndVariant(name) {
+  const m = SND_RE.exec(name || '');
+  if (!m) return null;
+  const v = Number(m[2]) - 1;
+  return { base: m[1], v, pitch: SND_PITCH[v], dur: SND_DUR[v] };
+}
+
 export const AUDIO = {
   get enabled() { return enabled; },
   set enabled(v) { enabled = !!v; },
@@ -70,7 +94,14 @@ export const AUDIO = {
     if (!enabled) return;
     const c = ac();
     if (!c) return;
-    switch (name) {
+    // P12-E：带档位的招式音色（slash3 / qi5 ……）先解出原型与变体参数，
+    // 落到原型分支上执行，只是音高与时长被改过。普通音效（hurt / ui / die…）
+    // 不带数字后缀，原样走老路。
+    const sv = sndVariant(name);
+    const nm = sv ? sv.base : name;
+    pitchMul = sv ? sv.pitch : 1;
+    durMul = sv ? sv.dur : 1;
+    switch (nm) {
       case 'slash': {  // 挥剑破风：不同兵器不同音色
         const f = { sword: 2600, blade: 2100, spear: 3200, staff: 1500, dual: 3000, hammer: 1100 }[arg] || 2400;
         hiss(c, 'bandpass', f, f * 0.28, arg === 'hammer' ? 0.18 : 0.11, arg === 'hammer' ? 0.22 : 0.16, 1.2);
@@ -81,7 +112,7 @@ export const AUDIO = {
         hiss(c, 'highpass', 5200, 1400, 0.28, 0.14, 1);
         tone(c, 'sawtooth', 320, 180, 0.3, 0.08);
         break;
-      case 'thunder2': // 落雷命中
+      case 'thunderHit': // 落雷命中（不参与招式音色池，老 boss 落雷专用）
         tone(c, 'square', 1600, 220, 0.18, 0.16);
         hiss(c, 'lowpass', 5200, 400, 0.34, 0.2, 0.8);
         tone(c, 'sine', 90, 40, 0.3, 0.14);
@@ -91,7 +122,10 @@ export const AUDIO = {
         hiss(c, 'bandpass', 1800, 2600, 0.12, 0.07, 2);
         break;
       case 'hit': {   // 命中
-        const p = 1 - Math.min(0.6, (arg || 10) / 60);
+        // P12-E：第二个参数有两种来法 —— 命中音按伤害值传，起手音按兵器名传。
+        // 这里只认数字，字符串一律按 10 算，别让 'chain'/60 变成 NaN 把整个放招打断。
+        const dmg = typeof arg === 'number' && isFinite(arg) ? arg : 10;
+        const p = 1 - Math.min(0.6, dmg / 60);
         tone(c, 'square', 240 * (1 + p), 120, 0.07, 0.13);
         hiss(c, 'highpass', 1600, 900, 0.05, 0.1, 1);
         break;
@@ -184,5 +218,6 @@ export const AUDIO = {
       }
       default: break;
     }
+    pitchMul = 1; durMul = 1;
   },
 };

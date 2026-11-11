@@ -333,6 +333,92 @@
       new Set(sw).size + '/30');
   }
 
+  // ---------- 1.5 P12-E 字面零重复：四个字段本身各 80/80 ----------
+  // P12-D 查的是「表现实例」—— 形状 + 变体号、声音对……；字段本身还能复用。
+  // 用户 2026-11-11 追加要求：连字段里写的字符串都不许复用。于是三张池各扩到 80，
+  // 61 种新刀光 + 60 个新动作 + 80 个音色全是新造的。
+  {
+    const A = g.ART_IDS.map(id => g.ARTS[id]);
+    const uniq = (label, fn) => {
+      const m = new Map();
+      for (const a of A) {
+        const k = String(fn(a));
+        if (!m.has(k)) m.set(k, []);
+        m.get(k).push(a.id);
+      }
+      const dups = [...m.entries()].filter(([, v]) => v.length > 1);
+      T('字面零重复 · ' + label + ' 80/80 唯一', m.size === 80,
+        m.size + '/80' + (dups.length
+          ? ' 撞车 ' + dups.slice(0, 3).map(([k, v]) => k + '→' + v.join(',')).join(' ') : ''));
+    };
+    uniq('形状 shape', a => g.artShape(a));
+    uniq('动作 pose.mode', a => g.artPose(a));
+    uniq('起手音 snd', a => a.snd);
+    uniq('命中音 hitSnd', a => a.hitSnd);
+
+    T('三张池各 80 个（19 形 + 61 新形 / 20 式 + 60 新式 / 16 音原型 × 5 档）',
+      g.ART_SHAPES.length === 80 && g.ART_POSES.length === 80 && g.ART_SNDS.length === 80,
+      g.ART_SHAPES.length + ' / ' + g.ART_POSES.length + ' / ' + g.ART_SNDS.length);
+    T('规格表 61 条形状 / 60 条动作',
+      Object.keys(g.ART_SHAPE_SPECS).length === 61 && Object.keys(g.ART_POSE_SPECS).length === 60,
+      Object.keys(g.ART_SHAPE_SPECS).length + ' / ' + Object.keys(g.ART_POSE_SPECS).length);
+
+    // 61 招用新刀光、19 招还在用 19 种老画法；60 招用新动作、20 招还在用老动作
+    const specShape = A.filter(a => g.ART_SHAPE_SPECS[a.shape]);
+    const specPose = A.filter(a => g.ART_POSE_SPECS[a.pose.mode]);
+    T('61 招走新刀光 / 19 招留在老画法', specShape.length === 61, specShape.length + ' 招');
+    T('60 招走新动作 / 20 招留在老动作', specPose.length === 60, specPose.length + ' 招');
+    T('每招用到的形状都有规格（不落进兜底分支）',
+      A.every(a => g.ART_SHAPE_SPECS[a.shape] || g.ART_SHAPES.indexOf(a.shape) >= 0));
+    T('每招用到的动作都有规格（不落进兜底分支）',
+      A.every(a => g.ART_POSE_SPECS[a.pose.mode] || g.ART_POSES.indexOf(a.pose.mode) >= 0));
+
+    // 音色名必须真的能解成「原型 + 档位」，且五个档位都用上了
+    T('160 个音色名全部解得出变体（16 原型 × 5 档）',
+      A.every(a => g.sndVariant(a.snd) && g.sndVariant(a.hitSnd)),
+      A.filter(a => !g.sndVariant(a.snd) || !g.sndVariant(a.hitSnd)).map(a => a.id).join(',') || 'OK');
+    T('起手音 / 命中音的五个档位都用上了',
+      new Set(A.map(a => g.sndVariant(a.snd).v)).size === 5
+      && new Set(A.map(a => g.sndVariant(a.hitSnd).v)).size === 5);
+
+    // 行为断言：新动作真的改变了运动轨迹（不是只在表里多了个名字）
+    const unchanged = [];
+    for (const a of specPose) {
+      const sw = { mode: a.pose.mode, a0: a.pose.a0, a1: a.pose.a1, dur: a.pose.dur, ease: a.pose.ease };
+      const p = 0.5;
+      const e = a.pose.ease === 'in' ? Math.pow(p, 2.4)
+        : a.pose.ease === 'both' ? (p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2)
+          : 1 - Math.pow(1 - p, 2.2);
+      const legacy = { ang: a.pose.a0 + (a.pose.a1 - a.pose.a0) * e, off: 0, cast: false };
+      if (JSON.stringify(g.swingAng(sw, 0, p)) === JSON.stringify(legacy)) unchanged.push(a.id);
+    }
+    T('60 个新动作的运动轨迹都和老动作默认值不同', unchanged.length === 0,
+      unchanged.join(',') || 'OK · 60/60');
+
+    // 行为断言：同一画法原子的不同参数，刀光几何必须真的不同
+    const groups = {};
+    for (const a of specShape) {
+      const k = g.ART_SHAPE_SPECS[a.shape].k;
+      (groups[k] = groups[k] || []).push(a);
+    }
+    const sameGeom = [];
+    for (const k of Object.keys(groups)) {
+      const list = groups[k];
+      if (list.length < 2) continue;
+      const geomOf = (a) => {
+        arena(14); g.equipFam(a.fam); g.clearArts(); g.slashGhosts.length = 0;
+        g.player.qi = 999; g.setLoadout([a.id]); g.castArt(0);
+        return g.slashGhosts.map(x => [x.len || 0, x.R || 0, x.dot || 0, x.w || 0,
+          x.line ? x.line.len : 0, x.line ? x.line.w : 0,
+          x.a0 === undefined ? '' : x.a0, x.a1 === undefined ? '' : x.a1].join('/')).join(',');
+      };
+      const m1 = geomOf(list[0]), m2 = geomOf(list[1]);
+      if (!m1 || m1 === m2) sameGeom.push(k + '(' + list[0].id + '≈' + list[1].id + ')');
+    }
+    T('同一画法原子的不同参数，刀光几何都不同', sameGeom.length === 0,
+      sameGeom.join(' ') || Object.keys(groups).length + ' 个原子全过');
+  }
+
   // ---------- 2. 专精曲线 ----------
   {
     T('0 击杀 = 0 级', g.profLevel(0) === 0, g.profLevel(0));

@@ -12,10 +12,20 @@
     T('工作台就绪（__wbReady / __wb）', window.__wbReady === true && !!w);
     const B = w.base;
     T('基线 80 招', Object.keys(B.arts).length === 80, Object.keys(B.arts).length);
-    T('形状池 19 / 动作池 20 / 声音池 17 / 原语 14 / 兵器 10 / 色板 20',
-      B.shapes.length === 19 && B.poses.length === 20 && B.snds.length === 17 &&
+    T('形状池 80 / 动作池 80 / 声音池 80 / 原语 14 / 兵器 10 / 色板 20',
+      B.shapes.length === 80 && B.poses.length === 80 && B.snds.length === 80 &&
       B.fx.length === 14 && B.fams.length === 10 && B.palette.length === 20,
       [B.shapes.length, B.poses.length, B.snds.length, B.fx.length, B.fams.length, B.palette.length].join('/'));
+    // P12-E：两张规格表要跟着基线一起内联（61 种新刀光的画法 / 60 个新动作的运动参数）
+    T('基线内联 61 条形状规格 / 60 条动作规格',
+      B.shapeSpecs && B.poseSpecs &&
+      Object.keys(B.shapeSpecs).length === 61 && Object.keys(B.poseSpecs).length === 60,
+      (B.shapeSpecs ? Object.keys(B.shapeSpecs).length : 0) + ' / ' + (B.poseSpecs ? Object.keys(B.poseSpecs).length : 0));
+    T('规格表的原子种类齐全（16 形 / 16 式）',
+      new Set(Object.keys(B.shapeSpecs || {}).map(k => B.shapeSpecs[k].k)).size === 16 &&
+      new Set(Object.keys(B.poseSpecs || {}).map(k => B.poseSpecs[k].k)).size === 16,
+      new Set(Object.keys(B.shapeSpecs || {}).map(k => B.shapeSpecs[k].k)).size + ' / '
+      + new Set(Object.keys(B.poseSpecs || {}).map(k => B.poseSpecs[k].k)).size);
 
     // 重点回归：zone.shape（circle / line）曾经被当成招式的 shape 解析进来，
     // 导致 5 招的下拉框是空值。解析脚本现在锚定顶层行，这里再兜一道。
@@ -50,6 +60,29 @@
     }
     T('工作台基线四条表现实例全表 80/80 唯一', dupBad.length === 0,
       dupBad.join(' ') || 'OK · shape@shv / pose / color / snd 对');
+    // P12-E：字面零重复 —— 四个字段本身全表各 80 个不同值。
+    // 这一条比上面那条更严：字段里写的字符串都不能复用。
+    const litSigs = {
+      '形状 shape': a => a.shape,
+      '动作 pose.mode': a => a.pose.mode,
+      '起手音 snd': a => a.snd,
+      '命中音 hitSnd': a => a.hitSnd,
+    };
+    const litBad = [];
+    for (const k of Object.keys(litSigs)) {
+      const n = new Set(ALL.map(litSigs[k])).size;
+      if (n !== 80) litBad.push(k + '=' + n + '/80');
+    }
+    T('工作台基线四个字段字面全表 80/80 唯一', litBad.length === 0,
+      litBad.join(' ') || 'OK · shape / pose.mode / snd / hitSnd');
+    // 每招用到的形状 / 动作都得有规格 —— 别掉进兜底分支
+    const specBad = [];
+    for (const a of ALL) {
+      if (!B.shapeSpecs[a.shape] && B.shapes.indexOf(a.shape) < 0) specBad.push(a.id + '.shape=' + a.shape);
+      if (!B.poseSpecs[a.pose.mode] && B.poses.indexOf(a.pose.mode) < 0) specBad.push(a.id + '.pose=' + a.pose.mode);
+    }
+    T('80 招的形状 / 动作都有规格（新招不掉进兜底）', specBad.length === 0,
+      specBad.slice(0, 6).join(' ') || 'OK');
     T('80 招都有合法几何变体 shv（1~12）',
       ALL.every(a => Number.isInteger(a.shv) && a.shv >= 1 && a.shv <= 12),
       ALL.filter(a => !Number.isInteger(a.shv)).map(a => a.id).join(',') || 'OK');

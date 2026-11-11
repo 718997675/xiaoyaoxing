@@ -53179,14 +53179,21 @@ function env(c, node, t0, peak, dec, dest) {
   return g;
 }
 
+// P12-E：招式音色有 80 个（16 个原型 × 5 档），pitchMul / durMul 由 play()
+// 按名字后缀临时设定。放在模块级而不是传参 —— 十几个预设分支都直接调
+// tone()/hiss()，改一处比给每个分支加参数省事得多。
+let pitchMul = 1, durMul = 1;
+
 function tone(c, type, f0, f1, dur, peak, dest) {
   const o = c.createOscillator();
   o.type = type;
   const t0 = c.currentTime;
-  o.frequency.setValueAtTime(f0, t0);
-  if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
-  env(c, o, t0, peak, dur, dest);
-  o.start(t0); o.stop(t0 + dur + 0.02);
+  const a0 = f0 * pitchMul, a1 = f1 * pitchMul;
+  const d = dur * durMul;
+  o.frequency.setValueAtTime(a0, t0);
+  if (a1 !== a0) o.frequency.exponentialRampToValueAtTime(Math.max(1, a1), t0 + d);
+  env(c, o, t0, peak, d, dest);
+  o.start(t0); o.stop(t0 + d + 0.02);
   return o;
 }
 
@@ -53202,6 +53209,23 @@ function hiss(c, type, f0, f1, dur, peak, q) {
   s.start(t0); s.stop(t0 + dur + 0.02);
 }
 
+// P12-E：招式音色名 = 原型 + 档位（slash1..slash5 / qi1..qi5 ……）。
+// 16 个原型 × 5 档 = 80 个，全表 80 招的 snd / hitSnd 各自用满 80 个不同值。
+// 档位换算成音高与时长：1 档最低最长，5 档最高最短，中间 3 档是原音。
+const SND_BASES = ['slash', 'qi', 'wu', 'dash', 'windup', 'thunder', 'forge', 'quake',
+  'boomerang', 'levelup', 'bell', 'shield', 'boss', 'rare', 'hit', 'crit'];
+const SND_RE = new RegExp('^(' + SND_BASES.join('|') + ')([1-5])$');
+// 档位 → 音高倍率（半音）与时长倍率
+const SND_PITCH = [0.794, 0.891, 1, 1.122, 1.26];
+const SND_DUR = [1.18, 1.09, 1, 0.92, 0.85];
+
+function sndVariant(name) {
+  const m = SND_RE.exec(name || '');
+  if (!m) return null;
+  const v = Number(m[2]) - 1;
+  return { base: m[1], v, pitch: SND_PITCH[v], dur: SND_DUR[v] };
+}
+
 const AUDIO = {
   get enabled() { return enabled; },
   set enabled(v) { enabled = !!v; },
@@ -53211,7 +53235,14 @@ const AUDIO = {
     if (!enabled) return;
     const c = ac();
     if (!c) return;
-    switch (name) {
+    // P12-E：带档位的招式音色（slash3 / qi5 ……）先解出原型与变体参数，
+    // 落到原型分支上执行，只是音高与时长被改过。普通音效（hurt / ui / die…）
+    // 不带数字后缀，原样走老路。
+    const sv = sndVariant(name);
+    const nm = sv ? sv.base : name;
+    pitchMul = sv ? sv.pitch : 1;
+    durMul = sv ? sv.dur : 1;
+    switch (nm) {
       case 'slash': {  // 挥剑破风：不同兵器不同音色
         const f = { sword: 2600, blade: 2100, spear: 3200, staff: 1500, dual: 3000, hammer: 1100 }[arg] || 2400;
         hiss(c, 'bandpass', f, f * 0.28, arg === 'hammer' ? 0.18 : 0.11, arg === 'hammer' ? 0.22 : 0.16, 1.2);
@@ -53222,7 +53253,7 @@ const AUDIO = {
         hiss(c, 'highpass', 5200, 1400, 0.28, 0.14, 1);
         tone(c, 'sawtooth', 320, 180, 0.3, 0.08);
         break;
-      case 'thunder2': // 落雷命中
+      case 'thunderHit': // 落雷命中（不参与招式音色池，老 boss 落雷专用）
         tone(c, 'square', 1600, 220, 0.18, 0.16);
         hiss(c, 'lowpass', 5200, 400, 0.34, 0.2, 0.8);
         tone(c, 'sine', 90, 40, 0.3, 0.14);
@@ -53232,7 +53263,10 @@ const AUDIO = {
         hiss(c, 'bandpass', 1800, 2600, 0.12, 0.07, 2);
         break;
       case 'hit': {   // 命中
-        const p = 1 - Math.min(0.6, (arg || 10) / 60);
+        // P12-E：第二个参数有两种来法 —— 命中音按伤害值传，起手音按兵器名传。
+        // 这里只认数字，字符串一律按 10 算，别让 'chain'/60 变成 NaN 把整个放招打断。
+        const dmg = typeof arg === 'number' && isFinite(arg) ? arg : 10;
+        const p = 1 - Math.min(0.6, dmg / 60);
         tone(c, 'square', 240 * (1 + p), 120, 0.07, 0.13);
         hiss(c, 'highpass', 1600, 900, 0.05, 0.1, 1);
         break;
@@ -53325,10 +53359,11 @@ const AUDIO = {
       }
       default: break;
     }
+    pitchMul = 1; durMul = 1;
   },
 };
 
-return { AUDIO };
+return { sndVariant, AUDIO };
 })();
 
 /* ==================== art.js ==================== */
@@ -55111,19 +55146,19 @@ const ARTS = {
     cd: 4, cost: 4.8, fx: 'melee',
     reach: 40, arc: 1.2, mul: 6.6, kb: 9, pierceDef: 0.3,
     pose: { mode: 'lunge', a0: -2.45, a1: -0.95, dur: 0.28, ease: 'out' },
-    shape: 'thrust', color: [C.paper3, C.paper2],
+    shape: 'arc', color: [C.paper3, C.paper2],
     shv: 1,
-    snd: 'qi', hitSnd: 'hit',
+    snd: 'slash1', hitSnd: 'hit1',
     desc: '一剑直取，无视三成防御。',
   },
   sword_2: {
     id: 'sword_2', fam: 'sword', slot: 'dmg', name: '连环刺', prof: 2,
     cd: 3, cost: 3.6, fx: 'melee',
     reach: 38, arc: 1.0, mul: 1.45, hits: 3, ramp: 0.10, kb: 5,
-    pose: { mode: 'flick', a0: -1.95, a1: -0.65, dur: 0.22, ease: 'out' },
-    shape: 'trail', color: [C.jade3, C.jade2],
+    pose: { mode: 'thrust', a0: -1.95, a1: -0.65, dur: 0.22, ease: 'out' },
+    shape: 'thrust', color: [C.jade3, C.jade2],
     shv: 1,
-    snd: 'slash', hitSnd: 'crit',
+    snd: 'slash2', hitSnd: 'hit2',
     desc: '三连突刺，一刺比一刺沉。',
   },
   sword_3: {
@@ -55131,29 +55166,29 @@ const ARTS = {
     cd: 6, cost: 7.2, fx: 'proj',
     count: 1, speed: 330, size: 10, life: 0.62, pierce: 3, mul: 7.2,
     pose: { mode: 'swing', a0: -1.06, a1: -0.25, dur: 0.30, ease: 'out' },
-    shape: 'cleave', color: [C.white, C.jade2],
+    shape: 'ring', color: [C.white, C.jade2],
     shv: 1,
-    snd: 'wu', hitSnd: 'forge',
+    snd: 'slash3', hitSnd: 'hit3',
     desc: '一道剑气直贯，沿途三人俱伤。',
   },
   sword_4: {
     id: 'sword_4', fam: 'sword', slot: 'aoe', name: '剑雨', prof: 5,
     cd: 10, cost: 12, fx: 'bolt',
     count: 8, mul: 1.4, radius: 26, range: 170,
-    pose: { mode: 'channel', a0: -0.28, a1: 0.30, dur: 0.44, ease: 'in' },
-    shape: 'rain', color: [C.pur3, C.pur2],
+    pose: { mode: 'lungeHigh', a0: -0.28, a1: 0.30, dur: 0.44, ease: 'in' },
+    shape: 'lanceLong', color: [C.pur3, C.pur2],
     shv: 1,
-    snd: 'thunder', hitSnd: 'thunder2',
+    snd: 'slash4', hitSnd: 'hit4',
     desc: '八道剑光自天落，各寻各的目标。',
   },
   sword_5: {
     id: 'sword_5', fam: 'sword', slot: 'move', name: '御剑突进', prof: 6,
     cd: 8, cost: 9.6, fx: 'dash', mul: 3.6, radius: 26, kb: 6,
     dash: { dir: 'face', dist: 60, iframe: 0.3 },
-    pose: { mode: 'charge', a0: 0.10, a1: 0.10, dur: 0.26, ease: 'out' },
-    shape: 'chargeLine', color: [C.gold3, C.gold2],
+    pose: { mode: 'lungeLow', a0: 0.10, a1: 0.10, dur: 0.26, ease: 'out' },
+    shape: 'lanceShort', color: [C.gold3, C.gold2],
     shv: 1,
-    snd: 'dash', hitSnd: 'boomerang',
+    snd: 'slash5', hitSnd: 'hit5',
     desc: '踏剑前冲六步，路径留伤，半息不伤。',
   },
   sword_6: {
@@ -55161,30 +55196,30 @@ const ARTS = {
     cd: 12, cost: 14.4, fx: 'melee',
     reach: 40, arc: 1.2, mul: 5.4, kb: 4,
     status: { kind: 'stun', dur: 1.5 },
-    pose: { mode: 'guard', a0: 0.60, a1: 1.10, dur: 0.32, ease: 'out' },
-    shape: 'point', color: [C.jade2, C.jade1],
+    pose: { mode: 'thrustLong', a0: 0.60, a1: 1.10, dur: 0.32, ease: 'out' },
+    shape: 'lanceWide', color: [C.jade2, C.jade1],
     shv: 1,
-    snd: 'bell', hitSnd: 'shield',
+    snd: 'qi1', hitSnd: 'crit1',
     desc: '剑尖点穴，中者一息半动弹不得。',
   },
   sword_7: {
     id: 'sword_7', fam: 'sword', slot: 'buff', name: '剑心通明', prof: 10,
     cd: 20, cost: 24, fx: 'buff', power: 10,
     buff: { dur: 8, crit: 25, critDmg: 30 },
-    pose: { mode: 'cast', a0: 1.15, a1: 1.50, dur: 0.40, ease: 'in' },
-    shape: 'sigil', color: [C.gold2, C.gold1],
+    pose: { mode: 'thrustShort', a0: 1.15, a1: 1.50, dur: 0.40, ease: 'in' },
+    shape: 'arcUp', color: [C.gold2, C.gold1],
     shv: 1,
-    snd: 'levelup', hitSnd: 'bell',
+    snd: 'qi2', hitSnd: 'crit2',
     desc: '敛神八息，会心与剑意俱锐。',
   },
   sword_8: {
     id: 'sword_8', fam: 'sword', slot: 'special', name: '万剑归宗', prof: 4,
     cd: 30, cost: 36, fx: 'orbit',
     count: 12, dur: 6, mul: 1.9, radius: 34,
-    pose: { mode: 'overheadBig', a0: -0.95, a1: 0.40, dur: 0.62, ease: 'in' },
-    shape: 'ring', color: [C.red3, C.red2],
+    pose: { mode: 'sweepHigh', a0: -0.95, a1: 0.40, dur: 0.62, ease: 'in' },
+    shape: 'arcDown', color: [C.red3, C.red2],
     shv: 1,
-    snd: 'boss', hitSnd: 'quake',
+    snd: 'qi3', hitSnd: 'crit3',
     desc: '十二剑环绕六息，各自追敌，每把独立结算。',
   },
 
@@ -55198,7 +55233,7 @@ const ARTS = {
     pose: { mode: 'overhead', a0: -1.90, a1: -0.30, dur: 0.34, ease: 'in' },
     shape: 'overheadArc', color: [C.white, C.ink1],
     shv: 1,
-    snd: 'windup', hitSnd: 'forge',
+    snd: 'qi4', hitSnd: 'crit4',
     desc: '一刀劈落，把人震开一丈。',
   },
   blade_2: {
@@ -55206,40 +55241,40 @@ const ARTS = {
     cd: 4, cost: 4.8, fx: 'melee',
     reach: 36, arc: 2.4, mul: 4.4, kb: 8,
     status: { kind: 'bleed', dur: 5, pct: 0.12 },
-    pose: { mode: 'swing', a0: -2.45, a1: -0.85, dur: 0.26, ease: 'out' },
-    shape: 'arc', color: [C.red2, C.red1],
+    pose: { mode: 'sideSwing', a0: -2.45, a1: -0.85, dur: 0.26, ease: 'out' },
+    shape: 'cleave', color: [C.red2, C.red1],
     shv: 1,
-    snd: 'slash', hitSnd: 'hit',
+    snd: 'qi5', hitSnd: 'crit5',
     desc: '割开一道口子，五息内持续流血。',
   },
   blade_3: {
     id: 'blade_3', fam: 'blade', slot: 'aoe', name: '横扫千军', prof: 3,
     cd: 6, cost: 7.2, fx: 'melee',
     reach: 44, arc: 6.28, mul: 7.2, kb: 10,
-    pose: { mode: 'sideSwing', a0: -1.45, a1: 0.10, dur: 0.30, ease: 'out' },
-    shape: 'ring', color: [C.white, C.ink2],
+    pose: { mode: 'reverse', a0: -1.45, a1: 0.10, dur: 0.30, ease: 'out' },
+    shape: 'sideArc', color: [C.white, C.ink2],
     shv: 2,
-    snd: 'wu', hitSnd: 'quake',
+    snd: 'wu1', hitSnd: 'forge1',
     desc: '周身一匝横扫，近者皆退。',
   },
   blade_4: {
     id: 'blade_4', fam: 'blade', slot: 'aoe', name: '旋风斩', prof: 5,
     cd: 10, cost: 12, fx: 'spin',
     dur: 1.5, tick: 0.25, mul: 1.83, radius: 50, kb: 7,
-    pose: { mode: 'spin', a0: -0.56, a1: 0.80, dur: 0.36, ease: 'both' },
-    shape: 'spiral', color: [C.white, C.ink3],
+    pose: { mode: 'overheadSlow', a0: -0.56, a1: 0.80, dur: 0.36, ease: 'both' },
+    shape: 'cleaveTwin', color: [C.white, C.ink3],
     shv: 1,
-    snd: 'boomerang', hitSnd: 'crit',
+    snd: 'wu2', hitSnd: 'forge2',
     desc: '旋身一息半，边走边斩，多段见血。',
   },
   blade_5: {
     id: 'blade_5', fam: 'blade', slot: 'move', name: '疾风步', prof: 6,
     cd: 9, cost: 10.8, fx: 'dash', mul: 4.05, radius: 24, kb: 6,
     dash: { dir: 'face', dist: 52, iframe: 0.22, forceCrit: true },
-    pose: { mode: 'lunge', a0: 0.05, a1: 0.93, dur: 0.24, ease: 'out' },
-    shape: 'trail', color: [C.white, C.paper2],
+    pose: { mode: 'overheadFast', a0: 0.05, a1: 0.93, dur: 0.24, ease: 'out' },
+    shape: 'cleaveThin', color: [C.white, C.paper2],
     shv: 2,
-    snd: 'dash', hitSnd: 'bell',
+    snd: 'wu3', hitSnd: 'forge3',
     desc: '掠步前欺，下一击必取要害。',
   },
   blade_6: {
@@ -55247,30 +55282,30 @@ const ARTS = {
     cd: 12, cost: 14.4, fx: 'melee',
     reach: 38, arc: 2.0, mul: 5.4, kb: 8,
     status: { kind: 'slow', dur: 3, pct: 0.6 },
-    pose: { mode: 'flick', a0: 0.60, a1: 1.46, dur: 0.20, ease: 'out' },
-    shape: 'hook', color: [C.white, C.paper1],
+    pose: { mode: 'sideHigh', a0: 0.60, a1: 1.46, dur: 0.20, ease: 'out' },
+    shape: 'cleaveWide', color: [C.white, C.paper1],
     shv: 1,
-    snd: 'qi', hitSnd: 'shield',
+    snd: 'wu4', hitSnd: 'forge4',
     desc: '刀锋挑筋，三息内寸步难行。',
   },
   blade_7: {
     id: 'blade_7', fam: 'blade', slot: 'buff', name: '狂怒', prof: 10,
     cd: 24, cost: 28.8, fx: 'buff', power: 12,
     buff: { dur: 10, atkPct: 30, hurtPct: 15 },
-    pose: { mode: 'guard', a0: 1.23, a1: 1.70, dur: 0.44, ease: 'in' },
-    shape: 'sigil', color: [C.red3, C.red1],
+    pose: { mode: 'sideLow', a0: 1.23, a1: 1.70, dur: 0.44, ease: 'in' },
+    shape: 'arcThin', color: [C.red3, C.red1],
     shv: 2,
-    snd: 'boss', hitSnd: 'levelup',
+    snd: 'wu5', hitSnd: 'forge5',
     desc: '十息内刀势更狠，皮肉也更薄。',
   },
   blade_8: {
     id: 'blade_8', fam: 'blade', slot: 'special', name: '血战八方', prof: 4,
     cd: 28, cost: 33.6, fx: 'spin',
     dur: 2.0, tick: 0.25, mul: 2.2, kb: 7, radius: 52, lifeOnHit: 0.02,
-    pose: { mode: 'slamLow', a0: -0.95, a1: 0.40, dur: 0.42, ease: 'in' },
-    shape: 'cross', color: [C.gold2, C.red2],
+    pose: { mode: 'reverseHigh', a0: -0.95, a1: 0.40, dur: 0.42, ease: 'in' },
+    shape: 'arcTall', color: [C.gold2, C.red2],
     shv: 1,
-    snd: 'thunder2', hitSnd: 'thunder',
+    snd: 'windup1', hitSnd: 'quake1',
     desc: '八段环斩，每一段命中都回两分气血。',
   },
 
@@ -55279,50 +55314,50 @@ const ARTS = {
     id: 'spear_1', fam: 'spear', slot: 'dmg', name: '贯甲刺', prof: 1,
     cd: 5, cost: 6, fx: 'cleave',
     len: 120, width: 30, mul: 7.5, pierceDef: 0.4, kb: 10,
-    pose: { mode: 'lunge', a0: -2.40, a1: -0.90, dur: 0.30, ease: 'out' },
-    shape: 'cleave', color: [C.white, C.jade1],
+    pose: { mode: 'flick', a0: -2.40, a1: -0.90, dur: 0.30, ease: 'out' },
+    shape: 'point', color: [C.white, C.jade1],
     shv: 2,
-    snd: 'qi', hitSnd: 'forge',
+    snd: 'windup2', hitSnd: 'quake2',
     desc: '一枪贯穿，沿途所有敌手俱伤，无视四成防御。',
   },
   spear_2: {
     id: 'spear_2', fam: 'spear', slot: 'dmg', name: '枪阵', prof: 2,
     cd: 6, cost: 7.2, fx: 'melee',
     reach: 46, arc: 1.0, mul: 3.2, hits: 3, kb: 6, kbLast: 10,
-    pose: { mode: 'flick', a0: -1.95, a1: -0.83, dur: 0.22, ease: 'out' },
-    shape: 'thrust', color: [C.white, C.red1],
+    pose: { mode: 'charge', a0: -1.95, a1: -0.83, dur: 0.22, ease: 'out' },
+    shape: 'rain', color: [C.white, C.red1],
     shv: 2,
-    snd: 'windup', hitSnd: 'hit',
+    snd: 'windup3', hitSnd: 'quake3',
     desc: '三刺连出，末一记把人挑开。',
   },
   spear_3: {
     id: 'spear_3', fam: 'spear', slot: 'aoe', name: '回马枪', prof: 3,
     cd: 4, cost: 4.8, fx: 'melee',
     reach: 44, arc: 1.6, mul: 3.4, back: true, backBonus: 1.4, kb: 9,
-    pose: { mode: 'reverse', a0: -1.45, a1: -0.35, dur: 0.26, ease: 'both' },
-    shape: 'hook', color: [C.white, C.gold1],
+    pose: { mode: 'cast', a0: -1.45, a1: -0.35, dur: 0.26, ease: 'both' },
+    shape: 'trail', color: [C.white, C.gold1],
     shv: 2,
-    snd: 'wu', hitSnd: 'crit',
+    snd: 'windup4', hitSnd: 'quake4',
     desc: '反手向身后一记突刺，回身反打格外狠。',
   },
   spear_4: {
     id: 'spear_4', fam: 'spear', slot: 'aoe', name: '天狼啸月', prof: 5,
     cd: 30, cost: 36, fx: 'melee',
     reach: 90, arc: 6.28, mul: 33, kb: 18,
-    pose: { mode: 'spin', a0: -0.45, a1: 0.70, dur: 0.50, ease: 'in' },
-    shape: 'ring', color: [C.white, C.gold3],
+    pose: { mode: 'thrustUp', a0: -0.45, a1: 0.70, dur: 0.50, ease: 'in' },
+    shape: 'lanceTwin', color: [C.white, C.gold3],
     shv: 3,
-    snd: 'boss', hitSnd: 'bell',
+    snd: 'windup5', hitSnd: 'quake5',
     desc: '枪尖画圆，九步之内尽在其下。',
   },
   spear_5: {
     id: 'spear_5', fam: 'spear', slot: 'move', name: '游龙步', prof: 6,
     cd: 10, cost: 12, fx: 'dash', mul: 4.5, radius: 26, kb: 6,
     dash: { dir: 'side', dist: 70, iframe: 0.5 },
-    pose: { mode: 'sweepLow', a0: 0.05, a1: 1.00, dur: 0.28, ease: 'out' },
-    shape: 'trail', color: [C.white, C.pur1],
+    pose: { mode: 'thrustDown', a0: 0.05, a1: 1.00, dur: 0.28, ease: 'out' },
+    shape: 'lanceSpin', color: [C.white, C.pur1],
     shv: 3,
-    snd: 'dash', hitSnd: 'quake',
+    snd: 'dash1', hitSnd: 'slash1',
     desc: '侧身游走七步，全程不沾片叶。',
   },
   spear_6: {
@@ -55330,30 +55365,30 @@ const ARTS = {
     cd: 14, cost: 16.8, fx: 'zone', mul: 0.8,
     zone: { dur: 4, tick: 0.5, radius: 70, shape: 'circle' },
     status: { kind: 'slow', dur: 1, pct: 0.5 },
-    pose: { mode: 'plant', a0: 0.55, a1: 1.20, dur: 0.32, ease: 'in' },
-    shape: 'sigil', color: [C.paper2, C.paper1],
+    pose: { mode: 'lungeFar', a0: 0.55, a1: 1.20, dur: 0.32, ease: 'in' },
+    shape: 'arcWide', color: [C.paper2, C.paper1],
     shv: 3,
-    snd: 'forge', hitSnd: 'shield',
+    snd: 'dash2', hitSnd: 'slash2',
     desc: '长枪插地，四息内方圆七步皆成泥沼。',
   },
   spear_7: {
     id: 'spear_7', fam: 'spear', slot: 'buff', name: '枪势', prof: 10,
     cd: 18, cost: 21.6, fx: 'buff', power: 9,
     buff: { dur: 8, reachPct: 40, pierce: 1 },
-    pose: { mode: 'guard', a0: 1.10, a1: 1.60, dur: 0.40, ease: 'out' },
-    shape: 'arc', color: [C.white, C.black],
+    pose: { mode: 'lungeSpin', a0: 1.10, a1: 1.60, dur: 0.40, ease: 'out' },
+    shape: 'rainSparse', color: [C.white, C.black],
     shv: 2,
-    snd: 'levelup', hitSnd: 'thunder2',
+    snd: 'dash3', hitSnd: 'slash3',
     desc: '枪意铺开八息，够得更远、也穿得更透。',
   },
   spear_8: {
     id: 'spear_8', fam: 'spear', slot: 'special', name: '挑飞', prof: 4,
     cd: 8, cost: 9.6, fx: 'melee',
     reach: 44, arc: 1.6, mul: 5.6, kb: 4, launch: true,
-    pose: { mode: 'leap', a0: -0.86, a1: 0.20, dur: 0.34, ease: 'in' },
-    shape: 'overheadArc', color: [C.white, C.red2],
+    pose: { mode: 'sweepThin', a0: -0.86, a1: 0.20, dur: 0.34, ease: 'in' },
+    shape: 'trailThin', color: [C.white, C.red2],
     shv: 2,
-    snd: 'slash', hitSnd: 'boomerang',
+    snd: 'dash4', hitSnd: 'slash4',
     desc: '上挑掀飞，落地再受一记摔伤。',
   },
 
@@ -55362,79 +55397,79 @@ const ARTS = {
     id: 'staff_1', fam: 'staff', slot: 'dmg', name: '扫棍', prof: 1,
     cd: 3, cost: 3.6, fx: 'melee',
     reach: 42, arc: 3.4, mul: 5.6, kb: 9,
-    pose: { mode: 'sweepLow', a0: -2.45, a1: -0.75, dur: 0.24, ease: 'out' },
-    shape: 'arc', color: [C.white, C.gold2],
+    pose: { mode: 'channel', a0: -2.45, a1: -0.75, dur: 0.24, ease: 'out' },
+    shape: 'sigil', color: [C.white, C.gold2],
     shv: 3,
-    snd: 'slash', hitSnd: 'forge',
+    snd: 'dash5', hitSnd: 'slash5',
     desc: '半圆横扫，冷却最短的棍法。',
   },
   staff_2: {
     id: 'staff_2', fam: 'staff', slot: 'dmg', name: '崩棍', prof: 2,
     cd: 5, cost: 6, fx: 'melee',
     reach: 40, arc: 1.3, mul: 8.0, kb: 18,
-    pose: { mode: 'flick', a0: -1.95, a1: -0.61, dur: 0.20, ease: 'out' },
-    shape: 'point', color: [C.white, C.pur2],
+    pose: { mode: 'spin', a0: -1.95, a1: -0.61, dur: 0.20, ease: 'out' },
+    shape: 'spiral', color: [C.white, C.pur2],
     shv: 2,
-    snd: 'forge', hitSnd: 'bell',
+    snd: 'thunder1', hitSnd: 'thunder1',
     desc: '棍尾一崩，只打一人，打得最远。',
   },
   staff_3: {
     id: 'staff_3', fam: 'staff', slot: 'aoe', name: '捅棍', prof: 3,
     cd: 4, cost: 4.8, fx: 'proj',
     count: 1, speed: 300, size: 11, life: 0.55, pierce: 4, mul: 4.8,
-    pose: { mode: 'lunge', a0: -1.45, a1: -0.15, dur: 0.28, ease: 'out' },
-    shape: 'thrust', color: [C.white, C.jade3],
+    pose: { mode: 'ring', a0: -1.45, a1: -0.15, dur: 0.28, ease: 'out' },
+    shape: 'chargeLine', color: [C.white, C.jade3],
     shv: 3,
-    snd: 'qi', hitSnd: 'crit',
+    snd: 'thunder2', hitSnd: 'thunder2',
     desc: '一棍直捅，连人带影穿成串。',
   },
   staff_4: {
     id: 'staff_4', fam: 'staff', slot: 'aoe', name: '跃棍', prof: 5,
     cd: 9, cost: 10.8, fx: 'shockwave',
     radius: 56, speed: 260, dur: 0.5, mul: 8.2, kb: 12, centerBonus: 1.5, centerR: 24,
-    pose: { mode: 'leap', a0: -0.29, a1: 0.70, dur: 0.42, ease: 'in' },
-    shape: 'shockwave', color: [C.white, C.pur3],
+    pose: { mode: 'castHigh', a0: -0.29, a1: 0.70, dur: 0.42, ease: 'in' },
+    shape: 'sigilHex', color: [C.white, C.pur3],
     shv: 1,
-    snd: 'windup', hitSnd: 'quake',
+    snd: 'thunder3', hitSnd: 'thunder3',
     desc: '跃起砸地，落点正中尤其沉重。',
   },
   staff_5: {
     id: 'staff_5', fam: 'staff', slot: 'move', name: '疾风棍', prof: 6,
     cd: 8, cost: 9.6, fx: 'dash', mul: 3.6, radius: 26, kb: 8,
     dash: { dir: 'face', dist: 58, iframe: 0.2, shieldPct: 8 },
-    pose: { mode: 'charge', a0: 0.10, a1: 0.12, dur: 0.26, ease: 'out' },
-    shape: 'chargeLine', color: [C.white, C.red3],
+    pose: { mode: 'castLow', a0: 0.10, a1: 0.12, dur: 0.26, ease: 'out' },
+    shape: 'sigilRune', color: [C.white, C.red3],
     shv: 2,
-    snd: 'dash', hitSnd: 'hit',
+    snd: 'forge1', hitSnd: 'thunder4',
     desc: '棍影护身前冲，路上顺手砸开一条道。',
   },
   staff_6: {
     id: 'staff_6', fam: 'staff', slot: 'ctrl', name: '缠棍', prof: 8,
     cd: 12, cost: 14.4, fx: 'pull', mul: 5.4, radius: 80, kb: 4,
-    pose: { mode: 'reverse', a0: 0.60, a1: 1.20, dur: 0.30, ease: 'out' },
-    shape: 'hook', color: [C.white, C.paper3],
+    pose: { mode: 'castSpin', a0: 0.60, a1: 1.20, dur: 0.30, ease: 'out' },
+    shape: 'sigilStar', color: [C.white, C.paper3],
     shv: 3,
-    snd: 'wu', hitSnd: 'boomerang',
+    snd: 'forge2', hitSnd: 'windup1',
     desc: '棍梢一卷，把八步内最近的敌手拽到面前。',
   },
   staff_7: {
     id: 'staff_7', fam: 'staff', slot: 'buff', name: '铁布衫', prof: 10,
     cd: 20, cost: 24, fx: 'buff', power: 10,
     buff: { dur: 5, dmgReduce: 50, shieldPct: 10 },
-    pose: { mode: 'plant', a0: 1.15, a1: 1.60, dur: 0.34, ease: 'in' },
-    shape: 'sigil', color: [C.paper3, C.ink1],
+    pose: { mode: 'channelHigh', a0: 1.15, a1: 1.60, dur: 0.34, ease: 'in' },
+    shape: 'spiralTight', color: [C.paper3, C.ink1],
     shv: 4,
-    snd: 'levelup', hitSnd: 'shield',
+    snd: 'forge3', hitSnd: 'windup2',
     desc: '五息横练，挨打只剩一半疼。',
   },
   staff_8: {
     id: 'staff_8', fam: 'staff', slot: 'special', name: '舞棍', prof: 4,
     cd: 10, cost: 12, fx: 'spin',
     dur: 2.0, tick: 0.25, mul: 1.5, kb: 6, radius: 44, reflect: true,
-    pose: { mode: 'spin', a0: -0.95, a1: 0.40, dur: 0.36, ease: 'both' },
-    shape: 'spiral', color: [C.paper3, C.ink2],
+    pose: { mode: 'channelLong', a0: -0.95, a1: 0.40, dur: 0.36, ease: 'both' },
+    shape: 'spiralWide', color: [C.paper3, C.ink2],
     shv: 2,
-    snd: 'boomerang', hitSnd: 'wu',
+    snd: 'forge4', hitSnd: 'windup3',
     desc: '舞棍两息，格开并反弹所有飞来之物。',
   },
 
@@ -55443,50 +55478,50 @@ const ARTS = {
     id: 'dual_1', fam: 'dual', slot: 'dmg', name: '双牙', prof: 1,
     cd: 2.5, cost: 3, fx: 'melee',
     reach: 32, arc: 1.8, mul: 2.5, hits: 2, kb: 4,
-    pose: { mode: 'flick', a0: -2.45, a1: -1.05, dur: 0.20, ease: 'out' },
-    shape: 'trail', color: [C.paper3, C.ink3],
+    pose: { mode: 'slam', a0: -2.45, a1: -1.05, dur: 0.20, ease: 'out' },
+    shape: 'fan', color: [C.paper3, C.ink3],
     shv: 4,
-    snd: 'slash', hitSnd: 'quake',
+    snd: 'forge5', hitSnd: 'windup4',
     desc: '极快两连，最短冷却。',
   },
   dual_2: {
     id: 'dual_2', fam: 'dual', slot: 'dmg', name: '十字斩', prof: 2,
     cd: 5, cost: 6, fx: 'melee',
     reach: 34, arc: 2.2, mul: 4.0, hits: 2, kb: 5, critLast: true,
-    pose: { mode: 'sideSwing', a0: -1.95, a1: -0.55, dur: 0.28, ease: 'out' },
+    pose: { mode: 'slamLow', a0: -1.95, a1: -0.55, dur: 0.28, ease: 'out' },
     shape: 'cross', color: [C.paper3, C.paper1],
     shv: 2,
-    snd: 'wu', hitSnd: 'hit',
+    snd: 'boomerang1', hitSnd: 'windup5',
     desc: '两刀交叉，后一刀专取破绽。',
   },
   dual_3: {
     id: 'dual_3', fam: 'dual', slot: 'aoe', name: '乱舞', prof: 3,
     cd: 10, cost: 12, fx: 'melee',
     reach: 56, arc: 6.28, mul: 2.0, hits: 6, randomTargets: 6, kb: 4,
-    pose: { mode: 'spin', a0: -0.95, a1: 0.30, dur: 0.34, ease: 'both' },
-    shape: 'spiral', color: [C.paper3, C.jade1],
+    pose: { mode: 'throw', a0: -0.95, a1: 0.30, dur: 0.34, ease: 'both' },
+    shape: 'hook', color: [C.paper3, C.jade1],
     shv: 3,
-    snd: 'qi', hitSnd: 'bell',
+    snd: 'boomerang2', hitSnd: 'qi1',
     desc: '六段乱斩，刀刀换个方向。',
   },
   dual_4: {
     id: 'dual_4', fam: 'dual', slot: 'aoe', name: '千刃', prof: 5,
     cd: 30, cost: 36, fx: 'zone', mul: 3.3,
     zone: { dur: 3, tick: 0.3, radius: 100, shape: 'circle' },
-    pose: { mode: 'channel', a0: -0.53, a1: 0.40, dur: 0.46, ease: 'in' },
-    shape: 'sigil', color: [C.paper3, C.red1],
+    pose: { mode: 'flickHigh', a0: -0.53, a1: 0.40, dur: 0.46, ease: 'in' },
+    shape: 'fanNarrow', color: [C.paper3, C.red1],
     shv: 5,
-    snd: 'windup', hitSnd: 'crit',
+    snd: 'boomerang3', hitSnd: 'qi2',
     desc: '刀刃成风，三息内十步方圆无人能立。',
   },
   dual_5: {
     id: 'dual_5', fam: 'dual', slot: 'move', name: '影袭', prof: 6,
     cd: 8, cost: 9.6, fx: 'dash', mul: 3.6, radius: 26, kb: 5,
     dash: { dir: 'target', dist: 48, iframe: 0.18, nextDmg: 0.5 },
-    pose: { mode: 'reverse', a0: 0.05, a1: 0.90, dur: 0.26, ease: 'out' },
-    shape: 'point', color: [C.paper3, C.gold1],
+    pose: { mode: 'flickLow', a0: 0.05, a1: 0.90, dur: 0.26, ease: 'out' },
+    shape: 'fanWide', color: [C.paper3, C.gold1],
     shv: 3,
-    snd: 'dash', hitSnd: 'forge',
+    snd: 'boomerang4', hitSnd: 'qi3',
     desc: '闪到敌手背后，紧接着那一刀更狠。',
   },
   dual_6: {
@@ -55494,30 +55529,30 @@ const ARTS = {
     cd: 12, cost: 14.4, fx: 'melee',
     reach: 32, arc: 1.0, mul: 5.4, kb: 4, critAdd: 60,
     status: { kind: 'slow', dur: 3, pct: 0.4 },
-    pose: { mode: 'guard', a0: 0.26, a1: 1.20, dur: 0.30, ease: 'out' },
-    shape: 'hook', color: [C.paper3, C.pur1],
+    pose: { mode: 'flickTurn', a0: 0.26, a1: 1.20, dur: 0.30, ease: 'out' },
+    shape: 'fanArc', color: [C.paper3, C.pur1],
     shv: 4,
-    snd: 'bell', hitSnd: 'thunder2',
+    snd: 'boomerang5', hitSnd: 'qi4',
     desc: '贴身一记，几乎必取要害，中者气息滞涩。',
   },
   dual_7: {
     id: 'dual_7', fam: 'dual', slot: 'buff', name: '杀意', prof: 10,
     cd: 22, cost: 26.4, fx: 'buff', power: 11,
     buff: { dur: 8, critDmg: 50, spd: 15 },
-    pose: { mode: 'slamLow', a0: 1.23, a1: 1.70, dur: 0.40, ease: 'in' },
-    shape: 'ring', color: [C.pur2, C.pur1],
+    pose: { mode: 'sideWide', a0: 1.23, a1: 1.70, dur: 0.40, ease: 'in' },
+    shape: 'crossThin', color: [C.pur2, C.pur1],
     shv: 4,
-    snd: 'boss', hitSnd: 'shield',
+    snd: 'crit1', hitSnd: 'qi5',
     desc: '八息杀意翻涌，会心更重、脚下更快。',
   },
   dual_8: {
     id: 'dual_8', fam: 'dual', slot: 'special', name: '疾影', prof: 4,
     cd: 9, cost: 10.8, fx: 'blink',
     times: 3, dist: 52, mul: 3.5, radius: 26,
-    pose: { mode: 'leap', a0: -1.45, a1: -0.17, dur: 0.24, ease: 'out' },
-    shape: 'chargeLine', color: [C.paper3, C.black],
+    pose: { mode: 'spinTight', a0: -1.45, a1: -0.17, dur: 0.24, ease: 'out' },
+    shape: 'crossThick', color: [C.paper3, C.black],
     shv: 3,
-    snd: 'boomerang', hitSnd: 'boomerang',
+    snd: 'crit2', hitSnd: 'wu1',
     desc: '三次短距闪烁，每次穿过敌手都留下一刀。',
   },
 
@@ -55532,10 +55567,10 @@ const ARTS = {
     // 一个点：极窄扇 + 短 reach。打中的往往只有一个人。
     reach: 34, arc: 0.55, mul: 8.4, kb: 16,
     status: { kind: 'break', dur: 4, pct: 0 },
-    pose: { mode: 'overhead', a0: -1.90, a1: 0.45, dur: 0.34, ease: 'in' },
-    shape: 'point', color: [C.paper3, C.jade2],
+    pose: { mode: 'overheadBig', a0: -1.90, a1: 0.45, dur: 0.34, ease: 'in' },
+    shape: 'shockwave', color: [C.paper3, C.jade2],
     shv: 4,
-    snd: 'slash', hitSnd: 'bell',
+    snd: 'quake1', hitSnd: 'wu2',
     desc: '一锤碎骨，四息内对方防御减四成。',
   },
   hammer_2: {
@@ -55543,10 +55578,10 @@ const ARTS = {
     cd: 5, cost: 6, fx: 'boomerang',
     // 锤脱手飞出去，转一圈，回到手上。飞出去那半秒人是空的。
     dist: 200, flight: 0.66, bulge: 16, mul: 8.0, kb: 14,
-    pose: { mode: 'throw', a0: -1.20, a1: 0.90, dur: 0.22, ease: 'out' },
-    shape: 'boomerang', color: [C.paper3, C.red2],
+    pose: { mode: 'plant', a0: -1.20, a1: 0.90, dur: 0.22, ease: 'out' },
+    shape: 'crack', color: [C.paper3, C.red2],
     shv: 1,
-    snd: 'boomerang', hitSnd: 'hit',
+    snd: 'quake2', hitSnd: 'wu3',
     desc: '锤脱手而出，走一圈再回手里，去回各伤一次。',
   },
   hammer_3: {
@@ -55554,10 +55589,10 @@ const ARTS = {
     cd: 8, cost: 9.6, fx: 'shockwave',
     // 一圈冲击波从脚下往外扩 —— 远处的人晚半拍才飞。
     radius: 84, speed: 240, mul: 9.6, kb: 18, dur: 0.6,
-    pose: { mode: 'slam', a0: -2.60, a1: 1.00, dur: 0.42, ease: 'in' },
-    shape: 'shockwave', color: [C.paper3, C.gold2],
+    pose: { mode: 'guard', a0: -2.60, a1: 1.00, dur: 0.42, ease: 'in' },
+    shape: 'plant', color: [C.paper3, C.gold2],
     shv: 2,
-    snd: 'windup', hitSnd: 'shield',
+    snd: 'quake3', hitSnd: 'wu4',
     desc: '锤落地面，一圈震波往外推开，八步内一并震起。',
   },
   hammer_4: {
@@ -55566,10 +55601,10 @@ const ARTS = {
     // 四段向前的线，但**依次**裂开（stagger）—— 一起亮出来就只是一块红斑
     zone: { dur: 4, tick: 0.5, radius: 34, shape: 'line', count: 4, stagger: 0.08 },
     status: { kind: 'burn', dur: 2, pct: 0.06 },
-    pose: { mode: 'slamLow', a0: -1.50, a1: 0.80, dur: 0.30, ease: 'in', hold: 0.40 },
-    shape: 'crack', color: [C.paper3, C.pur2],
+    pose: { mode: 'leap', a0: -1.50, a1: 0.80, dur: 0.30, ease: 'in', hold: 0.40 },
+    shape: 'boomerang', color: [C.paper3, C.pur2],
     shv: 1,
-    snd: 'forge', hitSnd: 'wu',
+    snd: 'quake4', hitSnd: 'wu5',
     desc: '一道裂地向前铺开，四息内踩着就伤。',
   },
   hammer_5: {
@@ -55577,10 +55612,10 @@ const ARTS = {
     cd: 9, cost: 10.8, fx: 'charge', mul: 4.05, kb: 16,
     // 直线冲 84px，撞到第一个就停 —— "会停"才是冲锋有重量的原因
     dist: 84, iframe: 0.18,
-    pose: { mode: 'charge', a0: 0, a1: 0.00, dur: 0.26, ease: 'out' },
-    shape: 'chargeLine', color: [C.paper3, C.jade3],
+    pose: { mode: 'sweepLow', a0: 0, a1: 0.00, dur: 0.26, ease: 'out' },
+    shape: 'shockThin', color: [C.paper3, C.jade3],
     shv: 4,
-    snd: 'dash', hitSnd: 'crit',
+    snd: 'quake5', hitSnd: 'dash1',
     desc: '低头撞出去八步，撞上第一个就停。',
   },
   hammer_6: {
@@ -55589,10 +55624,10 @@ const ARTS = {
     // 横抡：从侧后抡到正前，砸在太阳穴上。只打一个人。
     reach: 36, arc: 1.0, mul: 7.2, kb: 12, nearestOnly: true,
     status: { kind: 'stun', dur: 2 },
-    pose: { mode: 'sideSwing', a0: -2.20, a1: 0.25, dur: 0.30, ease: 'in' },
-    shape: 'sideArc', color: [C.paper3, C.gold3],
+    pose: { mode: 'slamSlow', a0: -2.20, a1: 0.25, dur: 0.30, ease: 'in' },
+    shape: 'shockThick', color: [C.paper3, C.gold3],
     shv: 1,
-    snd: 'wu', hitSnd: 'thunder2',
+    snd: 'levelup1', hitSnd: 'dash2',
     desc: '一记闷锤，两息不知东西。',
   },
   hammer_7: {
@@ -55600,10 +55635,10 @@ const ARTS = {
     cd: 20, cost: 24, fx: 'buff', power: 10,
     buff: { dur: 8, shieldPct: 20, hurtReflect: 30 },
     // 锤往地上一插，人半蹲在锤后面八息 —— 增益类招式的样板表现
-    pose: { mode: 'plant', a0: -0.90, a1: 0.10, dur: 0.28, ease: 'in', hold: 8 },
-    shape: 'plant', color: [C.paper3, C.pur3],
+    pose: { mode: 'slamFast', a0: -0.90, a1: 0.10, dur: 0.28, ease: 'in', hold: 8 },
+    shape: 'shockDouble', color: [C.paper3, C.pur3],
     shv: 1,
-    snd: 'levelup', hitSnd: 'forge',
+    snd: 'levelup2', hitSnd: 'dash3',
     desc: '锤插地上，八息罡气护体，近身来打的都要还三成。',
   },
   hammer_8: {
@@ -55611,10 +55646,10 @@ const ARTS = {
     cd: 32, cost: 38.4, fx: 'cleave',
     // 一条线，不是一个圆。举锤蓄力半息，然后一记纵向巨劈。
     len: 132, width: 58, mul: 22.8, kb: 24, centerBonus: 1.5, centerR: 46,
-    pose: { mode: 'overheadBig', a0: -2.70, a1: 1.20, dur: 0.62, ease: 'in' },
-    shape: 'cleave', color: [C.paper3, C.red3],
+    pose: { mode: 'slamWide', a0: -2.70, a1: 1.20, dur: 0.62, ease: 'in' },
+    shape: 'crackBranch', color: [C.paper3, C.red3],
     shv: 3,
-    snd: 'boss', hitSnd: 'boomerang',
+    snd: 'levelup3', hitSnd: 'dash4',
     desc: '举锤过顶，一记纵向巨劈，前方一条直线尽数裂开。',
   },
 
@@ -55624,10 +55659,10 @@ const ARTS = {
     id: 'mage_1', fam: 'mage', slot: 'dmg', name: '灵珠', prof: 1,
     cd: 2, cost: 2.4, fx: 'proj',
     count: 1, speed: 250, size: 11, life: 0.9, pierce: 1, mul: 4.0,
-    pose: { mode: 'cast', a0: -2.45, a1: -1.60, dur: 0.22, ease: 'out' },
-    shape: 'point', color: [C.jade3, C.ink1],
+    pose: { mode: 'ringHalf', a0: -2.45, a1: -1.60, dur: 0.22, ease: 'out' },
+    shape: 'sigilWheel', color: [C.jade3, C.ink1],
     shv: 5,
-    snd: 'qi', hitSnd: 'quake',
+    snd: 'levelup4', hitSnd: 'dash5',
     desc: '一枚灵珠，两息一发。',
   },
   mage_2: {
@@ -55635,10 +55670,10 @@ const ARTS = {
     cd: 5, cost: 6, fx: 'proj',
     count: 3, spread: 0.42, speed: 250, size: 10, life: 0.9, pierce: 1,
     mul: 2.0, splash: 24,
-    pose: { mode: 'channel', a0: -1.95, a1: -0.95, dur: 0.30, ease: 'out' },
-    shape: 'fan', color: [C.jade3, C.ink2],
+    pose: { mode: 'ringFull', a0: -1.95, a1: -0.95, dur: 0.30, ease: 'out' },
+    shape: 'sigilNotch', color: [C.jade3, C.ink2],
     shv: 1,
-    snd: 'thunder', hitSnd: 'hit',
+    snd: 'levelup5', hitSnd: 'boomerang1',
     desc: '三珠分袭，触地各炸一小片。',
   },
   mage_3: {
@@ -55646,30 +55681,30 @@ const ARTS = {
     cd: 12, cost: 14.4, fx: 'zone', mul: 1.08,
     zone: { dur: 4, tick: 0.4, radius: 56, shape: 'circle' },
     status: { kind: 'burn', dur: 2, pct: 0.18 },
-    pose: { mode: 'overhead', a0: -1.45, a1: -0.45, dur: 0.42, ease: 'in' },
-    shape: 'rain', color: [C.jade3, C.ink3],
+    pose: { mode: 'ringWide', a0: -1.45, a1: -0.45, dur: 0.42, ease: 'in' },
+    shape: 'rainDense', color: [C.jade3, C.ink3],
     shv: 2,
-    snd: 'windup', hitSnd: 'bell',
+    snd: 'bell1', hitSnd: 'boomerang2',
     desc: '一片火云落定，四息不熄，沾着就灼。',
   },
   mage_4: {
     id: 'mage_4', fam: 'mage', slot: 'aoe', name: '雷链', prof: 5,
     cd: 10, cost: 12, fx: 'bolt',
     count: 3, chain: 3, fall: 0.2, mul: 2.75, radius: 26, range: 190,
-    pose: { mode: 'lunge', a0: -0.45, a1: 0.20, dur: 0.26, ease: 'out' },
-    shape: 'trail', color: [C.jade3, C.paper1],
+    pose: { mode: 'ringTight', a0: -0.45, a1: 0.20, dur: 0.26, ease: 'out' },
+    shape: 'rainAngle', color: [C.jade3, C.paper1],
     shv: 5,
-    snd: 'bell', hitSnd: 'crit',
+    snd: 'bell2', hitSnd: 'boomerang3',
     desc: '一道雷串三人，每跳弱两成。',
   },
   mage_5: {
     id: 'mage_5', fam: 'mage', slot: 'move', name: '瞬闪', prof: 6,
     cd: 8, cost: 9.6, fx: 'dash', mul: 2.7, radius: 24, kb: 4,
     dash: { dir: 'face', dist: 90, iframe: 0.3 },
-    pose: { mode: 'leap', a0: 0.05, a1: 0.88, dur: 0.24, ease: 'out' },
-    shape: 'sigil', color: [C.jade3, C.jade1],
+    pose: { mode: 'channelSpin', a0: 0.05, a1: 0.88, dur: 0.24, ease: 'out' },
+    shape: 'ringThin', color: [C.jade3, C.jade1],
     shv: 6,
-    snd: 'dash', hitSnd: 'shield',
+    snd: 'bell3', hitSnd: 'boomerang4',
     desc: '身影一晃已在九步外，原地只留残影。',
   },
   mage_6: {
@@ -55677,30 +55712,30 @@ const ARTS = {
     cd: 10, cost: 12, fx: 'melee',
     reach: 44, arc: 1.6, mul: 3.4, kb: 3,
     status: { kind: 'freeze', dur: 2 },
-    pose: { mode: 'plant', a0: 0.51, a1: 1.10, dur: 0.34, ease: 'in' },
-    shape: 'ring', color: [C.jade3, C.red1],
+    pose: { mode: 'sweepRise', a0: 0.51, a1: 1.10, dur: 0.34, ease: 'in' },
+    shape: 'ringThick', color: [C.jade3, C.red1],
     shv: 5,
-    snd: 'wu', hitSnd: 'wu',
+    snd: 'bell4', hitSnd: 'boomerang5',
     desc: '寒气凝住两息，冻着的时候更禁打。',
   },
   mage_7: {
     id: 'mage_7', fam: 'mage', slot: 'buff', name: '灵护', prof: 10,
     cd: 18, cost: 21.6, fx: 'buff', power: 6.8,
     buff: { dur: 10, shieldPct: 25 },
-    pose: { mode: 'guard', a0: 1.15, a1: 1.60, dur: 0.40, ease: 'out' },
-    shape: 'plant', color: [C.jade3, C.gold1],
+    pose: { mode: 'sweepFall', a0: 1.15, a1: 1.60, dur: 0.40, ease: 'out' },
+    shape: 'ringDouble', color: [C.jade3, C.gold1],
     shv: 2,
-    snd: 'levelup', hitSnd: 'boomerang',
+    snd: 'bell5', hitSnd: 'bell1',
     desc: '灵光覆身十息，替你挡下四分之一气血的伤。',
   },
   mage_8: {
     id: 'mage_8', fam: 'mage', slot: 'special', name: '天雷引', prof: 4,
     cd: 30, cost: 36, fx: 'bolt',
     count: 5, mul: 4.6, radius: 30, range: 200,
-    pose: { mode: 'overheadBig', a0: -0.95, a1: 0.30, dur: 0.62, ease: 'in' },
-    shape: 'crack', color: [C.jade3, C.pur1],
+    pose: { mode: 'sweepTurn', a0: -0.95, a1: 0.30, dur: 0.62, ease: 'in' },
+    shape: 'ringSpiral', color: [C.jade3, C.pur1],
     shv: 2,
-    snd: 'boss', hitSnd: 'forge',
+    snd: 'shield1', hitSnd: 'bell2',
     desc: '五道天雷随机落下，各算各的。',
   },
 
@@ -55709,10 +55744,10 @@ const ARTS = {
     id: 'dart_1', fam: 'dart', slot: 'dmg', name: '飞蝗', prof: 1,
     cd: 1.8, cost: 2.16, fx: 'proj',
     count: 1, speed: 320, size: 7, life: 0.55, pierce: 1, mul: 3.5, kind: 'dart',
-    pose: { mode: 'flick', a0: -2.45, a1: -1.25, dur: 0.20, ease: 'out' },
-    shape: 'thrust', color: [C.jade3, C.black],
+    pose: { mode: 'sweepBack', a0: -2.45, a1: -1.25, dur: 0.20, ease: 'out' },
+    shape: 'pointStar', color: [C.jade3, C.black],
     shv: 4,
-    snd: 'qi', hitSnd: 'thunder2',
+    snd: 'shield2', hitSnd: 'bell3',
     desc: '一镖出手，全武器最短冷却。',
   },
   dart_2: {
@@ -55720,10 +55755,10 @@ const ARTS = {
     cd: 4, cost: 4.8, fx: 'proj',
     count: 3, spread: 0.12, speed: 320, size: 7, life: 0.6, pierce: 1,
     mul: 1.6, kind: 'dart',
-    pose: { mode: 'lunge', a0: -1.95, a1: -0.85, dur: 0.24, ease: 'out' },
-    shape: 'trail', color: [C.jade3, C.paper2],
+    pose: { mode: 'sweepWide', a0: -1.95, a1: -0.85, dur: 0.24, ease: 'out' },
+    shape: 'pointBurst', color: [C.jade3, C.paper2],
     shv: 6,
-    snd: 'slash', hitSnd: 'shield',
+    snd: 'shield3', hitSnd: 'bell4',
     desc: '三镖几乎同路，全中一处才见威力。',
   },
   dart_3: {
@@ -55731,10 +55766,10 @@ const ARTS = {
     cd: 10, cost: 12, fx: 'proj',
     count: 12, spread: 1.4, speed: 300, size: 7, life: 0.65, pierce: 1,
     mul: 0.75, kind: 'dart',
-    pose: { mode: 'throw', a0: -0.54, a1: 0.10, dur: 0.28, ease: 'out' },
-    shape: 'fan', color: [C.jade3, C.red2],
+    pose: { mode: 'sweepPush', a0: -0.54, a1: 0.10, dur: 0.28, ease: 'out' },
+    shape: 'pointCross', color: [C.jade3, C.red2],
     shv: 2,
-    snd: 'windup', hitSnd: 'boomerang',
+    snd: 'shield4', hitSnd: 'bell5',
     desc: '十二枚扇面齐撒，近处密远处疏。',
   },
   dart_4: {
@@ -55742,20 +55777,20 @@ const ARTS = {
     cd: 30, cost: 36, fx: 'proj',
     count: 24, ring: true, speed: 280, size: 7, life: 0.7, pierce: 1,
     mul: 1.0, kind: 'dart',
-    pose: { mode: 'spin', a0: -0.53, a1: 0.60, dur: 0.44, ease: 'in' },
-    shape: 'ring', color: [C.jade3, C.gold2],
+    pose: { mode: 'spinWide', a0: -0.53, a1: 0.60, dur: 0.44, ease: 'in' },
+    shape: 'fanStar', color: [C.jade3, C.gold2],
     shv: 6,
-    snd: 'boomerang', hitSnd: 'quake',
+    snd: 'shield5', hitSnd: 'levelup1',
     desc: '周身二十四镖一齐泼出去，四面皆到。',
   },
   dart_5: {
     id: 'dart_5', fam: 'dart', slot: 'move', name: '缩地', prof: 6,
     cd: 12, cost: 14.4, fx: 'dash', mul: 4.05, radius: 24, kb: 4,
     dash: { dir: 'back', dist: 70, iframe: 0.35, stealth: true },
-    pose: { mode: 'reverse', a0: 0.05, a1: 0.80, dur: 0.26, ease: 'out' },
-    shape: 'sigil', color: [C.jade3, C.pur2],
+    pose: { mode: 'spinReverse', a0: 0.05, a1: 0.80, dur: 0.26, ease: 'out' },
+    shape: 'fanSplit', color: [C.jade3, C.pur2],
     shv: 7,
-    snd: 'dash', hitSnd: 'wu',
+    snd: 'boss1', hitSnd: 'levelup2',
     desc: '向后一纵七步，追兵一时失了你的踪迹。',
   },
   dart_6: {
@@ -55763,20 +55798,20 @@ const ARTS = {
     cd: 8, cost: 9.6, fx: 'zone', mul: 0.54, power: 4.3,
     zone: { dur: 6, tick: 0.2, radius: 12, shape: 'circle', count: 5, once: true },
     status: { kind: 'stun', dur: 1 },
-    pose: { mode: 'sweepLow', a0: 0.60, a1: 1.20, dur: 0.32, ease: 'out' },
-    shape: 'plant', color: [C.jade3, C.pur3],
+    pose: { mode: 'sideTurn', a0: 0.60, a1: 1.20, dur: 0.32, ease: 'out' },
+    shape: 'trailThick', color: [C.jade3, C.pur3],
     shv: 3,
-    snd: 'forge', hitSnd: 'hit',
+    snd: 'boss2', hitSnd: 'levelup3',
     desc: '脚下撒五枚蒺藜，踩中定住一息。',
   },
   dart_7: {
     id: 'dart_7', fam: 'dart', slot: 'buff', name: '淬毒', prof: 10,
     cd: 20, cost: 24, fx: 'buff', power: 7.5,
     buff: { dur: 8, poisonOnHit: true },
-    pose: { mode: 'channel', a0: 1.15, a1: 1.70, dur: 0.40, ease: 'in' },
-    shape: 'cross', color: [C.jade3, C.red3],
+    pose: { mode: 'sidePush', a0: 1.15, a1: 1.70, dur: 0.40, ease: 'in' },
+    shape: 'trailArc', color: [C.jade3, C.red3],
     shv: 3,
-    snd: 'levelup', hitSnd: 'rare',
+    snd: 'boss3', hitSnd: 'levelup4',
     desc: '八息内出手皆带毒，刀镖拳脚一视同仁。',
   },
   dart_8: {
@@ -55784,10 +55819,10 @@ const ARTS = {
     cd: 5, cost: 6, fx: 'proj',
     count: 1, speed: 300, size: 8, life: 0.6, pierce: 2, mul: 4.2, kind: 'dart',
     status: { kind: 'poison', dur: 6, pct: 0.10, spread: true },
-    pose: { mode: 'guard', a0: -1.45, a1: -0.60, dur: 0.30, ease: 'out' },
-    shape: 'point', color: [C.gold3, C.ink1],
+    pose: { mode: 'plantDeep', a0: -1.45, a1: -0.60, dur: 0.30, ease: 'out' },
+    shape: 'trailZig', color: [C.gold3, C.ink1],
     shv: 6,
-    snd: 'rare', hitSnd: 'crit',
+    snd: 'boss4', hitSnd: 'levelup5',
     desc: '淬毒六息；中毒者倒下时毒气四散，沾上的人一起中毒。',
   },
 
@@ -55796,80 +55831,80 @@ const ARTS = {
     id: 'chain_1', fam: 'chain', slot: 'dmg', name: '锁喉', prof: 1,
     cd: 4, cost: 4.8, fx: 'melee',
     reach: 46, arc: 1.0, mul: 6.2, kb: 8, pierceDef: 0.3,
-    pose: { mode: 'lunge', a0: -2.45, a1: -0.93, dur: 0.28, ease: 'out' },
-    shape: 'thrust', color: [C.gold3, C.ink2],
+    pose: { mode: 'plantWide', a0: -2.45, a1: -0.93, dur: 0.28, ease: 'out' },
+    shape: 'trailDot', color: [C.gold3, C.ink2],
     shv: 5,
-    snd: 'qi', hitSnd: 'boomerang',
+    snd: 'boss5', hitSnd: 'shield1',
     desc: '链梢直取咽喉，无视三成防御。',
   },
   chain_2: {
     id: 'chain_2', fam: 'chain', slot: 'dmg', name: '缠身', prof: 2,
     cd: 3, cost: 3.6, fx: 'melee',
     reach: 42, arc: 1.4, mul: 2.0, hits: 3, ramp: 0.10, kb: 5,
-    pose: { mode: 'flick', a0: -1.95, a1: -0.65, dur: 0.20, ease: 'out' },
-    shape: 'trail', color: [C.gold3, C.ink3],
+    pose: { mode: 'plantTurn', a0: -1.95, a1: -0.65, dur: 0.20, ease: 'out' },
+    shape: 'hookUp', color: [C.gold3, C.ink3],
     shv: 7,
-    snd: 'slash', hitSnd: 'thunder2',
+    snd: 'rare1', hitSnd: 'shield2',
     desc: '三节链环依次缠上，一节比一节紧。',
   },
   chain_3: {
     id: 'chain_3', fam: 'chain', slot: 'aoe', name: '扫链', prof: 3,
     cd: 6, cost: 7.2, fx: 'melee',
     reach: 50, arc: 6.28, mul: 7.0, kb: 10,
-    pose: { mode: 'spin', a0: -2.80, a1: -0.80, dur: 0.36, ease: 'both' },
-    shape: 'ring', color: [C.gold3, C.paper1],
+    pose: { mode: 'guardHigh', a0: -2.80, a1: -0.80, dur: 0.36, ease: 'both' },
+    shape: 'hookDown', color: [C.gold3, C.paper1],
     shv: 7,
-    snd: 'wu', hitSnd: 'bell',
+    snd: 'rare2', hitSnd: 'shield3',
     desc: '抡链一匝，周身五步内无人能近。',
   },
   chain_4: {
     id: 'chain_4', fam: 'chain', slot: 'aoe', name: '回旋索', prof: 5,
     cd: 5, cost: 6, fx: 'boomerang',
     dist: 190, flight: 0.66, bulge: 18, mul: 7.6, kb: 12,
-    pose: { mode: 'throw', a0: -1.20, a1: 0.92, dur: 0.22, ease: 'out' },
-    shape: 'boomerang', color: [C.gold3, C.jade1],
+    pose: { mode: 'guardLow', a0: -1.20, a1: 0.92, dur: 0.22, ease: 'out' },
+    shape: 'hookLong', color: [C.gold3, C.jade1],
     shv: 2,
-    snd: 'boomerang', hitSnd: 'forge',
+    snd: 'rare3', hitSnd: 'shield4',
     desc: '整条链脱手盘旋一圈，去回各伤一次。',
   },
   chain_5: {
     id: 'chain_5', fam: 'chain', slot: 'move', name: '曳影', prof: 6,
     cd: 8, cost: 9.6, fx: 'dash', mul: 3.8, radius: 26, kb: 6,
     dash: { dir: 'target', dist: 56, iframe: 0.25, nextDmg: 0.4 },
-    pose: { mode: 'charge', a0: 0.10, a1: 0.14, dur: 0.26, ease: 'out' },
-    shape: 'chargeLine', color: [C.gold3, C.red1],
+    pose: { mode: 'guardTurn', a0: 0.10, a1: 0.14, dur: 0.26, ease: 'out' },
+    shape: 'spiralDouble', color: [C.gold3, C.red1],
     shv: 5,
-    snd: 'dash', hitSnd: 'rare',
+    snd: 'rare4', hitSnd: 'shield5',
     desc: '链挂住敌手一拽，人已贴到身后，下一击更沉。',
   },
   chain_6: {
     id: 'chain_6', fam: 'chain', slot: 'ctrl', name: '缚龙', prof: 8,
     cd: 14, cost: 16.8, fx: 'pull', mul: 5.2, radius: 88, kb: 4,
     status: { kind: 'stun', dur: 1.2 },
-    pose: { mode: 'reverse', a0: -1.45, a1: -0.35, dur: 0.30, ease: 'in' },
-    shape: 'hook', color: [C.gold3, C.gold1],
+    pose: { mode: 'leapHigh', a0: -1.45, a1: -0.35, dur: 0.30, ease: 'in' },
+    shape: 'spiralReverse', color: [C.gold3, C.gold1],
     shv: 5,
-    snd: 'bell', hitSnd: 'hit',
+    snd: 'rare5', hitSnd: 'rare1',
     desc: '反手甩链卷回最远那人，一时动弹不得。',
   },
   chain_7: {
     id: 'chain_7', fam: 'chain', slot: 'buff', name: '链势', prof: 10,
     cd: 20, cost: 24, fx: 'buff', power: 10,
     buff: { dur: 8, reachPct: 30, atkSpd: 12 },
-    pose: { mode: 'plant', a0: 1.15, a1: 1.80, dur: 0.34, ease: 'in' },
-    shape: 'sigil', color: [C.gold3, C.pur1],
+    pose: { mode: 'leapFar', a0: 1.15, a1: 1.80, dur: 0.34, ease: 'in' },
+    shape: 'ringDash', color: [C.gold3, C.pur1],
     shv: 8,
-    snd: 'levelup', hitSnd: 'crit',
+    snd: 'hit1', hitSnd: 'rare2',
     desc: '链垂于地八息，够得更远、出手更快。',
   },
   chain_8: {
     id: 'chain_8', fam: 'chain', slot: 'special', name: '万链归墟', prof: 4,
     cd: 30, cost: 36, fx: 'orbit',
     count: 10, dur: 5, mul: 1.7, radius: 36,
-    pose: { mode: 'overheadBig', a0: -2.70, a1: 1.22, dur: 0.62, ease: 'in' },
-    shape: 'spiral', color: [C.gold3, C.black],
+    pose: { mode: 'throwHigh', a0: -2.70, a1: 1.22, dur: 0.62, ease: 'in' },
+    shape: 'ringWide', color: [C.gold3, C.black],
     shv: 4,
-    snd: 'boss', hitSnd: 'wu',
+    snd: 'hit2', hitSnd: 'rare3',
     desc: '十节链环离身盘旋五息，各自追敌结算。',
   },
 
@@ -55878,50 +55913,50 @@ const ARTS = {
     id: 'fan_1', fam: 'fan', slot: 'dmg', name: '点穴', prof: 1,
     cd: 3, cost: 3.6, fx: 'melee',
     reach: 32, arc: 0.9, mul: 5.6, kb: 5, critAdd: 40,
-    pose: { mode: 'flick', a0: -2.45, a1: -1.15, dur: 0.20, ease: 'out' },
-    shape: 'point', color: [C.gold3, C.paper2],
+    pose: { mode: 'overheadWide', a0: -2.45, a1: -1.15, dur: 0.20, ease: 'out' },
+    shape: 'crossStar', color: [C.gold3, C.paper2],
     shv: 7,
-    snd: 'qi', hitSnd: 'wu',
+    snd: 'hit3', hitSnd: 'rare4',
     desc: '收扇以扇骨一点，专取要害。',
   },
   fan_2: {
     id: 'fan_2', fam: 'fan', slot: 'dmg', name: '折影', prof: 2,
     cd: 5, cost: 6, fx: 'melee',
     reach: 34, arc: 1.6, mul: 2.6, hits: 2, critLast: true, kb: 5,
-    pose: { mode: 'sideSwing', a0: -1.95, a1: 0.25, dur: 0.28, ease: 'in' },
-    shape: 'cross', color: [C.gold3, C.jade2],
+    pose: { mode: 'overheadLeft', a0: -1.95, a1: 0.25, dur: 0.28, ease: 'in' },
+    shape: 'crossSplit', color: [C.gold3, C.jade2],
     shv: 4,
-    snd: 'slash', hitSnd: 'rare',
+    snd: 'hit4', hitSnd: 'rare5',
     desc: '一开一合两记，合扇那下必取破绽。',
   },
   fan_3: {
     id: 'fan_3', fam: 'fan', slot: 'aoe', name: '扇风', prof: 3,
     cd: 9, cost: 10.8, fx: 'shockwave',
     radius: 72, speed: 250, dur: 0.5, mul: 7.4, kb: 12, centerBonus: 1.3, centerR: 22,
-    pose: { mode: 'sweepLow', a0: -2.20, a1: -0.80, dur: 0.30, ease: 'in' },
-    shape: 'shockwave', color: [C.gold3, C.red2],
+    pose: { mode: 'throwFar', a0: -2.20, a1: -0.80, dur: 0.30, ease: 'in' },
+    shape: 'boomerangFlat', color: [C.gold3, C.red2],
     shv: 3,
-    snd: 'windup', hitSnd: 'thunder2',
+    snd: 'hit5', hitSnd: 'boss1',
     desc: '展扇推出一圈气浪，波前所过尽退，正中尤其沉重。',
   },
   fan_4: {
     id: 'fan_4', fam: 'fan', slot: 'aoe', name: '落符', prof: 5,
     cd: 10, cost: 12, fx: 'bolt',
     count: 6, mul: 1.2, radius: 24, range: 160,
-    pose: { mode: 'overhead', a0: -0.71, a1: 0.59, dur: 0.42, ease: 'in' },
-    shape: 'rain', color: [C.gold3, C.pur2],
+    pose: { mode: 'chargeHigh', a0: -0.71, a1: 0.59, dur: 0.42, ease: 'in' },
+    shape: 'boomerangHigh', color: [C.gold3, C.pur2],
     shv: 3,
-    snd: 'thunder', hitSnd: 'crit',
+    snd: 'crit3', hitSnd: 'boss2',
     desc: '六道符纸自扇面散落，各寻各的目标。',
   },
   fan_5: {
     id: 'fan_5', fam: 'fan', slot: 'move', name: '随风', prof: 6,
     cd: 8, cost: 9.6, fx: 'dash', mul: 3.2, radius: 24, kb: 4,
     dash: { dir: 'side', dist: 62, iframe: 0.4 },
-    pose: { mode: 'leap', a0: -0.90, a1: 0.00, dur: 0.24, ease: 'out' },
-    shape: 'trail', color: [C.gold3, C.jade3],
+    pose: { mode: 'chargeLong', a0: -0.90, a1: 0.00, dur: 0.24, ease: 'out' },
+    shape: 'chargeWide', color: [C.gold3, C.jade3],
     shv: 8,
-    snd: 'dash', hitSnd: 'thunder',
+    snd: 'crit4', hitSnd: 'boss3',
     desc: '借风侧掠六步，一路扇骨扫开追兵。',
   },
   fan_6: {
@@ -55929,30 +55964,30 @@ const ARTS = {
     cd: 12, cost: 14.4, fx: 'zone', mul: 0.9,
     zone: { dur: 4, tick: 0.5, radius: 60, shape: 'circle' },
     status: { kind: 'slow', dur: 1.5, pct: 0.5 },
-    pose: { mode: 'guard', a0: 0.29, a1: 0.99, dur: 0.32, ease: 'in' },
-    shape: 'sigil', color: [C.gold3, C.pur3],
+    pose: { mode: 'chargeTurn', a0: 0.29, a1: 0.99, dur: 0.32, ease: 'in' },
+    shape: 'chargeDust', color: [C.gold3, C.pur3],
     shv: 9,
-    snd: 'forge', hitSnd: 'forge',
+    snd: 'crit5', hitSnd: 'boss4',
     desc: '身周起四息旋风，踏入者步履滞涩。',
   },
   fan_7: {
     id: 'fan_7', fam: 'fan', slot: 'buff', name: '凝神', prof: 10,
     cd: 20, cost: 24, fx: 'buff', power: 9,
     buff: { dur: 8, pierce: 1, atkPct: 15 },
-    pose: { mode: 'channel', a0: 0.84, a1: 1.44, dur: 0.40, ease: 'in' },
-    shape: 'fan', color: [C.gold3, C.red3],
+    pose: { mode: 'reverseTurn', a0: 0.84, a1: 1.44, dur: 0.40, ease: 'in' },
+    shape: 'crackStraight', color: [C.gold3, C.red3],
     shv: 3,
-    snd: 'levelup', hitSnd: 'hit',
+    snd: 'thunder4', hitSnd: 'boss5',
     desc: '敛息八息，出手更锐，也穿得更透。',
   },
   fan_8: {
     id: 'fan_8', fam: 'fan', slot: 'special', name: '风雷引', prof: 4,
     cd: 30, cost: 36, fx: 'cleave',
     len: 110, width: 40, mul: 14, kb: 14, centerBonus: 1.4, centerR: 30,
-    pose: { mode: 'overheadBig', a0: -2.73, a1: 1.17, dur: 0.62, ease: 'in' },
-    shape: 'cleave', color: [C.pur3, C.ink1],
+    pose: { mode: 'spinStar', a0: -2.73, a1: 1.17, dur: 0.62, ease: 'in' },
+    shape: 'crackWide', color: [C.pur3, C.ink1],
     shv: 4,
-    snd: 'boss', hitSnd: 'slash',
+    snd: 'thunder5', hitSnd: 'thunder5',
     desc: '双扇尽展，一记风雷沿正前方直贯百步。',
   },
 };
@@ -55967,16 +56002,193 @@ const ART_FX = ['melee', 'proj', 'spin', 'orbit', 'blink', 'bolt', 'dash', 'buff
 // 关键：推导只写一份。运行时按它画，自检按它查重 —— 两边各写一份，
 // 迟早在"某招到底算 ring 还是 arc"上漂开（artPower 当初就是这么吃过亏的）。
 // P11：七件兵器各自八种形状 / 八种动作，新补七形八式（都是通用画法，不为某一招专造）。
-const ART_SHAPES = ['point', 'overheadArc', 'shockwave', 'crack', 'cleave',
-  'boomerang', 'sideArc', 'chargeLine', 'plant', 'arc', 'ring', 'thrust',
-  'fan', 'cross', 'rain', 'sigil', 'trail', 'spiral', 'hook'];
-const ART_POSES = ['swing', 'thrust', 'ring', 'cast',
-  'overhead', 'overheadBig', 'slam', 'slamLow', 'sideSwing', 'throw', 'plant', 'charge',
-  'lunge', 'flick', 'sweepLow', 'reverse', 'guard', 'channel', 'leap', 'spin'];
-// 起手音 + 命中音。同兵器内 (snd, hitSnd) 组合不许重复 —— 第四条签名。
-const ART_SNDS = ['slash', 'qi', 'wu', 'dash', 'windup', 'thunder', 'thunder2',
-  'forge', 'quake', 'boomerang', 'levelup', 'bell', 'shield', 'boss', 'rare',
-  'hit', 'crit'];
+// ============ P12-E：字面零重复的四个池 ============
+// 用户要求「字段本身不许复用」—— 这里不再有「基础原型 + 变体」这种复合签名。
+//   · ART_SHAPES 80 个：19 种老画法 + 61 种新画法（ART_SHAPE_SPECS 给参数）
+//   · ART_POSES  80 个：20 种老动作 + 60 种新动作（ART_POSE_SPECS 给参数）
+//   · ART_SNDS   80 个：16 个音色原型 × 5 档（档位换音高与时长）
+// 全表 80 招的 shape / pose.mode / snd / hitSnd 四个字段各自用满 80 个不同值。
+const ART_SHAPES = [
+  'point', 'overheadArc', 'shockwave', 'crack', 'cleave', 'boomerang',
+  'sideArc', 'chargeLine', 'plant', 'arc', 'ring', 'thrust',
+  'fan', 'cross', 'rain', 'sigil', 'trail', 'spiral',
+  'hook', 'arcUp', 'arcDown', 'arcWide', 'arcThin', 'arcTall',
+  'ringThin', 'ringThick', 'ringDouble', 'ringSpiral', 'ringDash', 'ringWide',
+  'lanceLong', 'lanceShort', 'lanceWide', 'lanceTwin', 'lanceSpin', 'fanNarrow',
+  'fanWide', 'fanArc', 'fanStar', 'fanSplit', 'crossThin', 'crossThick',
+  'crossStar', 'crossSplit', 'sigilHex', 'sigilRune', 'sigilStar', 'sigilWheel',
+  'sigilNotch', 'trailThin', 'trailThick', 'trailArc', 'trailZig', 'trailDot',
+  'spiralTight', 'spiralWide', 'spiralDouble', 'spiralReverse', 'rainSparse', 'rainDense',
+  'rainAngle', 'pointStar', 'pointBurst', 'pointCross', 'hookUp', 'hookDown',
+  'hookLong', 'crackBranch', 'crackStraight', 'crackWide', 'shockThin', 'shockThick',
+  'shockDouble', 'cleaveTwin', 'cleaveThin', 'cleaveWide', 'boomerangFlat', 'boomerangHigh',
+  'chargeWide', 'chargeDust',
+];
+
+const ART_POSES = [
+  'swing', 'thrust', 'ring', 'cast', 'overhead', 'overheadBig',
+  'slam', 'slamLow', 'sideSwing', 'throw', 'plant', 'charge',
+  'lunge', 'flick', 'sweepLow', 'reverse', 'guard', 'channel',
+  'leap', 'spin', 'sweepHigh', 'sweepThin', 'sweepRise', 'sweepFall',
+  'sweepTurn', 'sweepBack', 'sweepWide', 'sweepPush', 'lungeHigh', 'lungeLow',
+  'lungeFar', 'lungeSpin', 'thrustLong', 'thrustShort', 'thrustUp', 'thrustDown',
+  'ringHalf', 'ringFull', 'ringWide', 'ringTight', 'castHigh', 'castLow',
+  'castSpin', 'overheadSlow', 'overheadFast', 'overheadWide', 'overheadLeft', 'slamSlow',
+  'slamFast', 'slamWide', 'sideHigh', 'sideLow', 'sideWide', 'sideTurn',
+  'sidePush', 'throwHigh', 'throwFar', 'plantDeep', 'plantWide', 'plantTurn',
+  'chargeHigh', 'chargeLong', 'chargeTurn', 'flickHigh', 'flickLow', 'flickTurn',
+  'guardHigh', 'guardLow', 'guardTurn', 'channelHigh', 'channelLong', 'channelSpin',
+  'leapHigh', 'leapFar', 'reverseHigh', 'reverseTurn', 'spinTight', 'spinWide',
+  'spinReverse', 'spinStar',
+];
+
+const ART_SNDS = [
+  'slash1', 'slash2', 'slash3', 'slash4', 'slash5', 'qi1',
+  'qi2', 'qi3', 'qi4', 'qi5', 'wu1', 'wu2',
+  'wu3', 'wu4', 'wu5', 'dash1', 'dash2', 'dash3',
+  'dash4', 'dash5', 'windup1', 'windup2', 'windup3', 'windup4',
+  'windup5', 'thunder1', 'thunder2', 'thunder3', 'thunder4', 'thunder5',
+  'forge1', 'forge2', 'forge3', 'forge4', 'forge5', 'quake1',
+  'quake2', 'quake3', 'quake4', 'quake5', 'boomerang1', 'boomerang2',
+  'boomerang3', 'boomerang4', 'boomerang5', 'levelup1', 'levelup2', 'levelup3',
+  'levelup4', 'levelup5', 'bell1', 'bell2', 'bell3', 'bell4',
+  'bell5', 'shield1', 'shield2', 'shield3', 'shield4', 'shield5',
+  'boss1', 'boss2', 'boss3', 'boss4', 'boss5', 'rare1',
+  'rare2', 'rare3', 'rare4', 'rare5', 'hit1', 'hit2',
+  'hit3', 'hit4', 'hit5', 'crit1', 'crit2', 'crit3',
+  'crit4', 'crit5',
+];
+
+// 新刀光的参数表：名字 → 用哪种原子画法 + 参数。
+// 渲染在 game.js 的 artShapeSpec()，与 19 种老画法共用同一套 ghost 原子。
+const ART_SHAPE_SPECS = {
+  arcUp: { k: 'arc', tilt: -0.55, wide: 0.95, r: 1.0, rays: 3 },
+  arcDown: { k: 'arc', tilt: 0.55, wide: 0.95, r: 1.0, rays: 3 },
+  arcWide: { k: 'arc', tilt: 0.0, wide: 1.55, r: 0.92, rays: 4 },
+  arcThin: { k: 'arc', tilt: 0.0, wide: 0.42, r: 1.12, rays: 2 },
+  arcTall: { k: 'arc', tilt: -0.25, wide: 0.7, r: 1.3, rays: 5 },
+  ringThin: { k: 'ring', r: 1.0, count: 1, w: 0.8 },
+  ringThick: { k: 'ring', r: 0.86, count: 1, w: 2.2 },
+  ringDouble: { k: 'ring', r: 1.05, count: 2, w: 1.0 },
+  ringSpiral: { k: 'ring', r: 0.95, count: 2, w: 1.0, spiral: 1 },
+  ringDash: { k: 'ring', r: 1.0, count: 3, w: 1.0, dash: 1 },
+  ringWide: { k: 'ring', r: 1.3, count: 2, w: 1.2 },
+  lanceLong: { k: 'lance', len: 1.35, w: 2.4 },
+  lanceShort: { k: 'lance', len: 0.7, w: 2.0 },
+  lanceWide: { k: 'lance', len: 1.0, w: 3.4 },
+  lanceTwin: { k: 'lance', len: 1.05, w: 2.0, twin: 1 },
+  lanceSpin: { k: 'lance', len: 1.0, w: 2.2, spin: 1 },
+  fanNarrow: { k: 'fan', n: 3, spread: 0.16, len: 0.85 },
+  fanWide: { k: 'fan', n: 7, spread: 0.26, len: 0.95 },
+  fanArc: { k: 'fan', n: 5, spread: 0.22, len: 1.05, arc: 1 },
+  fanStar: { k: 'fan', n: 8, spread: 0.4, len: 0.8, star: 1 },
+  fanSplit: { k: 'fan', n: 6, spread: 0.3, len: 0.9, split: 1 },
+  crossThin: { k: 'cross', n: 2, spread: 0.55, len: 0.95, w: 1.6 },
+  crossThick: { k: 'cross', n: 2, spread: 0.55, len: 0.95, w: 3.2 },
+  crossStar: { k: 'cross', n: 3, spread: 0.42, len: 0.9, w: 1.8 },
+  crossSplit: { k: 'cross', n: 2, spread: 0.8, len: 0.85, w: 2.0, split: 1 },
+  sigilHex: { k: 'sigil', r: 0.85, spokes: 6, layers: 2, hex: 1 },
+  sigilRune: { k: 'sigil', r: 0.95, spokes: 4, layers: 3 },
+  sigilStar: { k: 'sigil', r: 0.9, spokes: 8, layers: 2, star: 1 },
+  sigilWheel: { k: 'sigil', r: 1.05, spokes: 12, layers: 3, wheel: 1 },
+  sigilNotch: { k: 'sigil', r: 0.8, spokes: 5, layers: 2, notch: 1 },
+  trailThin: { k: 'trail', n: 5, len: 0.8, spread: 0.1 },
+  trailThick: { k: 'trail', n: 4, len: 0.95, spread: 0.14, w: 2.6 },
+  trailArc: { k: 'trail', n: 6, len: 0.9, spread: 0.18, arc: 1 },
+  trailZig: { k: 'trail', n: 7, len: 0.7, spread: 0.22, zig: 1 },
+  trailDot: { k: 'trail', n: 6, len: 0.85, spread: 0.16, dot: 1 },
+  spiralTight: { k: 'spiral', r: 0.7, turns: 2.2, wide: 0.8 },
+  spiralWide: { k: 'spiral', r: 1.2, turns: 1.4, wide: 1.2 },
+  spiralDouble: { k: 'spiral', r: 0.9, turns: 2.6, wide: 0.9, double: 1 },
+  spiralReverse: { k: 'spiral', r: 1.0, turns: 1.8, wide: 1.0, reverse: 1 },
+  rainSparse: { k: 'rain', n: 4, spacing: 26, len: 22 },
+  rainDense: { k: 'rain', n: 9, spacing: 15, len: 26 },
+  rainAngle: { k: 'rain', n: 6, spacing: 19, len: 30, angle: 0.45 },
+  pointStar: { k: 'point', n: 6, r: 16, star: 1 },
+  pointBurst: { k: 'point', n: 10, r: 22 },
+  pointCross: { k: 'point', n: 4, r: 18, cross: 1 },
+  hookUp: { k: 'hook', len: 0.95, turn: 1.95, up: 1 },
+  hookDown: { k: 'hook', len: 0.95, turn: -1.95 },
+  hookLong: { k: 'hook', len: 1.35, turn: 1.95 },
+  crackBranch: { k: 'crack', n: 4, step: 0.8, branch: 1 },
+  crackStraight: { k: 'crack', n: 5, step: 0.9, straight: 1 },
+  crackWide: { k: 'crack', n: 3, step: 1.1, wide: 1 },
+  shockThin: { k: 'shock', r: 0.95, count: 8, w: 1.0 },
+  shockThick: { k: 'shock', r: 0.85, count: 8, w: 2.6 },
+  shockDouble: { k: 'shock', r: 1.15, count: 12, w: 1.2, double: 1 },
+  cleaveTwin: { k: 'cleave', len: 1.25, w: 4.0, twin: 1 },
+  cleaveThin: { k: 'cleave', len: 1.35, w: 1.6 },
+  cleaveWide: { k: 'cleave', len: 1.1, w: 6.0 },
+  boomerangFlat: { k: 'boom', flat: 1, wide: 1.0 },
+  boomerangHigh: { k: 'boom', high: 1, wide: 0.7 },
+  chargeWide: { k: 'charge', len: 1.25, w: 1.8 },
+  chargeDust: { k: 'charge', len: 1.0, w: 1.2, dust: 8 },
+};
+
+// 新动作的参数表：名字 → 哪一种运动 + 参数。
+// 渲染在 game.js 的 swingAng()（老动作的分支保持原样，新动作走这张表）。
+const ART_POSE_SPECS = {
+  sweepHigh: { k: 'swing', off: 3.0 },
+  sweepThin: { k: 'swing', off: 0.4, arcMul: 0.6, angAdd: -0.0956 },
+  sweepRise: { k: 'swing', off: 2.0, angAdd: -0.3 },
+  sweepFall: { k: 'swing', off: -1.0, angAdd: 0.3 },
+  sweepTurn: { k: 'swing', off: 2.2, angAdd: 0.4 },
+  sweepBack: { k: 'swing', off: -1.5, arcMul: -0.6 },
+  sweepWide: { k: 'swing', off: 1.5, arcMul: 1.4 },
+  sweepPush: { k: 'swing', off: 4.5, angAdd: 0.0781 },
+  lungeHigh: { k: 'lunge', off: 18 },
+  lungeLow: { k: 'lunge', off: 8, angAdd: 0.4160 },
+  lungeFar: { k: 'lunge', off: 12, arcMul: 1.3 },
+  lungeSpin: { k: 'lunge', off: 14, angAdd: 0.5 },
+  thrustLong: { k: 'thrust', off: 14, angAdd: 0.3440 },
+  thrustShort: { k: 'thrust', off: 5, angAdd: 0.1720 },
+  thrustUp: { k: 'thrust', off: 9, tilt: -0.35, angAdd: 0.1716 },
+  thrustDown: { k: 'thrust', off: 9, tilt: 0.35 },
+  ringHalf: { k: 'ring', t1: 0.55, t2: 1.1 },
+  ringFull: { k: 'ring', t1: 1.1, t2: 2.2 },
+  ringWide: { k: 'ring', t1: 0.8, t2: 1.6 },
+  ringTight: { k: 'ring', t1: 1.4, t2: 2.8 },
+  castHigh: { k: 'cast', tilt: -0.9, sweep: 0.6, off: 4, angAdd: 0.0748 },
+  castLow: { k: 'cast', tilt: -0.3, sweep: 0.25, off: 2 },
+  castSpin: { k: 'cast', tilt: -0.6, sweep: 0.9, off: 5 },
+  overheadSlow: { k: 'over', up: 5, down: 9 },
+  overheadFast: { k: 'over', up: 2.5, down: 5 },
+  overheadWide: { k: 'over', up: 6, down: 11, arcMul: 1.2 },
+  overheadLeft: { k: 'over', up: 4, down: 8, angAdd: -0.3 },
+  slamSlow: { k: 'over', up: 6, down: 10 },
+  slamFast: { k: 'over', up: 3, down: 6 },
+  slamWide: { k: 'over', up: 7, down: 12, arcMul: 1.15 },
+  sideHigh: { k: 'side', a: 4, b: -2, angAdd: -0.1007 },
+  sideLow: { k: 'side', a: -3, b: 1.5, angAdd: -0.1190 },
+  sideWide: { k: 'side', a: 5, b: -3, arcMul: 1.3, angAdd: 0.0361 },
+  sideTurn: { k: 'side', a: 3.5, b: -1.5, angAdd: 0.35 },
+  sidePush: { k: 'side', a: 2, b: -4 },
+  throwHigh: { k: 'throw', off: 6 },
+  throwFar: { k: 'throw', off: 3, arcMul: 1.2, angAdd: 0.1016 },
+  plantDeep: { k: 'plant', off: 6 },
+  plantWide: { k: 'plant', off: 3, arcMul: 1.25 },
+  plantTurn: { k: 'plant', off: 4, angAdd: 0.3 },
+  chargeHigh: { k: 'charge', off: 14 },
+  chargeLong: { k: 'charge', off: 10, arcMul: 1.2 },
+  chargeTurn: { k: 'charge', off: 12, angAdd: 0.25 },
+  flickHigh: { k: 'flick', off: 5, angAdd: -0.1686 },
+  flickLow: { k: 'flick', off: 0.5 },
+  flickTurn: { k: 'flick', off: 3, angAdd: 0.5257 },
+  guardHigh: { k: 'guard', off: -6 },
+  guardLow: { k: 'guard', off: -2 },
+  guardTurn: { k: 'guard', off: -4, angAdd: 0.35 },
+  channelHigh: { k: 'chan', off: -8 },
+  channelLong: { k: 'chan', off: -11 },
+  channelSpin: { k: 'chan', off: -7, angAdd: 0.5 },
+  leapHigh: { k: 'leap', off: -12 },
+  leapFar: { k: 'leap', off: -6, arcMul: 1.25 },
+  reverseHigh: { k: 'rev', t: 0.85, off: 4 },
+  reverseTurn: { k: 'rev', t: 0.35, off: 3, angAdd: 0.3 },
+  spinTight: { k: 'spin', t: 0.6 },
+  spinWide: { k: 'spin', t: 1.4 },
+  spinReverse: { k: 'spin', t: -0.6, angAdd: -0.0431 },
+  spinStar: { k: 'spin', t: 2.0 },
+};
 
 // 形状签名：招式自带的 shape；没写的按 arc 推回 P6 的三形
 function artShape(a) {
@@ -56098,7 +56310,7 @@ function artBrief(a) {
   return out.join(' · ');
 }
 
-return { PROF_MAX, PROF_NEED, PROF_WEIGHT, profLevel, profLeft, profFrac, ARTS, ART_FX, ART_SHAPES, ART_POSES, ART_SNDS, artShape, artPose, artColor, artShapeSig, artMotionSig, artColorSig, artSoundSig, ART_IDS, ART_SLOTS, ART_KEYS, artById, artsOfWeapon, artUnlocked, unlockedArts, ART_SLOT_LABEL, artPower, artBrief };
+return { PROF_MAX, PROF_NEED, PROF_WEIGHT, profLevel, profLeft, profFrac, ARTS, ART_FX, ART_SHAPES, ART_POSES, ART_SNDS, ART_SHAPE_SPECS, ART_POSE_SPECS, artShape, artPose, artColor, artShapeSig, artMotionSig, artColorSig, artSoundSig, ART_IDS, ART_SLOTS, ART_KEYS, artById, artsOfWeapon, artUnlocked, unlockedArts, ART_SLOT_LABEL, artPower, artBrief };
 })();
 
 /* ==================== artoverrides.js ==================== */
@@ -59579,7 +59791,7 @@ return { DT, DG, DGT, DG_FLOORS, inDungeon, genFloor, paintDungeon, dungeonArt, 
 /* ==================== game.js ==================== */
 __M.game = (function () {
 const THREE = __M.three;
-const { AUDIO } = __M.audio;
+const { AUDIO, sndVariant } = __M.audio;
 const { C, spriteCanvas, outlined, mirror, hexRgb, rgba } = __M.pixel;
 const { RARITY, SLOTS, SLOT_LABEL, makeGear, gearStats, itemScore, rollRarity, randomFam, salvageValue, enhanceCost, rerollCost, rerollAffixes, MAX_ENH, STAT_LABEL } = __M.items;
 const { WEAPONS, WEAPON_IDS, weaponCanvas, weaponIcon, drawWeaponAt, drawArcFx, drawThrustFx, drawRingFx, drawShockFx, drawRareAura, HELD_SCALE, SWING_SCALE, skinOf } = __M.weapons;
@@ -59590,7 +59802,7 @@ const { Clock, PHASES, PHASE_EDGES } = __M.time;
 const { VILLAGE, inVillage, villageArt, BUILDINGS, PROPS, NPCS, VILLAGERS, SHOPS } = __M.village;
 const { QUESTS, QUEST_IDS, QUEST_ITEMS, RELICS_TRIPLE, MAIN_ORDER, questById, objDone, objText, tripleReady, tripleMissing, relicName, questsOfGiver } = __M.quests;
 const { DG, DGT, DG_FLOORS, FLOOR_MOBS, inDungeon, genFloor, paintDungeon, dungeonArt } = __M.dungeon;
-const { ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_SLOT_LABEL, ART_FX, PROF_MAX, PROF_WEIGHT, artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower, artShape, artPose, artColor, ART_SHAPES, ART_POSES, ART_SNDS, artShapeSig, artMotionSig, artColorSig, artSoundSig } = __M.arts;
+const { ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_SLOT_LABEL, ART_FX, PROF_MAX, PROF_WEIGHT, artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower, artShape, artPose, artColor, ART_SHAPES, ART_POSES, ART_SNDS, ART_SHAPE_SPECS, ART_POSE_SPECS, artShapeSig, artMotionSig, artColorSig, artSoundSig } = __M.arts;
 const { MAIN, SUB, MANTRAS, MAIN_IDS, SUB_IDS, MANTRA_IDS, MANTRA_MAX_LV, SUB_SLOTS, mantraById, isMain, emptyMod, mantraMod, mainOf, install: mantraInstall, uninstall: mantraUninstall, sanitize: mantraSanitize, lvOf, mantraBrief } = __M.mantras;
 const { POI, ACTS, STORY, STORY_IDS, CLUES, CLUE_IDS, ENV_TEXTS, ENV_IDS, NPC_LAYERS, NPC_LINES, storyByAct, npcLayer, npcLines, storyReady, storyHint } = __M.story;
 const { applyArtOverrides, artFrames, artTiming, OVERRIDE_KEY, importOverrides, clearOverrides, overrideCount, readOverrides, exportOverrides } = __M.artoverrides;
@@ -62673,6 +62885,256 @@ function orbTexture(fam) {
 //   line  { ang, len, w } 一道有方向的刃光
 //   grow  [r0, r1] 环从 r0 长到 r1（冲击波）
 //   delay 秒数：先等这么久再开始淡出（依次裂开用）
+
+// ---------- P12-E：新刀光渲染器（17 类原子画法 → 61 种新刀光） ----------
+// 19 种老画法是「共享原型」，P12-E 之后每一招都有自己的一副长相。
+// 做法不是手写 61 条分支，而是把老画法拆出来的原子（弧 / 环 / 线 / 点 / 锥 / 尘）
+// 参数化之后重新组合：ART_SHAPE_SPECS[name] = { k: 原子名, ...参数 }。
+// 原子只落在老画法已经在用的 ghost 通道上（ring / line / thrust / dot / 弧 a0+a1+R），
+// 渲染管线一条都不用新开 —— 画法参数化了，长相还是同一套。
+function artShapeSpec(sp, ctx) {
+  const a = ctx.a, base = ctx.base, reach = ctx.reach;
+  const x = ctx.x, y = ctx.y;
+  const push = ctx.push, pushAt = ctx.pushAt;
+  const k = sp.k;
+  const num = (v, d) => (v === undefined ? d : v);
+
+  if (k === 'arc') {
+    // 弧：一段定向弧 + 几道从弧身射出的余光
+    const wide = num(sp.wide, 1), tilt = num(sp.tilt, 0);
+    const R = reach * wide * num(sp.r, 1);
+    const g0 = base - wide * 0.9 + tilt, g1 = base + wide * 0.9 + tilt;
+    push({ a0: g0, a1: g1, R, t: 0.30, max: 0.30 });
+    const n = num(sp.rays, 3);
+    for (let i = 0; i < n; i++) {
+      const ang = n === 1 ? (g0 + g1) / 2 : g0 + (g1 - g0) * (i / (n - 1));
+      push({ line: { ang, len: R * 0.62, w: 1.1 }, t: 0.22, max: 0.22, delay: i * 0.022 });
+    }
+  } else if (k === 'ring') {
+    // 环：多圈同心，粗细 / 螺旋 / 虚线各不相同
+    const cnt = num(sp.count, 1), R = reach * num(sp.r, 1) * 0.9;
+    for (let i = 0; i < cnt; i++) {
+      push({ ring: true, R: R * (1 + i * 0.17), w: num(sp.w, 1), t: 0.32, max: 0.32, delay: i * 0.05 });
+    }
+    if (sp.spiral) push({ a0: base - 0.5, a1: base + Math.PI * 1.45, R: R * 0.82, t: 0.30, max: 0.30 });
+    if (sp.dash) {
+      for (let i = 0; i < 12; i++) {
+        push({ line: { ang: base + i / 12 * Math.PI * 2, len: R * 0.34, w: 1.0 }, t: 0.20, max: 0.20 });
+      }
+    }
+  } else if (k === 'lance') {
+    // 枪 / 长刺：一道锥形气浪，锥尖落在最远端
+    const len = reach * num(sp.len, 1) * 1.05, w = num(sp.w, 2.2);
+    push({ thrust: base, len, t: 0.26, max: 0.26 });
+    push({ line: { ang: base, len: len * 0.9, w: w * 0.4 }, t: 0.22, max: 0.22 });
+    pushAt(x + Math.cos(base) * len, y + Math.sin(base) * len, { dot: 4, t: 0.20, max: 0.20 });
+    if (sp.twin) {
+      push({ thrust: base - 0.17, len: len * 0.92, t: 0.24, max: 0.24, delay: 0.03 });
+      push({ thrust: base + 0.17, len: len * 0.92, t: 0.24, max: 0.24, delay: 0.03 });
+    }
+    if (sp.spin) {
+      push({ thrust: base - 0.95, len: len * 0.74, t: 0.24, max: 0.24, delay: 0.05 });
+      push({ thrust: base + 0.95, len: len * 0.74, t: 0.24, max: 0.24, delay: 0.05 });
+    }
+  } else if (k === 'fan') {
+    // 扇面：n 道放射刃，中间最长两侧渐短
+    const n = num(sp.n, 5), spread = num(sp.spread, 0.9), len = reach * num(sp.len, 1);
+    for (let i = 0; i < n; i++) {
+      const u = n === 1 ? 0.5 : i / (n - 1);
+      const mid = Math.abs(u - 0.5) * 2;
+      const ang = base + (u - 0.5) * spread * 2 + (sp.arc ? (u - 0.5) * 0.7 : 0);
+      const l = len * (sp.star ? (0.34 + 0.66 * (1 - mid)) : (0.66 + 0.34 * (1 - mid)));
+      push({ line: { ang, len: l, w: 1.2 }, t: 0.26, max: 0.26, delay: i * 0.016 });
+      if (sp.split) {
+        push({ line: { ang: ang + spread * 0.55, len: l * 0.72, w: 0.9 }, t: 0.22, max: 0.22, delay: i * 0.016 + 0.03 });
+      }
+    }
+  } else if (k === 'cross') {
+    // 十字：n 道交错的刃，交点一个爆点
+    const n = num(sp.n, 2), spread = num(sp.spread, 0.55);
+    const len = reach * num(sp.len, 1), w = num(sp.w, 1.7);
+    for (let i = 0; i < n; i++) {
+      const ang = base + (i - (n - 1) / 2) * spread;
+      push({ line: { ang, len, w }, t: 0.28, max: 0.28 });
+      if (sp.split) {
+        push({ line: { ang: ang + spread * 0.62, len: len * 0.78, w: w * 0.65 }, t: 0.24, max: 0.24, delay: 0.04 });
+      }
+    }
+    push({ dot: 4.5, t: 0.22, max: 0.22 });
+  } else if (k === 'sigil') {
+    // 法阵：多层同心环 + 辐条；六芒 / 五芒 / 轮 / 缺口各有自己的记号
+    const R = Math.max(18, reach * num(sp.r, 1) * 0.62);
+    const layers = num(sp.layers, 2), spokes = num(sp.spokes, 6);
+    for (let i = 0; i < layers; i++) {
+      push({ ring: true, R: R * (1 - i * 0.26), t: 0.42, max: 0.42, delay: i * 0.06 });
+    }
+    for (let i = 0; i < spokes; i++) {
+      push({ line: { ang: base + i / spokes * Math.PI * 2, len: R * 0.5, w: 1.0 }, t: 0.34, max: 0.34, delay: i * 0.012 });
+    }
+    if (sp.hex) {
+      for (let tt = 0; tt < 2; tt++) {
+        for (let i = 0; i < 3; i++) {
+          const a1 = base + tt * Math.PI / 3 + i / 3 * Math.PI * 2;
+          const a2 = base + tt * Math.PI / 3 + (i + 1) / 3 * Math.PI * 2;
+          push({ line: { ang: Math.atan2(Math.sin(a2 - a1), Math.cos(a2 - a1)), len: R * 0.86, w: 1.3 }, t: 0.36, max: 0.36, delay: 0.05 });
+        }
+      }
+    }
+    if (sp.star) {
+      for (let i = 0; i < 5; i++) {
+        const a1 = base - Math.PI / 2 + i / 5 * Math.PI * 2;
+        const a2 = base - Math.PI / 2 + ((i + 2) % 5) / 5 * Math.PI * 2;
+        push({ line: { ang: Math.atan2(Math.sin(a2 - a1), Math.cos(a2 - a1)), len: R * 0.95, w: 1.2 }, t: 0.36, max: 0.36, delay: 0.05 });
+      }
+    }
+    if (sp.wheel) {
+      push({ ring: true, R: R * 1.24, t: 0.42, max: 0.42, delay: 0.08 });
+      for (let i = 0; i < 6; i++) {
+        push({ line: { ang: base + i / 6 * Math.PI * 2 + 0.26, len: R * 0.42, w: 0.9 }, t: 0.30, max: 0.30, delay: 0.10 });
+      }
+    }
+    if (sp.notch) {
+      for (let i = 0; i < 5; i++) {
+        push({ line: { ang: base + i / 5 * Math.PI * 2 + 0.3, len: R * 0.44, w: 1.1 }, t: 0.34, max: 0.34, delay: 0.08 });
+      }
+    }
+  } else if (k === 'trail') {
+    // 残影：多段递进，一段比一段远
+    const n = num(sp.n, 5), len = reach * num(sp.len, 1) * 0.5, spread = num(sp.spread, 0.14);
+    for (let i = 0; i < n; i++) {
+      const tt = (i + 1) / n;
+      const px = x + Math.cos(base) * reach * 0.55 * tt;
+      const py = y + Math.sin(base) * reach * 0.55 * tt;
+      let ang = base + (i % 2 ? spread : -spread);
+      if (sp.arc) ang = base + (tt - 0.5) * spread * 2.4;
+      else if (sp.zig) ang = base + (i % 2 ? spread * 3 : -spread * 3);
+      pushAt(px, py, { line: { ang, len, w: num(sp.w, 1.2) }, t: 0.28 - tt * 0.06, max: 0.28 - tt * 0.06 });
+      if (sp.dot) pushAt(px, py, { dot: 3, t: 0.24 - tt * 0.05, max: 0.24 - tt * 0.05 });
+    }
+  } else if (k === 'spiral') {
+    // 旋：一圈 + 一段大扫弧
+    const R = reach * num(sp.r, 1) * 0.7, turns = num(sp.turns, 2);
+    const dir = sp.reverse ? -1 : 1;
+    const wide = num(sp.wide, 1);
+    push({ ring: true, R, t: 0.34, max: 0.34 });
+    push({ a0: base, a1: base + dir * Math.PI * 2 * Math.min(turns, 3) * 0.6, R: R * wide, t: 0.30, max: 0.30 });
+    if (sp.double) {
+      push({ a0: base + Math.PI, a1: base + Math.PI + dir * Math.PI * 2 * Math.min(turns, 3) * 0.5, R: R * wide * 0.82, t: 0.30, max: 0.30, delay: 0.05 });
+    }
+    for (let i = 0; i < 4; i++) {
+      push({ line: { ang: base + i * Math.PI / 2, len: R * 0.55, w: 1.1 }, t: 0.24, max: 0.24 });
+    }
+  } else if (k === 'rain') {
+    // 天降：自上而下的短刃，按顺序点亮
+    const n = num(sp.n, 4), spacing = num(sp.spacing, 20), len = num(sp.len, 22);
+    const tilt = num(sp.angle, 0);
+    const rr = reach * 0.42 + spacing * 0.6;
+    for (let i = 0; i < n; i++) {
+      const ang = base + i / n * Math.PI * 2;
+      const dd = rr * (0.55 + (i % 3) * 0.30);
+      pushAt(x + Math.cos(ang) * dd, y + Math.sin(ang) * dd - 16,
+        { line: { ang: Math.PI / 2 + tilt, len, w: 1.3 }, t: 0.30, max: 0.30, delay: i * 0.035 });
+    }
+  } else if (k === 'point') {
+    // 落点爆：一点 + 放射碎屑
+    const px = x + Math.cos(base) * reach * 0.95, py = y + Math.sin(base) * reach * 0.95;
+    const n = num(sp.n, 6), r = num(sp.r, 16);
+    pushAt(px, py, { dot: 6, t: 0.20, max: 0.20 });
+    if (sp.cross) {
+      pushAt(px, py, { line: { ang: base, len: r * 1.9, w: 1.6 }, t: 0.22, max: 0.22 });
+      pushAt(px, py, { line: { ang: base + Math.PI / 2, len: r * 1.9, w: 1.6 }, t: 0.22, max: 0.22 });
+    } else if (sp.star) {
+      for (let i = 0; i < 5; i++) {
+        const a1 = base - Math.PI / 2 + i / 5 * Math.PI * 2;
+        const a2 = base - Math.PI / 2 + ((i + 2) % 5) / 5 * Math.PI * 2;
+        pushAt(px, py, { line: { ang: Math.atan2(Math.sin(a2 - a1), Math.cos(a2 - a1)), len: r * 1.05, w: 1.2 }, t: 0.22, max: 0.22, delay: i * 0.02 });
+      }
+    } else {
+      for (let i = 0; i < n; i++) {
+        pushAt(px, py, { line: { ang: base + i / n * Math.PI * 2, len: r, w: 1.2 }, t: 0.18, max: 0.18, delay: i * 0.012 });
+      }
+    }
+  } else if (k === 'hook') {
+    // 回勾：直出 + 末端折回来
+    const len = reach * num(sp.len, 1), turn = num(sp.turn, 1.95);
+    push({ line: { ang: base, len, w: 1.5 }, t: 0.30, max: 0.30 });
+    const hx = x + Math.cos(base) * len, hy = y + Math.sin(base) * len - (sp.up ? 9 : 0);
+    pushAt(hx, hy, { line: { ang: base + turn, len: len * 0.42, w: 1.5 }, t: 0.28, max: 0.28, delay: 0.04 });
+    pushAt(hx, hy, { dot: 4, t: 0.24, max: 0.24, delay: 0.04 });
+  } else if (k === 'crack') {
+    // 地裂：一段段亮起来的裂纹
+    const z = a.zone || {};
+    const n = num(sp.n, 4), step = (z.radius || 30) * num(sp.step, 0.9);
+    const stag = z.stagger || 0;
+    for (let i = 0; i < n; i++) {
+      const px = x + Math.cos(base) * step * (i + 1), py = y + Math.sin(base) * step * (i + 1);
+      const life = 0.30 - i * 0.03;
+      const jit = sp.straight ? 0 : (i % 2 ? 0.55 : -0.55) * (sp.branch ? 1 : 0.45);
+      const segs = sp.branch ? 3 : 1;
+      for (let s = 0; s < segs; s++) {
+        const ang = base + jit + (s % 2 ? 0.55 : -0.55) * (sp.branch ? 0.5 : 0);
+        pushAt(px, py, { line: { ang, len: step * 0.7, w: sp.wide ? 2.4 : 1.6 }, t: life, max: life, delay: i * stag + s * 0.03 });
+      }
+      pushAt(px, py, { dot: 4, t: life, max: life, delay: i * stag });
+    }
+  } else if (k === 'shock') {
+    // 冲击：一圈环 + 放射裂纹
+    const R = reach * num(sp.r, 1) * 0.85, cnt = num(sp.count, 8), w = num(sp.w, 1.2);
+    push({ ring: true, R, t: 0.30, max: 0.30 });
+    for (let i = 0; i < cnt; i++) {
+      push({ line: { ang: base + i / cnt * Math.PI * 2, len: R * 0.52, w }, t: 0.26, max: 0.26, delay: i * 0.015 });
+    }
+    if (sp.double) push({ ring: true, R: R * 1.32, t: 0.30, max: 0.30, delay: 0.06 });
+  } else if (k === 'cleave') {
+    // 长斩：一条巨刃 + 沿路的地缝
+    const len = reach * num(sp.len, 1) * 1.15, w = num(sp.w, 3.0);
+    push({ line: { ang: base, len, w }, t: 0.34, max: 0.34 });
+    push({ thrust: base, len: len * 0.95, t: 0.28, max: 0.28 });
+    if (sp.twin) {
+      push({ line: { ang: base + 0.24, len: len * 0.9, w: w * 0.6 }, t: 0.32, max: 0.32, delay: 0.04 });
+      push({ line: { ang: base - 0.24, len: len * 0.9, w: w * 0.6 }, t: 0.32, max: 0.32, delay: 0.04 });
+    }
+    for (let i = 1; i <= 3; i++) {
+      const d = len * i / 3;
+      pushAt(x + Math.cos(base) * d, y + Math.sin(base) * d,
+        { line: { ang: base + Math.PI / 2, len: len * 0.16, w: 1.4 }, t: 0.28, max: 0.28 });
+    }
+  } else if (k === 'boom') {
+    // 回旋：一段外凸的弧 + 飞行轨迹上的点
+    const dist = a.dist || 200, wide = num(sp.wide, 1);
+    push({ a0: base - 0.55 * wide, a1: base + 0.55 * wide, R: dist * 0.92, t: 0.30, max: 0.30 });
+    for (let i = 1; i <= 6; i++) {
+      const tt = i / 6;
+      pushAt(x + Math.cos(base) * dist * tt, y + Math.sin(base) * dist * tt,
+        { dot: 3 - tt, t: 0.24 - tt * 0.03, max: 0.24 - tt * 0.03 });
+    }
+    if (sp.flat) push({ line: { ang: base, len: dist * 0.85, w: 1.2 }, t: 0.24, max: 0.24 });
+    if (sp.high) push({ line: { ang: base - 1.05, len: dist * 0.5, w: 1.2 }, t: 0.24, max: 0.24 });
+  } else if (k === 'charge') {
+    // 冲锋：地上的擦痕 + 一路扬尘
+    const dist = a.dist || (a.dash && a.dash.dist) || 84;
+    push({ line: { ang: base, len: dist * num(sp.len, 1), w: num(sp.w, 1.2) }, t: 0.30, max: 0.30 });
+    for (let i = 1; i <= 5; i++) {
+      const tt = i / 5;
+      pushAt(x + Math.cos(base) * dist * tt, y + Math.sin(base) * dist * tt, { dot: 3, t: 0.26, max: 0.26 });
+    }
+    const dust = num(sp.dust, 0);
+    for (let i = 0; i < dust; i++) {
+      const tt = i / Math.max(1, dust);
+      pushAt(x + Math.cos(base) * dist * tt + (Math.random() - 0.5) * 12,
+        y + Math.sin(base) * dist * tt + (Math.random() - 0.5) * 8,
+        { dot: 2 + Math.random() * 2, t: 0.30, max: 0.30 });
+    }
+  }
+}
+
+// P12-E：插地类动作。老 plant + 三个新 plant（plantDeep / plantWide / plantTurn）走一把尺子。
+function isPlantPose(mode) {
+  if (mode === 'plant') return true;
+  const sp = ART_POSE_SPECS[mode];
+  return !!(sp && sp.k === 'plant');
+}
+
 function artSwingFx(a, base, reach, arc, ox, oy) {
   const W = WEAPONS[a.fam];
   const col = artColor(a, W.trail);
@@ -62682,6 +63144,8 @@ function artSwingFx(a, base, reach, arc, ox, oy) {
   const y = oy === undefined ? player.y - 8 : oy;
   const shape = artShape(a);
   const push = (g) => { slashGhosts.push(Object.assign({ x, y, colors: col }, g)); };
+  // P12-E：新刀光有的片段不在角色身上（在落点、在枪尖、在裂纹末端），要指定坐标
+  const pushAt = (px, py, g) => { slashGhosts.push(Object.assign({ x: px, y: py, colors: col }, g)); };
 
   if (shape === 'point') {
     // 落点：一个爆点 + 四道放射碎屑。打的是一个点，不是一片。
@@ -62849,6 +63313,9 @@ function artSwingFx(a, base, reach, arc, ox, oy) {
   } else if (shape === 'thrust') {
     push({ thrust: base, len: reach * 1.05, t: 0.24, max: 0.24 });
 
+  } else if (ART_SHAPE_SPECS[shape]) {
+    // P12-E：61 种新刀光。参数化的原子画法，和 19 种老画法共用同一套 ghost 通道
+    artShapeSpec(ART_SHAPE_SPECS[shape], { a, base, reach, arc, x, y, col, push, pushAt });
   } else {
     push({ a0: base - arc / 2, a1: base + arc / 2, R: reach * 0.85, t: 0.26, max: 0.26 });
   }
@@ -62938,7 +63405,7 @@ function execArt(a) {
     : { mode: a.fx === 'proj' ? 'thrust' : 'swing', a0: 0, a1: 0, dur: 0.22 };
   player.swing = { fam, base: aim, cast: true, sw: psw, t: psw.dur, dur: psw.dur };
   // 收招后的保持（地裂：落地后前倾 0.4 息不动）—— 收招空档也是重量的一部分
-  player.holdT = (ps && ps.mode !== 'plant' && ps.hold) ? ps.hold : 0;
+  player.holdT = (ps && !isPlantPose(ps.mode) && ps.hold) ? ps.hold : 0;
   // P11：起手音改由招式自带（snd）；没写的退回 P10 的按原语分派
   AUDIO.play(a.snd || (a.fx === 'bolt' ? 'thunder' : a.fx === 'proj' ? 'qi' :
     a.fx === 'buff' ? 'levelup' :
@@ -63247,7 +63714,7 @@ function execArt(a) {
     }
     // 铁壁：锤插在地上，人半蹲在它后面 —— 增益类招式以前完全没有表现，
     // 玩家看不出自己处于什么状态。这一招是这条规矩的样板。
-    if (a.pose && a.pose.mode === 'plant') player.plantT = dur;
+    if (a.pose && isPlantPose(a.pose.mode)) player.plantT = dur;
     if (a.shape) {
       artSwingFx(a, aim, 20, 1.6);
     } else {
@@ -66717,7 +67184,7 @@ function update(dt) {
           if (b.art) afterArtHit(e, b.art, dealt, ang);
         }
       }
-      AUDIO.play('thunder2');
+      AUDIO.play('thunderHit');
       spawnBoltFx(b.x, b.y);
     }
   }
@@ -66830,6 +67297,35 @@ function swingAng(sw, base, p) {
   if (sw.ease === 'in') e = Math.pow(q, 2.4);                    // 慢蓄猛落
   else if (sw.ease === 'both') e = q < 0.5 ? 2 * q * q : 1 - Math.pow(-2 * q + 2, 2) / 2;
   else e = 1 - Math.pow(1 - q, 2.2);                             // 快起慢收（原样）
+  // P12-E：60 个新动作走 ART_POSE_SPECS —— 17 类运动 × 参数。
+  // 新表里没有老动作的名字，两边不会撞；老动作的分支一个都没动。
+  // angAdd 是这一招专属的角度偏角（调参器用来把同兵器八招在 0.15 息时错开）。
+  const nsp = ART_POSE_SPECS[sw.mode];
+  if (nsp) {
+    const arcMul = nsp.arcMul === undefined ? 1 : nsp.arcMul;
+    const angAdd = nsp.angAdd || 0;
+    const sweepA = (sw.a0 + (sw.a1 - sw.a0) * e) * arcMul;
+    const off = nsp.off === undefined ? 0 : nsp.off;
+    switch (nsp.k) {
+      case 'swing': return { ang: base + sweepA + angAdd, off: off * e, cast: false };
+      case 'lunge': return { ang: base + sweepA + angAdd, off: off * e, cast: false };
+      case 'thrust': return { ang: base + (nsp.tilt || 0) + angAdd, off: off * e, cast: false };
+      case 'ring': return { ang: base - Math.PI * nsp.t1 + e * Math.PI * nsp.t2 + angAdd, off: 0, cast: false };
+      case 'cast': return { ang: base + (nsp.tilt || 0) + e * (nsp.sweep || 0.4) + angAdd, off: off * e, cast: true };
+      case 'over': return { ang: base + sweepA + angAdd, off: -nsp.up * (1 - e) + nsp.down * e * e, cast: false };
+      case 'side': return { ang: base + sweepA + angAdd, off: nsp.a * e + nsp.b, cast: false };
+      case 'throw': return { ang: base + sweepA + angAdd, off: off * e, cast: false };
+      case 'plant': return { ang: base + sweepA + angAdd, off: -off * e, cast: false };
+      case 'charge': return { ang: base + (sw.a0 || 0) * arcMul + angAdd, off: off * e, cast: false };
+      case 'flick': return { ang: base + sweepA + angAdd, off: off * e, cast: false };
+      case 'guard': return { ang: base + sweepA + angAdd, off: off * e, cast: true };
+      case 'chan': return { ang: base + sweepA + angAdd, off: off * e, cast: true };
+      case 'leap': return { ang: base + sweepA + angAdd, off: off * e, cast: false };
+      case 'rev': return { ang: base + sweepA + angAdd + Math.PI * (nsp.t || 0.5), off: -off * e, cast: false };
+      case 'spin': return { ang: base + sweepA + angAdd + e * Math.PI * (nsp.t === undefined ? 1 : nsp.t), off: 0, cast: false };
+      default: break;
+    }
+  }
   if (sw.mode === 'ring') return { ang: base - Math.PI * 1.1 + e * Math.PI * 2.2, off: 0, cast: false };
   if (sw.mode === 'thrust') return { ang: base, off: e * 9, cast: false };
   if (sw.mode === 'cast') return { ang: base - 0.62 + e * 0.42, off: e * 3, cast: true };
@@ -67291,7 +67787,7 @@ function drawOverlay(camX, camY) {
     if (g.ring) {
       // grow：从 r0 长到 r1（冲击波 / 扩散环）；否则是原来"由外收拢"的收势
       const R = g.grow ? g.grow[0] + (g.grow[1] - g.grow[0]) * (1 - a) : g.R * (1.4 - a * 0.4);
-      drawRingFx(octx, g.x - camX, g.y - camY, R, g.colors, a, 1);
+      drawRingFx(octx, g.x - camX, g.y - camY, R, g.colors, a, g.w || 1);
     }
     else if (g.thrust) drawThrustFx(octx, g.x - camX, g.y - camY, g.thrust, g.len, g.colors, a * 0.9, 1);
     else if (g.dot) drawDotFx(octx, g.x - camX, g.y - camY, g.dot * (0.5 + a * 0.8), g.colors, a);
@@ -68043,6 +68539,7 @@ window.__game = {
   ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_FX, ART_SLOT_LABEL, PROF_MAX,
   artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower,
   artShape, artPose, artColor, ART_SHAPES, ART_POSES, ART_SNDS, swingAng,
+  ART_SHAPE_SPECS, ART_POSE_SPECS, artShapeSpec, isPlantPose, sndVariant,
   artShapeSig, artMotionSig, artColorSig, artSoundSig,
   castArt, execArt, updateArts, clearArts, autoLoadout, addProf, applyStatus, afterArtHit,
   renderArts, showArtPage, artMaxOf, artCdOf,

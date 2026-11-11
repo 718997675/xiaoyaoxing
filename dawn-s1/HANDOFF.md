@@ -36,10 +36,10 @@ node tools/run.js eval tools/map.js       # 大地图连通性与地貌，当前
 node tools/run.js eval tools/camps.js     # 营地生态（巡逻/吹哨/食物链/作息），当前 17 pass / 0 fail
 node tools/run.js eval tools/bosses.js    # 首领（招式表/三阶段换兵器/巢穴/危险区/首杀专属），当前 38 pass / 0 fail
 node tools/run.js eval tools/quests.js    # 任务（18 条全通/交付对话逐句播放/三物门禁/存档），当前 43 pass / 0 fail
-node tools/run.js eval tools/arts.js      # 招式（80 招/十四种原语/专精/装配拖拽/签名查重/全表零重复/平衡/存档），当前 158 pass / 0 fail
+node tools/run.js eval tools/arts.js      # 招式（80 招/十四种原语/专精/装配拖拽/签名查重/全表零重复/平衡/存档），当前 172 pass / 0 fail
 node tools/run.js eval tools/mantras.js   # 心法（22 条/互斥/12 个机制/200 组 DPS 分布），当前 75 pass / 0 fail
 STORY=1 QS=x=1 node tools/run.js eval tools/story.js   # 剧情（49 节点/七种触发/两次终章选择/旧事页/存档），当前 113 pass / 0 fail
-PAGE=art-workbench.html node tools/run.js eval tools/art-workbench.js   # 工作台页，当前 39 pass / 0 fail
+PAGE=art-workbench.html node tools/run.js eval tools/art-workbench.js   # 工作台页，当前 43 pass / 0 fail
 node tools/run.js eval tools/art-unique.js  # 全表 80 招零重复体检报告（ok=true 才算过），当前 ok=true
 node tools/run.js eval tools/art-overrides.js                            # 游戏侧覆盖层，当前 29 pass / 0 fail
 node tools/run.js shot out.png 1440 900   # 截图
@@ -378,6 +378,52 @@ md5 `1b63d7ee…` / **2,088,806 字节**、工作台页 `96e55d0f…` / **60,268
 跨兵器撞车 0、30 段普攻 30/30）；线上九套自检 `arts` **158** / `art-workbench` **39**，
 **499 PASS / 0 FAIL**。唯一在线地址 https://718997675.github.io/xiaoyaoxing/ 。
 
+### P12-E · 字面零重复（80 招 × 四个字段本身，2026-11-11 代码已落地）
+
+P12-D 查的是「表现实例」（`shape@shv` / 动作全参数 / 色彩对 / 声音对），字段本身还能复用。
+用户 2026-11-11 追加要求：**连字段里写的字符串都不许复用**。于是：
+
+| 字段 | P12-D | P12-E |
+|---|---|---|
+| `shape` | 19 个值（61 处重复） | **80 个值**（19 老画法 + 61 新画法） |
+| `pose.mode` | 20 个值（60 处重复） | **80 个值**（20 老动作 + 60 新动作） |
+| `snd` | 17 个值 | **80 个值**（16 音色原型 × 5 档） |
+| `hitSnd` | 17 个值 | **80 个值**（同一套 80 个另行排布） |
+
+落地清单：
+
+- `arts.js`：`ART_SHAPES` / `ART_POSES` / `ART_SNDS` 三张池各扩到 80；新增
+  `ART_SHAPE_SPECS`（61 条，名字 → 画法原子 `k` + 参数）与 `ART_POSE_SPECS`
+  （60 条，名字 → 运动原子 `k` + 参数）。80 招的四个字段一一对应、全表不重。
+- `game.js`：新增 `artShapeSpec()` —— 把 19 种老画法拆出的**原子**
+  （弧 / 环 / 锥 / 扇 / 十字 / 法阵 / 残影 / 旋 / 雨 / 点 / 勾 / 裂纹 / 冲击 / 长斩 / 回旋 / 冲锋，
+  共 16 类）参数化后重新组合，渲染 61 种新刀光，插在 `artSwingFx` 的 `else` 兜底**之前**；
+  `swingAng()` 开头解析 `ART_POSE_SPECS` 支持 60 个新动作（16 类运动 × 参数），
+  20 个老动作的分支一个都没动；新增 `isPlantPose()` 让 `plantDeep/plantWide/plantTurn`
+  和老的 `plant` 一样被识别为插地（`holdT` / `plantT` 两处）；ghost 的 `ring` 支持 `w` 线宽。
+- `audio.js`：`SND_BASES`（16 原型）+ `SND_RE` + 5 档音高/时长倍率，导出 `sndVariant()`；
+  老 boss 落雷音 `thunder2` 改名 `thunderHit`（避让新档位名）。
+- **连拍角度**：新动作与老动作的公式会撞（同一件兵器里两招在 0.15 息时角度重合）。
+  解法是给每个新动作挂一个 `angAdd` 偏角旋钮 —— 60 个新动作名全局各只被一招使用，
+  所以只动新招、老招数据零改动。10 件兵器现在最紧一对 **8.1°**（staff 崩棍↔捅棍，老招对，
+  P12-D 时就那样），其余 ≥ 9.5°。
+- `tools/gen-artworkbench.js`：解析两张规格表并内联进 `wbBase`（`shapeSpecs` / `poseSpecs`），
+  唯一性校验升级为**字面口径**（四个字段各 80/80）。
+- `art-workbench.html`：`ease()` 改成与 `game.js` 同一套曲线（2.4 / 2.2 / 双向）；
+  `weaponAng()` 走 `poseSpecs`、`drawShape()` 走 `shapeSpecs`（新增 `drawSpec()`，16 类原子预览）。
+- `tools/arts.js` 新增 **§1.5 字面零重复**（14 条断言，含行为断言：60 个新动作的运动轨迹
+  都和老动作默认值不同；同一画法原子的不同参数，刀光几何必须真的不同）。
+- `tools/art-unique.js` 体检报告升级：`literal` 段列四个字段，`atoms` 段列 16/16/16 个
+  仍然共享的**渲染原子**（那是实现，不是招式长相）。
+
+自检：模块版 11 套 **740 PASS / 0 FAIL**（devtest 148 / arts **172** / weapons 39 / mantras 75 /
+story 113 / quests 43 / bosses 38 / map 23 / camps 17 / art-overrides 29 / art-workbench **43**）；
+单文件版两条路径各 **549 PASS / 0 FAIL**（9 套 eval + `online` 探针 `ok=true`）；
+线上体检 `ok=true`（四个字段各 80/80）。
+
+**还没做**：文档章节（`README.md` / `CHAPTER-1-EXPANSION.md` §9.9 / `ARTS-DESIGN.md` 第十一章 /
+`ART-WORKBENCH.md`）、本地记忆、线上发布与线上复验。
+
 ### 未完成（按顺序）
 
 | 批次 | 内容 | 文档 |
@@ -385,6 +431,7 @@ md5 `1b63d7ee…` / **2,088,806 字节**、工作台页 `96e55d0f…` / **60,268
 | ~~P12-B~~ | ✅ 2026-11-11 已完成，见 §3 | `CHAPTER-1-EXPANSION.md` §9.6 |
 | ~~P12-C~~ | ✅ 2026-11-11 已完成，见 §3 | `CHAPTER-1-EXPANSION.md` §9.7 |
 | ~~P12-D~~ | ✅ 2026-11-11 已完成（全表零重复），见 §3 | `CHAPTER-1-EXPANSION.md` §9.8 |
+| P12-E | 🟡 代码已落地并全绿（字面零重复），**文档与线上发布待补**，见 §3 | `HANDOFF.md` §3 P12-E |
 | — | 支线 9→15 与文本量加厚已随 **P12-B** 一并交付（10316 字） | `SKILLS-STORY-PLAN.md` §4.2 |
 | — | 文本量距设计目标 3~5 万字仍有差距：剧情自检实测 **10316 字**（P12-B 后）；任务交付对话另计，不含在该口径内 | — |
 

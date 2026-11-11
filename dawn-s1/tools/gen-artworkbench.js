@@ -30,6 +30,40 @@ const poses = strArray('ART_POSES');
 const snds = strArray('ART_SNDS');
 const fx = strArray('ART_FX');
 
+// P12-E：两张规格表。名字 → 原子 + 参数。形状那边是 61 种新刀光的画法，
+// 动作那边是 60 个新动作的运动参数 —— 工作台预览要用同一份参数，
+// 否则预览里看到的和游戏里放出来的是两回事。
+function specTable(name) {
+  const re = new RegExp('export const ' + name + ' = \\{([\\s\\S]*?)\\n\\};');
+  const m = re.exec(artsSrc);
+  if (!m) throw new Error('arts.js 里找不到 ' + name);
+  const out = {};
+  for (const raw of m[1].split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const lm = /^(\w+): \{ k: '(\w+)'(.*) \},$/.exec(line);
+    if (!lm) throw new Error(name + ' 里有一行解析不了：' + line);
+    const fields = {};
+    const body = lm[3].trim();
+    if (body) {
+      for (const part of body.split(',')) {
+        const p = part.trim();
+        if (!p) continue;
+        const pm = /^(\w+):\s*(-?[\d.]+)$/.exec(p);
+        if (!pm) throw new Error(name + '.' + lm[1] + ' 字段解析不了：' + p);
+        fields[pm[1]] = Number(pm[2]);
+      }
+    }
+    out[lm[1]] = Object.assign({ k: lm[2] }, fields);
+  }
+  if (!Object.keys(out).length) throw new Error(name + ' 解析出 0 条');
+  return out;
+}
+const shapeSpecs = specTable('ART_SHAPE_SPECS');
+const poseSpecs = specTable('ART_POSE_SPECS');
+if (Object.keys(shapeSpecs).length !== 61) throw new Error('ART_SHAPE_SPECS 应为 61 条，实际 ' + Object.keys(shapeSpecs).length);
+if (Object.keys(poseSpecs).length !== 60) throw new Error('ART_POSE_SPECS 应为 60 条，实际 ' + Object.keys(poseSpecs).length);
+
 // 3. 80 招：按 "  id: { ... \n  }," 切块（招式结束行的缩进恰好两个空格）
 const lines = artsSrc.split('\n');
 const arts = {};
@@ -115,9 +149,21 @@ for (const f of FAM_IDS) {
 }
 if (stray.length) throw new Error('基线解析结果不在登记池里（多半是匹配到了嵌套字段）：\n  ' + stray.join('\n  '));
 
-// P12-D 全表零重复：生成工作台基线时就把四条表现实例卡死，改了 arts.js
-// 忘了重跑生成器 / 或者新招抄了旧招的签名，这里立刻炸，不用等自检。
+// P12-E 字面零重复：四个字段**本身**全表各 80 个不同值。
+// P12-D 那版查的是「表现实例」（形状 + 变体号、声音对…），字段还能复用；
+// 这一版查的是字段本身 —— shape / pose.mode / snd / hitSnd 一招一个，撞了就炸。
 const ALL = Object.values(arts);
+const literal = {
+  '形状 shape': a => a.shape,
+  '动作 pose.mode': a => a.pose.mode,
+  '起手音 snd': a => a.snd,
+  '命中音 hitSnd': a => a.hitSnd,
+};
+for (const [label, fn] of Object.entries(literal)) {
+  const n = new Set(ALL.map(fn)).size;
+  if (n !== 80) throw new Error('字面零重复失败：' + label + ' 只有 ' + n + ' / 80 个不同值');
+}
+// P12-D 的四条表现实例也要继续成立（字面唯一是它们的充分条件，但别把尺子弄丢）
 const sigs = {
   '形状实例 shape@shv': a => a.shape + '@' + a.shv,
   '动作全参数': a => [a.pose.mode, a.pose.a0, a.pose.a1, a.pose.dur, a.pose.ease].join('|'),
@@ -128,10 +174,17 @@ for (const [label, fn] of Object.entries(sigs)) {
   const n = new Set(ALL.map(fn)).size;
   if (n !== 80) throw new Error('全表零重复失败：' + label + ' 只有 ' + n + ' / 80 个不同值');
 }
+// 每招用到的形状 / 动作都得有规格（新招不能掉进兜底分支里）
+const noSpec = [];
+for (const a of ALL) {
+  if (!shapeSpecs[a.shape] && shapes.indexOf(a.shape) < 0) noSpec.push(a.id + '.shape=' + a.shape);
+  if (!poseSpecs[a.pose.mode] && poses.indexOf(a.pose.mode) < 0) noSpec.push(a.id + '.pose=' + a.pose.mode);
+}
+if (noSpec.length) throw new Error('有招式的形状 / 动作既不在池里也没有规格：\n  ' + noSpec.join('\n  '));
 
 const data = {
   version: 1,
-  shapes, poses, snds, fx,
+  shapes, poses, snds, fx, shapeSpecs, poseSpecs,
   palette: Object.entries(colors).map(([k, v]) => ({ name: k, hex: v })),
   fams: FAM_IDS,
   famLabel: { sword: '剑', blade: '刀', spear: '枪', staff: '棍', mage: '法杖', dual: '双刃', hammer: '锤',
@@ -150,5 +203,6 @@ const json = JSON.stringify(data);
 const out = html.replace(re, () => '<script id="wbBase" type="application/json">' + json + '</script>');
 fs.writeFileSync(p, CRLF ? out.replace(/\n/g, '\r\n') : out, 'utf8');
 console.log('工作台基线数据已内联：80 招 / ' + shapes.length + ' 形 / ' + poses.length + ' 式 / '
-  + snds.length + ' 音 / ' + Object.keys(colors).length + ' 色，' + (json.length / 1024).toFixed(1) + ' KB'
-  + '；四条表现实例全表 80/80 唯一');
+  + snds.length + ' 音 / ' + Object.keys(colors).length + ' 色 / ' + Object.keys(shapeSpecs).length + ' 形规格 / '
+  + Object.keys(poseSpecs).length + ' 式规格，' + (json.length / 1024).toFixed(1) + ' KB'
+  + '；四个字段字面全表 80/80 唯一，四条表现实例同样 80/80');
