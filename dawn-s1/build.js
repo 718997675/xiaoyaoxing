@@ -30,6 +30,7 @@ const ORDER = [
   { id: 'items', file: 'items.js' },
   { id: 'skills', file: 'skills.js' },
   { id: 'arts', file: 'arts.js' },
+  { id: 'artoverrides', file: 'artoverrides.js' },   // ← 工作台覆盖层（id 不能带连字符）
   { id: 'mantras', file: 'mantras.js' },   // ← 新增
   { id: 'quests', file: 'quests.js' },
   { id: 'story', file: 'story.js' },       // ← 纯数据层，不 import 任何东西
@@ -135,6 +136,11 @@ function buildSingle(bundle) {
   const before = html.length;
   let out = html.replace(/<script id="boot">[\s\S]*?<\/script>/, () => '<script>\n' + bundle + '\n</script>');
   if (out.length === before) throw new Error('没找到 <script id="boot">，单文件版会缺代码');
+  // 工作台导出的覆盖表必须内联：dist 目录里没有那个 data.js，留 src 就是一条 404。
+  const dataTag = /<script src="art-overrides\.data\.js"><\/script>/;
+  if (!dataTag.test(out)) throw new Error('没找到 art-overrides.data.js 的 script 标签');
+  const data = fs.readFileSync(path.join(ROOT, 'art-overrides.data.js'), 'utf8');
+  out = out.replace(dataTag, () => '<script>\n' + data + '\n</script>');
   // dev/scene 场景钩子靠动态 import，file:// 下必然失败，单文件版直接去掉
   out = out.replace(/\n\s*if \(location\.search\.indexOf\('dev=1'\)[\s\S]*?\n\s*\}/, () => '')
     .replace(/\n\s*if \(location\.search\.indexOf\('scene='\)[\s\S]*?\n\s*\}/, () => '');
@@ -157,3 +163,14 @@ const DIST = path.join(ROOT, 'dist');
 if (!fs.existsSync(DIST)) fs.mkdirSync(DIST);
 fs.writeFileSync(path.join(DIST, 'index.html'), single, 'utf8');
 console.log('✓ dist/index.html    ' + (single.length / 1024).toFixed(0) + ' KB（发布目录：整页单请求）');
+
+// 招式工作台也放进发布目录。两个好处：
+//   1. 线上能直接开 https://718997675.github.io/xiaoyaoxing/art-workbench.html；
+//   2. 工作台和游戏同一个源，「写入试玩」写的 localStorage 才真的能被游戏读到
+//      （file:// 或跨源时只能走「下载 JSON → 招式页导入」）。
+// 工作台本身是零依赖单文件，不需要打包，直接拷。
+const wbSrc = path.join(ROOT, 'art-workbench.html');
+if (!fs.existsSync(wbSrc)) throw new Error('找不到 art-workbench.html，发布目录会缺工作台');
+const wb = fs.readFileSync(wbSrc);
+fs.writeFileSync(path.join(DIST, 'art-workbench.html'), wb);
+console.log('✓ dist/art-workbench.html ' + (wb.length / 1024).toFixed(0) + ' KB（与游戏同源，可一键试玩）');

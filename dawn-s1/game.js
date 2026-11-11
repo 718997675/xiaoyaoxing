@@ -35,6 +35,14 @@ import {
   POI, ACTS, STORY, STORY_IDS, CLUES, CLUE_IDS, ENV_TEXTS, ENV_IDS,
   NPC_LAYERS, NPC_LINES, storyByAct, npcLayer, npcLines, storyReady, storyHint,
 } from './story.js';
+import {
+  applyArtOverrides, artFrames, artTiming, OVERRIDE_KEY,
+  importOverrides, clearOverrides, overrideCount, readOverrides, exportOverrides,
+} from './artoverrides.js';
+
+// 招式工作台覆盖表：原地改 ARTS 的字段，所有持有 ARTS 引用的地方自动生效。
+// 默认覆盖表是空的，64 招行为一字不变 —— 回归自检靠这一点保证。
+applyArtOverrides(ARTS);
 
 const LW = 480, LH = 270, TILE = 16, MAPW = 144, MAPH = 104;
 const SAVE_KEY = 'xiaoyao-save-v5';
@@ -2790,6 +2798,7 @@ function orbTexture() {
 function artSwingFx(a, base, reach, arc, ox, oy) {
   const W = WEAPONS[a.fam];
   const col = artColor(a, W.trail);
+  const from = slashGhosts.length;   // 工作台覆盖层要对这一招新加的 ghost 统一后处理
   // 位移招把起点传进来：刀光要留在走过的路上，不是落点前方
   const x = ox === undefined ? player.x : ox;
   const y = oy === undefined ? player.y - 8 : oy;
@@ -2964,6 +2973,26 @@ function artSwingFx(a, base, reach, arc, ox, oy) {
 
   } else {
     push({ a0: base - arc / 2, a1: base + arc / 2, R: reach * 0.85, t: 0.26, max: 0.26 });
+  }
+
+  // 工作台覆盖层：帧数时间轴换算成刀光延迟 / 寿命；自定义 PNG 序列帧
+  // 追加一个图片 ghost。放在末尾统一后处理，19 个形状分支一个都不用改
+  // （有些分支是直接 slashGhosts.push，没走上面的 push()）。
+  const tm = artTiming(a);
+  if (tm.delay || tm.life) {
+    for (let i = from; i < slashGhosts.length; i++) {
+      const g = slashGhosts[i];
+      if (tm.delay) g.delay = (g.delay || 0) + tm.delay;
+      if (tm.life) { g.t = tm.life; g.max = tm.life; }
+    }
+  }
+  const fr = artFrames(a);
+  if (fr) {
+    const life = tm.life || 0.30;
+    slashGhosts.push({
+      x, y, frames: fr, colors: col, base, delay: tm.delay, t: life, max: life,
+      scale: a.frameScale || 1, rotate: !!a.frameRotate,
+    });
   }
 }
 
@@ -5172,6 +5201,39 @@ function toggleSkills(force) {
 // 道行与招式合成一个面板的两页：都是"我这套东西怎么配"，分成两个入口
 // 玩家会忘记另一个的存在。
 const artPageEl = document.getElementById('artPage');
+
+// 招式页里的「导入工作台覆盖表」：file:// 下单文件、http 模块版、线上打包版都走同一条路。
+// 选 .json 文件 → 写游戏自己的 localStorage → 刷新生效，不依赖工作台与游戏同源。
+function initArtOverrideUI() {
+  const file = document.getElementById('artOvFile');
+  const btn = document.getElementById('btnArtOv');
+  const clr = document.getElementById('btnArtOvClear');
+  const info = document.getElementById('artOvInfo');
+  const refresh = () => { if (info) info.textContent = '已覆盖 ' + overrideCount() + ' 招'; };
+  if (btn && file) {
+    btn.onclick = () => file.click();
+    file.onchange = () => {
+      const f = file.files && file.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const n = importOverrides(String(r.result));
+          alert('已导入 ' + n + ' 招，刷新后生效。');
+          location.reload();
+        } catch (e) { alert('覆盖表格式不对：' + e.message); }
+      };
+      r.readAsText(f);
+    };
+  }
+  if (clr) clr.onclick = () => {
+    clearOverrides();
+    alert('已清除试玩覆盖，刷新后回到基线（仓库里的 data.js 覆盖仍有效）。');
+    location.reload();
+  };
+  refresh();
+}
+initArtOverrideUI();
 const daoPageEl = document.getElementById('daoPage');
 const skillTitleEl = document.getElementById('skillTitle');
 let artPageOn = false;
@@ -7182,6 +7244,22 @@ function drawOverlay(camX, camY) {
   for (const g of slashGhosts) {
     if (g.delay > 0) continue;
     const a = Math.max(0, g.t / g.max);
+    if (g.frames) {
+      // 序列帧按 ghost 的淡出进度推进：t/max 从 1 走到 0，帧号从 0 走到最后一帧。
+      const k = Math.min(g.frames.length - 1,
+        Math.max(0, Math.floor((1 - a) * g.frames.length)));
+      const im = g.frames[k];
+      if (im && im.complete && im.naturalWidth) {
+        const w = im.naturalWidth * (g.scale || 1), h = im.naturalHeight * (g.scale || 1);
+        octx.save();
+        octx.globalAlpha = Math.min(1, a * 1.6);
+        octx.translate(g.x - camX, g.y - camY);
+        if (g.rotate) octx.rotate(g.base || 0);
+        octx.drawImage(im, -w / 2, -h / 2, w, h);
+        octx.restore();
+      }
+      continue;
+    }
     if (g.ring) {
       // grow：从 r0 长到 r1（冲击波 / 扩散环）；否则是原来"由外收拢"的收势
       const R = g.grow ? g.grow[0] + (g.grow[1] - g.grow[0]) * (1 - a) : g.R * (1.4 - a * 0.4);
@@ -7838,6 +7916,10 @@ loadArt().then(ok => {
 
 // ============ 测试钩子 ============
 window.__game = {
+  artOverrides: {
+    apply: applyArtOverrides, importText: importOverrides, clear: clearOverrides,
+    count: overrideCount, read: readOverrides, dump: exportOverrides, key: OVERRIDE_KEY,
+  },
   get state() { return state; },
   get touch() { return touch; },
   get inputMode() { return touch.enabled ? 'touch' : 'keyboard'; },

@@ -1021,6 +1021,30 @@ P10 只重做了锤。P11 按 `ARTS-DESIGN.md` §7 的顺序把
 
 逐招画面、取舍理由与四个坑见 `ARTS-DESIGN.md` §7 / §8。
 
+### 4.11 招式工作台实施记录（2026-11-11 完成）
+
+P11 把 64 招做成了纯数据之后，改招式还得手改 `arts.js`。工作台把这一步变成
+「覆盖表编辑器 + 一层启动时合并」，不改基线、删表即回滚。
+
+- **协议**：按招式 id 存 `{version:1, arts}`；`OVERRIDE_SAFE` 白名单只放表现层 / 数值层，
+  `id / fam / slot / prof` 在 `cleanPack()` 就被剥掉。`applyArtOverrides(ARTS)` **原地改字段**，
+  因为 `game.js` 多处持有 `ARTS` 引用。
+- **双来源**：`window.__ART_OVERRIDES_FILE__`（仓库 / 永久）+
+  `localStorage['xy_art_overrides_v1']`（试玩，后者优先）。
+- **30fps 时间轴**：`total / windup / hit / fxStart / fxLen / recover` 全填帧数；
+  `artTiming()` 换算成秒，追加给 `slashGhosts` 的 `delay / max`。基线 64 招无 timeline，
+  算出来全是 0，默认行为一个字节不变。
+- **PNG 序列帧**：按列 × 行切片成 dataURL，`artFrames()` 转 `Image` 并缓存；
+  `drawOverlay()` 的 `slashGhosts` 循环加 `g.frames` 分支按淡出进度 `drawImage`。
+- **单文件 HTML**：`art-workbench.html` 零依赖双击即开，64 招 / 19 形 / 20 式 / 17 音 /
+  20 色由 `tools/gen-artworkbench.js` 从 `arts.js` / `pixel.js` 内联生成。
+  支持导入草稿 JSON 续改、下载 JSON / data.js、写入试玩、复制导入码。
+- **分发**：`build.js` 把工作台一起拷进 `dist/`，线上与游戏同源，「写入试玩」才真的有效；
+  `art-overrides.data.js` 内联进 `dist/index.html`，避免 404。
+- **验收**：新增工作台自检 31 条 + 覆盖层自检 29 条；模块版 / `逍遥行.html` /
+  `dist/index.html` 三套代码路径各自全绿；既有 9 套回归仍是 553 PASS / 0 FAIL。
+  协议与用法见 `ART-WORKBENCH.md`。
+
 ---
 ## 五、施工批次（接在 CHAPTER-1-EXPANSION 的 P1~P4 之后）
 

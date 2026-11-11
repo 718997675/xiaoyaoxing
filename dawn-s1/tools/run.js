@@ -131,8 +131,11 @@ async function waitFor(fn, timeout, label) {
       '?' + (process.env.QS || 'dev=1') + storyOff);
     await api.send('Page.navigate', { url });
     await sleep(500);
-    await waitFor(() => api.send('Runtime.evaluate', { expression: '!!window.__game', returnByValue: true })
-      .then(r => r.result.value).catch(() => false), 25000, '等 __game 就绪');
+    // 工作台页没有 __game，用 __wbReady 当就绪标记，这样同一套 runner 也能验它
+    await waitFor(() => api.send('Runtime.evaluate', {
+      expression: '!!(window.__game || window.__wbReady)', returnByValue: true,
+    })
+      .then(r => r.result.value).catch(() => false), 25000, '等页面就绪');
 
     if (mode === 'online') {
       // 线上健康检查：能起、有心法、有道人、画面真的画出来了、控制台没报错。

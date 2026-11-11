@@ -67,6 +67,27 @@ node build.js           # 产出 xiaoyao-bundle.js 与 逍遥行.html
 `index.html` 会按 `location.protocol` 自动分流：`http` 走原生 ES module，`file:` 走打包版，
 所以开发流程不变，同时双击也不会白屏。
 
+## 招式工作台（自己改招式，不用碰源码）
+
+双击 `dawn-s1/art-workbench.html`，或线上打开
+`https://718997675.github.io/xiaoyaoxing/art-workbench.html`；
+游戏里也可以从 **行囊 → 招式页 → 「打开招式工作台」** 跳过去。
+
+左边挑 64 招里的任意一招，中间按 **30fps 帧数**调起手 / 命中 / 刀光 / 收招，
+右边换刀光形状、身体动作、起手音、命中音、配色和数值；也可以导入一张 PNG 序列图
+按「列 × 行」切片，用自己的素材替换刀光。设计结果有三种进游戏的方式：
+
+| 方式 | 操作 | 适用 |
+|---|---|---|
+| 试玩 | 工作台「写入试玩」→ 刷新游戏页 | 线上同源最快；招式页可一键清除 |
+| 导入文件 | 「下载覆盖表 JSON」→ 游戏招式页「导入工作台覆盖表」 | 跨源 / 本机通用，推荐 |
+| 永久生效 | 「下载 art-overrides.data.js」→ 覆盖同名文件 → `node build.js` → 推送 | 写进仓库 |
+
+底层是一张按招式 id 存的覆盖表，启动时盖在 `arts.js` 的 64 招基线上；
+结构字段（`id / fam / slot / prof`）在白名单外不许改，删掉覆盖表即回滚。
+完整协议、帧数字段、PNG 切片规则与自检命令见
+[`dawn-s1/ART-WORKBENCH.md`](dawn-s1/ART-WORKBENCH.md)。
+
 ## 操作
 
 同一份页面按设备自动分流，不需要分别做移动版 / PC 版。
@@ -137,6 +158,10 @@ xiaoyaoxing/
 │   ├── art.js  monsters.js  程序化美术与敌手定义
 │   ├── weapons.js items.js  兵器招式、装备与词缀
 │   ├── arts.js   mantras.js  招式系统（64 招 · 十四种原语）、心法系统（22 条）
+│   ├── art-workbench.html    招式工作台（单文件 · 30fps 时间轴 · PNG 序列帧 · 导出覆盖表）
+│   ├── artoverrides.js      工作台覆盖层（白名单 / 原地合并 / 帧数换算 / 图片帧缓存）
+│   ├── art-overrides.data.js 永久覆盖表（默认空，工作台导出的 data.js 覆盖它）
+│   ├── ART-WORKBENCH.md     工作台使用说明
 │   ├── quests.js story.js   任务（12 条）、剧情（28 节点 · 18 地标 · 17 线索 · 10 旧物 · 三层对话）
 │   ├── skills.js time.js    道行树、昼夜时辰
 │   ├── village.js           青云集：建筑、NPC、店铺、对话
@@ -144,7 +169,9 @@ xiaoyaoxing/
 │   ├── devtest.js           无头回归测试（137 条断言，另有 8 个 tools/ 专项套件）
 │   ├── build.js             按依赖序打 IIFE 单文件
 │   ├── tools/               shot.js（CDP 截图）/ touch.js（触屏回归）/ weapons.js（兵器专项）/
-│   │                        arts.js（招式）/ mantras.js（心法）/ story.js（剧情）/ play.js
+│   │                        arts.js（招式）/ mantras.js（心法）/ story.js（剧情）/ play.js /
+│   │                        art-workbench.js（工作台自检）/ art-overrides.js（覆盖层自检）/
+│   │                        gen-artworkbench.js（从 arts.js 重新内联工作台基线）
 │   ├── lib/three.module.js  本地化 three.js r160（离线可玩）
 │   └── CHAPTER-1.md         第一章交付文档 / ECOSYSTEM-PLAN.md 生态升级计划
 ├── pixel-menu/              最早的主菜单视觉原型
@@ -189,6 +216,7 @@ node tools/shot.js                # CDP 截图（SHOT_W/SHOT_H/MOBILE/DPR/WAIT �
 - [x] **招式重做**（P10 试点 + P11 收口）：`ARTS-DESIGN.md`
   - [x] P10 表现层 + 锤八招：`pose` 字段（12 种动作 · 起手时长 · 缓动）、刀光 3→11 形、逐招配色、四种新原语（抛掷往返 / 冲击波 / 冲锋 / 长条劈）、两个新音效、签名自动查重断言；锤 8 招按名字重写（arts.js 自检 89 → 111 条）
   - [x] P11 其余七件：56 招补齐四签名、19 形 / 20 式 / 逐招音效、八兵器连拍、贯甲刺 → `cleave`、跃棍 → `shockwave`；签名撞车欠账 7 → 0（arts.js 自检 111 → 131 条）
+- [x] **招式工作台**：`ART-WORKBENCH.md` —— 单文件 HTML 编辑 64 招的帧数 / 形状 / 动作 / 音效 / 配色 / PNG 序列帧，导出覆盖表一键试玩或写进仓库；白名单合并、原地改 `ARTS`、删表即回滚（新增工作台自检 31 条 + 覆盖层自检 29 条）
 - [ ] 洞内专属词缀（地宫掉落带标记，可交易 / 献祭）
 - [ ] 每层一个房间事件（陷阱宝箱 / 行脚商人 / 祭坛）
 - [ ] 第二章

@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>逍遥行 · 招式工作台</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0E1219;color:#E8DFC8;font:13px/1.6 "Microsoft YaHei",SimSun,monospace}
+header{display:flex;align-items:center;gap:6px;padding:9px 12px;background:#161C26;border-bottom:1px solid #3A352A;flex-wrap:wrap}
+h1{font-size:16px;font-weight:500;margin:0 10px 0 0;color:#F2D089;letter-spacing:2px}
+button,select,input{font:12px SimSun,monospace;background:#222A36;color:#E8DFC8;border:1px solid #4A5568;padding:4px 7px}
+button{cursor:pointer}
+button:hover{background:#2F6E6A;border-color:#5FA8A0}
+button.hot{background:#8A6520;border-color:#D9A441;color:#FFF3D4}
+.sep{width:1px;height:22px;background:#3A352A;margin:0 4px}
+.wrap{display:grid;grid-template-columns:205px minmax(360px,1fr) 285px;gap:9px;padding:9px;height:calc(100vh - 108px);min-height:570px}
+.pane{background:#161C26;border:1px solid #3A352A;overflow:auto;padding:8px}
+.pane h2{font-size:13px;font-weight:500;margin:2px 0 8px;color:#F2D089;letter-spacing:1px}
+.grp{font-size:11px;color:#9BD4CC;margin:9px 0 3px;letter-spacing:1px}
+.it{display:block;width:100%;text-align:left;padding:3px 7px;margin:1px 0;background:#1D2430;border:1px solid transparent;font-size:12px}
+.it:hover{background:#2A3546}
+.it.on{background:#2F6E6A;border-color:#5FA8A0;color:#FFF3D4}
+.it i{float:right;font-style:normal;color:#D9A441}
+.stage{display:flex;flex-direction:column;gap:8px}
+canvas{width:100%;max-height:400px;background:#12161F;border:1px solid #3A352A;image-rendering:pixelated}
+.ctrl{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ctrl .fr{margin-left:auto;font:12px monospace;color:#F2D089}
+.tl{background:#1D2430;border:1px solid #3A352A;padding:7px}
+.bar{position:relative;height:26px;background:#12161F;border:1px solid #4A5568;margin-bottom:7px;overflow:hidden}
+.seg{position:absolute;top:0;bottom:0;opacity:.85}
+.ptr{position:absolute;top:0;bottom:0;width:2px;background:#FFFFFF;z-index:3}
+.rows{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.rows label{font-size:10px;color:#9BD4CC;display:block;text-align:center}
+.rows input{width:100%;text-align:center;padding:2px}
+.row{display:flex;align-items:center;gap:6px;margin:5px 0}
+.row>span{width:74px;flex:0 0 auto;font-size:11px;color:#9BD4CC}
+.row input,.row select{flex:1;min-width:0}
+.sw{display:flex;gap:3px;flex-wrap:wrap;margin:4px 0 8px}
+.sw button{width:20px;height:20px;padding:0;border:1px solid #4A5568}
+.frames{display:flex;gap:3px;flex-wrap:wrap;max-height:92px;overflow:auto;margin:5px 0}
+.frames img{width:34px;height:34px;object-fit:contain;background:#0E1219;border:1px solid #3A352A}
+.note{font-size:11px;color:#8A8268;line-height:1.6}
+footer{padding:7px 12px;background:#161C26;border-top:1px solid #3A352A;font-size:11px;color:#8A8268;display:flex;gap:16px;flex-wrap:wrap}
+#status{color:#9BD4CC}
+</style>
+</head>
+<body>
+<header>
+  <h1>招式工作台</h1>
+  <button id="btnPlay" class="hot">播放</button>
+  <button id="btnStep">下一帧</button>
+  <button id="btnReset">回到第 0 帧</button>
+  <select id="selSpeed"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select>
+  <div class="sep"></div>
+  <button id="btnPng">导入 PNG 素材</button>
+  <input id="pngFile" type="file" accept="image/png,image/*" hidden>
+  <div class="sep"></div>
+  <button id="btnJson" class="hot">下载覆盖表 JSON</button>
+  <button id="btnData" class="hot">下载 art-overrides.data.js</button>
+  <button id="btnTry">写入试玩</button>
+  <button id="btnCopy">复制导入码</button>
+  <button id="btnImport">导入草稿 JSON</button>
+  <input id="jsonFile" type="file" accept=".json,application/json" hidden>
+  <button id="btnClear">清空草稿</button>
+</header>
+
+<div class="wrap">
+  <div class="pane" id="listPane">
+    <h2>64 招基线</h2>
+    <input id="search" placeholder="搜招式名 / id" style="width:100%">
+    <div id="list"></div>
+  </div>
+
+  <div class="pane stage">
+    <canvas id="cv" width="640" height="360"></canvas>
+    <div class="ctrl">
+      <span class="note">预览是示意画法，判定仍由游戏的 14 种原语负责</span>
+      <span class="fr" id="frameInfo">第 0 / 0 帧</span>
+    </div>
+    <div class="tl">
+      <div class="bar" id="bar"><div class="ptr" id="ptr"></div></div>
+      <div class="rows">
+        <label>总帧<input id="tl_total" type="number" min="6" max="120"></label>
+        <label>起手帧<input id="tl_windup" type="number" min="0" max="120"></label>
+        <label>命中帧<input id="tl_hit" type="number" min="0" max="120"></label>
+        <label>刀光起帧<input id="tl_fxStart" type="number" min="0" max="120"></label>
+        <label>刀光帧数<input id="tl_fxLen" type="number" min="1" max="120"></label>
+        <label>收招帧<input id="tl_recover" type="number" min="0" max="120"></label>
+      </div>
+      <div class="note" id="tlHint"></div>
+    </div>
+  </div>
+
+  <div class="pane" id="propPane">
+    <h2 id="propTitle">选一招开始</h2>
+    <div id="props"></div>
+  </div>
+</div>
+
+<footer>
+  <span id="status">就绪</span>
+  <span>三步：选招 → 调形状/帧数/素材 → 下载 JSON，在游戏「招式」页点「导入工作台覆盖表」</span>
+  <span>把 data.js 放进 dawn-s1/ 覆盖同名文件，再 node build.js 即永久生效</span>
+</footer>
+
+<script id="wbBase" type="application/json">{"version":1,"shapes":["point","overheadArc","shockwave","crack","cleave","boomerang","sideArc","chargeLine","plant","arc","ring","thrust","fan","cross","rain","sigil","trail","spiral","hook"],"poses":["swing","thrust","ring","cast","overhead","overheadBig","slam","slamLow","sideSwing","throw","plant","charge","lunge","flick","sweepLow","reverse","guard","channel","leap","spin"],"snds":["slash","qi","wu","dash","windup","thunder","thunder2","forge","quake","boomerang","levelup","bell","shield","boss","rare","hit","crit"],"fx":["melee","proj","spin","orbit","blink","bolt","dash","buff","zone","pull","boomerang","shockwave","charge","cleave"],"palette":[{"name":"ink1","hex":"#12161F"},{"name":"ink2","hex":"#2A3140"},{"name":"ink3","hex":"#4A5568"},{"name":"paper1","hex":"#8A8268"},{"name":"paper2","hex":"#C9BFA3"},{"name":"paper3","hex":"#E8DFC8"},{"name":"jade1","hex":"#2F6E6A"},{"name":"jade2","hex":"#5FA8A0"},{"name":"jade3","hex":"#9BD4CC"},{"name":"red1","hex":"#7A2420"},{"name":"red2","hex":"#C8453B"},{"name":"red3","hex":"#E8806F"},{"name":"gold1","hex":"#8A6520"},{"name":"gold2","hex":"#D9A441"},{"name":"gold3","hex":"#F2D089"},{"name":"pur1","hex":"#4A3A6B"},{"name":"pur2","hex":"#8A6FC4"},{"name":"pur3","hex":"#C0A8E0"},{"name":"black","hex":"#000000"},{"name":"white","hex":"#FFFFFF"}],"fams":["sword","blade","spear","staff","dual","hammer","mage","dart"],"famLabel":{"sword":"剑","blade":"刀","spear":"枪","staff":"棍","mage":"法杖","dual":"双刃","hammer":"锤","dart":"暗器"},"arts":{"sword_1":{"id":"sword_1","fam":"sword","name":"破锋式","desc":"一剑直取，无视三成防御。","slot":"dmg","fx":"melee","cd":4,"cost":4.8,"mul":6.6,"reach":40,"arc":1.2,"pose":{"mode":"lunge","a0":-2.45,"a1":-0.95,"dur":0.28,"ease":"out"},"shape":"thrust","color":["#E8DFC8","#C9BFA3"],"snd":"qi","hitSnd":"hit"},"sword_2":{"id":"sword_2","fam":"sword","name":"连环刺","desc":"三连突刺，一刺比一刺沉。","slot":"dmg","fx":"melee","cd":3,"cost":3.6,"mul":1.45,"reach":38,"arc":1,"pose":{"mode":"flick","a0":-1.95,"a1":-0.65,"dur":0.22,"ease":"out"},"shape":"trail","color":["#9BD4CC","#5FA8A0"],"snd":"slash","hitSnd":"crit"},"sword_3":{"id":"sword_3","fam":"sword","name":"剑气斩","desc":"一道剑气直贯，沿途三人俱伤。","slot":"aoe","fx":"proj","cd":6,"cost":7.2,"mul":7.2,"reach":44,"arc":1.6,"pose":{"mode":"swing","a0":-1.06,"a1":-0.25,"dur":0.3,"ease":"out"},"shape":"cleave","color":["#FFFFFF","#5FA8A0"],"snd":"wu","hitSnd":"forge"},"sword_4":{"id":"sword_4","fam":"sword","name":"剑雨","desc":"八道剑光自天落，各寻各的目标。","slot":"aoe","fx":"bolt","cd":10,"cost":12,"mul":1.4,"reach":44,"arc":1.6,"pose":{"mode":"channel","a0":-0.28,"a1":0.3,"dur":0.44,"ease":"in"},"shape":"rain","color":["#C0A8E0","#8A6FC4"],"snd":"thunder","hitSnd":"thunder2"},"sword_5":{"id":"sword_5","fam":"sword","name":"御剑突进","desc":"踏剑前冲六步，路径留伤，半息不伤。","slot":"move","fx":"dash","cd":8,"cost":9.6,"mul":3.6,"reach":44,"arc":1.6,"pose":{"mode":"charge","a0":0.1,"a1":0.1,"dur":0.26,"ease":"out"},"shape":"chargeLine","color":["#F2D089","#D9A441"],"snd":"dash","hitSnd":"boomerang"},"sword_6":{"id":"sword_6","fam":"sword","name":"定身剑","desc":"剑尖点穴，中者一息半动弹不得。","slot":"ctrl","fx":"melee","cd":12,"cost":14.4,"mul":5.4,"reach":40,"arc":1.2,"pose":{"mode":"guard","a0":0.6,"a1":1.1,"dur":0.32,"ease":"out"},"shape":"point","color":["#5FA8A0","#2F6E6A"],"snd":"bell","hitSnd":"shield"},"sword_7":{"id":"sword_7","fam":"sword","name":"剑心通明","desc":"敛神八息，会心与剑意俱锐。","slot":"buff","fx":"buff","cd":20,"cost":24,"mul":6,"reach":44,"arc":1.6,"pose":{"mode":"cast","a0":1.15,"a1":1.5,"dur":0.4,"ease":"in"},"shape":"sigil","color":["#D9A441","#8A6520"],"snd":"levelup","hitSnd":"bell"},"sword_8":{"id":"sword_8","fam":"sword","name":"万剑归宗","desc":"十二剑环绕六息，各自追敌，每把独立结算。","slot":"special","fx":"orbit","cd":30,"cost":36,"mul":1.9,"reach":44,"arc":1.6,"pose":{"mode":"overheadBig","a0":-0.95,"a1":0.4,"dur":0.62,"ease":"in"},"shape":"ring","color":["#E8806F","#C8453B"],"snd":"boss","hitSnd":"quake"},"blade_1":{"id":"blade_1","fam":"blade","name":"力劈","desc":"一刀劈落，把人震开一丈。","slot":"dmg","fx":"melee","cd":5,"cost":6,"mul":8,"reach":36,"arc":1.8,"pose":{"mode":"overhead","a0":-1.9,"a1":-0.3,"dur":0.34,"ease":"in"},"shape":"overheadArc","color":["#E8DFC8","#C9BFA3"],"snd":"windup","hitSnd":"forge"},"blade_2":{"id":"blade_2","fam":"blade","name":"血刃","desc":"割开一道口子，五息内持续流血。","slot":"dmg","fx":"melee","cd":4,"cost":4.8,"mul":4.4,"reach":36,"arc":2.4,"pose":{"mode":"swing","a0":-2.45,"a1":-0.85,"dur":0.26,"ease":"out"},"shape":"arc","color":["#C8453B","#7A2420"],"snd":"slash","hitSnd":"hit"},"blade_3":{"id":"blade_3","fam":"blade","name":"横扫千军","desc":"周身一匝横扫，近者皆退。","slot":"aoe","fx":"melee","cd":6,"cost":7.2,"mul":7.2,"reach":44,"arc":6.28,"pose":{"mode":"sideSwing","a0":-1.45,"a1":0.1,"dur":0.3,"ease":"out"},"shape":"ring","color":["#F2D089","#D9A441"],"snd":"wu","hitSnd":"quake"},"blade_4":{"id":"blade_4","fam":"blade","name":"旋风斩","desc":"旋身一息半，边走边斩，多段见血。","slot":"aoe","fx":"spin","cd":10,"cost":12,"mul":1.83,"reach":44,"arc":1.6,"pose":{"mode":"spin","a0":-0.56,"a1":0.8,"dur":0.36,"ease":"both"},"shape":"spiral","color":["#9BD4CC","#5FA8A0"],"snd":"boomerang","hitSnd":"crit"},"blade_5":{"id":"blade_5","fam":"blade","name":"疾风步","desc":"掠步前欺，下一击必取要害。","slot":"move","fx":"dash","cd":9,"cost":10.8,"mul":4.05,"reach":44,"arc":1.6,"pose":{"mode":"lunge","a0":0.05,"a1":0.93,"dur":0.24,"ease":"out"},"shape":"trail","color":["#FFFFFF","#C9BFA3"],"snd":"dash","hitSnd":"boomerang"},"blade_6":{"id":"blade_6","fam":"blade","name":"断筋","desc":"刀锋挑筋，三息内寸步难行。","slot":"ctrl","fx":"melee","cd":12,"cost":14.4,"mul":5.4,"reach":38,"arc":2,"pose":{"mode":"flick","a0":0.6,"a1":1.46,"dur":0.2,"ease":"out"},"shape":"hook","color":["#C0A8E0","#8A6FC4"],"snd":"qi","hitSnd":"shield"},"blade_7":{"id":"blade_7","fam":"blade","name":"狂怒","desc":"十息内刀势更狠，皮肉也更薄。","slot":"buff","fx":"buff","cd":24,"cost":28.8,"mul":6,"reach":44,"arc":1.6,"pose":{"mode":"guard","a0":1.23,"a1":1.7,"dur":0.44,"ease":"in"},"shape":"sigil","color":["#E8806F","#7A2420"],"snd":"boss","hitSnd":"levelup"},"blade_8":{"id":"blade_8","fam":"blade","name":"血战八方","desc":"八段环斩，每一段命中都回两分气血。","slot":"special","fx":"spin","cd":28,"cost":33.6,"mul":2.2,"reach":44,"arc":1.6,"pose":{"mode":"slamLow","a0":-0.95,"a1":0.4,"dur":0.42,"ease":"in"},"shape":"cross","color":["#D9A441","#C8453B"],"snd":"thunder2","hitSnd":"thunder"},"spear_1":{"id":"spear_1","fam":"spear","name":"贯甲刺","desc":"一枪贯穿，沿途所有敌手俱伤，无视四成防御。","slot":"dmg","fx":"cleave","cd":5,"cost":6,"mul":7.5,"reach":44,"arc":1.6,"pose":{"mode":"lunge","a0":-2.4,"a1":-0.9,"dur":0.3,"ease":"out"},"shape":"cleave","color":["#E8DFC8","#C9BFA3"],"snd":"qi","hitSnd":"forge"},"spear_2":{"id":"spear_2","fam":"spear","name":"枪阵","desc":"三刺连出，末一记把人挑开。","slot":"dmg","fx":"melee","cd":6,"cost":7.2,"mul":3.2,"reach":46,"arc":1,"pose":{"mode":"flick","a0":-1.95,"a1":-0.83,"dur":0.22,"ease":"out"},"shape":"thrust","color":["#9BD4CC","#5FA8A0"],"snd":"windup","hitSnd":"hit"},"spear_3":{"id":"spear_3","fam":"spear","name":"回马枪","desc":"反手向身后一记突刺，回身反打格外狠。","slot":"aoe","fx":"melee","cd":4,"cost":4.8,"mul":3.4,"reach":44,"arc":1.6,"pose":{"mode":"reverse","a0":-1.45,"a1":-0.35,"dur":0.26,"ease":"both"},"shape":"hook","color":["#F2D089","#D9A441"],"snd":"wu","hitSnd":"crit"},"spear_4":{"id":"spear_4","fam":"spear","name":"天狼啸月","desc":"枪尖画圆，九步之内尽在其下。","slot":"aoe","fx":"melee","cd":30,"cost":36,"mul":33,"reach":90,"arc":6.28,"pose":{"mode":"spin","a0":-0.45,"a1":0.7,"dur":0.5,"ease":"in"},"shape":"ring","color":["#FFFFFF","#F2D089"],"snd":"boss","hitSnd":"quake"},"spear_5":{"id":"spear_5","fam":"spear","name":"游龙步","desc":"侧身游走七步，全程不沾片叶。","slot":"move","fx":"dash","cd":10,"cost":12,"mul":4.5,"reach":44,"arc":1.6,"pose":{"mode":"sweepLow","a0":0.05,"a1":1,"dur":0.28,"ease":"out"},"shape":"trail","color":["#5FA8A0","#2F6E6A"],"snd":"dash","hitSnd":"boomerang"},"spear_6":{"id":"spear_6","fam":"spear","name":"定军","desc":"长枪插地，四息内方圆七步皆成泥沼。","slot":"ctrl","fx":"zone","cd":14,"cost":16.8,"mul":0.8,"reach":44,"arc":1.6,"pose":{"mode":"plant","a0":0.55,"a1":1.2,"dur":0.32,"ease":"in"},"shape":"sigil","color":["#C9BFA3","#8A8268"],"snd":"forge","hitSnd":"bell"},"spear_7":{"id":"spear_7","fam":"spear","name":"枪势","desc":"枪意铺开八息，够得更远、也穿得更透。","slot":"buff","fx":"buff","cd":18,"cost":21.6,"mul":6,"reach":44,"arc":1.6,"pose":{"mode":"guard","a0":1.1,"a1":1.6,"dur":0.4,"ease":"out"},"shape":"arc","color":["#D9A441","#8A6520"],"snd":"levelup","hitSnd":"shield"},"spear_8":{"id":"spear_8","fam":"spear","name":"挑飞","desc":"上挑掀飞，落地再受一记摔伤。","slot":"special","fx":"melee","cd":8,"cost":9.6,"mul":5.6,"reach":44,"arc":1.6,"pose":{"mode":"leap","a0":-0.86,"a1":0.2,"dur":0.34,"ease":"in"},"shape":"overheadArc","color":["#E8806F","#C8453B"],"snd":"slash","hitSnd":"thunder2"},"staff_1":{"id":"staff_1","fam":"staff","name":"扫棍","desc":"半圆横扫，冷却最短的棍法。","slot":"dmg","fx":"melee","cd":3,"cost":3.6,"mul":5.6,"reach":42,"arc":3.4,"pose":{"mode":"sweepLow","a0":-2.45,"a1":-0.75,"dur":0.24,"ease":"out"},"shape":"arc","color":["#C9BFA3","#8A8268"],"snd":"slash","hitSnd":"hit"},"staff_2":{"id":"staff_2","fam":"staff","name":"崩棍","desc":"棍尾一崩，只打一人，打得最远。","slot":"dmg","fx":"melee","cd":5,"cost":6,"mul":8,"reach":40,"arc":1.3,"pose":{"mode":"flick","a0":-1.95,"a1":-0.61,"dur":0.2,"ease":"out"},"shape":"point","color":["#9BD4CC","#5FA8A0"],"snd":"forge","hitSnd":"bell"},"staff_3":{"id":"staff_3","fam":"staff","name":"捅棍","desc":"一棍直捅，连人带影穿成串。","slot":"aoe","fx":"proj","cd":4,"cost":4.8,"mul":4.8,"reach":44,"arc":1.6,"pose":{"mode":"lunge","a0":-1.45,"a1":-0.15,"dur":0.28,"ease":"out"},"shape":"thrust","color":["#F2D089","#D9A441"],"snd":"qi","hitSnd":"shield"},"staff_4":{"id":"staff_4","fam":"staff","name":"跃棍","desc":"跃起砸地，落点正中尤其沉重。","slot":"aoe","fx":"shockwave","cd":9,"cost":10.8,"mul":8.2,"reach":44,"arc":1.6,"pose":{"mode":"leap","a0":-0.29,"a1":0.7,"dur":0.42,"ease":"in"},"shape":"shockwave","color":["#C8453B","#7A2420"],"snd":"windup","hitSnd":"quake"},"staff_5":{"id":"staff_5","fam":"staff","name":"疾风棍","desc":"棍影护身前冲，路上顺手砸开一条道。","slot":"move","fx":"dash","cd":8,"cost":9.6,"mul":3.6,"reach":44,"arc":1.6,"pose":{"mode":"charge","a0":0.1,"a1":0.1,"dur":0.26,"ease":"out"},"shape":"chargeLine","color":["#FFFFFF","#C9BFA3"],"snd":"dash","hitSnd":"crit"},"staff_6":{"id":"staff_6","fam":"staff","name":"缠棍","desc":"棍梢一卷，把八步内最近的敌手拽到面前。","slot":"ctrl","fx":"pull","cd":12,"cost":14.4,"mul":5.4,"reach":44,"arc":1.6,"pose":{"mode":"reverse","a0":0.6,"a1":1.2,"dur":0.3,"ease":"out"},"shape":"hook","color":["#C0A8E0","#8A6FC4"],"snd":"wu","hitSnd":"boomerang"},"staff_7":{"id":"staff_7","fam":"staff","name":"铁布衫","desc":"五息横练，挨打只剩一半疼。","slot":"buff","fx":"buff","cd":20,"cost":24,"mul":6,"reach":44,"arc":1.6,"pose":{"mode":"plant","a0":1.15,"a1":1.6,"dur":0.34,"ease":"in"},"shape":"sigil","color":["#D9A441","#8A6520"],"snd":"levelup","hitSnd":"forge"},"staff_8":{"id":"staff_8","fam":"staff","name":"舞棍","desc":"舞棍两息，格开并反弹所有飞来之物。","slot":"special","fx":"spin","cd":10,"cost":12,"mul":1.5,"reach":44,"arc":1.6,"pose":{"mode":"spin","a0":-0.95,"a1":0.4,"dur":0.36,"ease":"both"},"shape":"spiral","color":["#5FA8A0","#2F6E6A"],"snd":"boomerang","hitSnd":"wu"},"dual_1":{"id":"dual_1","fam":"dual","name":"双牙","desc":"极快两连，最短冷却。","slot":"dmg","fx":"melee","cd":2.5,"cost":3,"mul":2.5,"reach":32,"arc":1.8,"pose":{"mode":"flick","a0":-2.45,"a1":-1.05,"dur":0.2,"ease":"out"},"shape":"trail","color":["#E8DFC8","#C9BFA3"],"snd":"slash","hitSnd":"hit"},"dual_2":{"id":"dual_2","fam":"dual","name":"十字斩","desc":"两刀交叉，后一刀专取破绽。","slot":"dmg","fx":"melee","cd":5,"cost":6,"mul":4,"reach":34,"arc":2.2,"pose":{"mode":"sideSwing","a0":-1.95,"a1":-0.55,"dur":0.28,"ease":"out"},"shape":"cross","color":["#9BD4CC","#5FA8A0"],"snd":"wu","hitSnd":"crit"},"dual_3":{"id":"dual_3","fam":"dual","name":"乱舞","desc":"六段乱斩，刀刀换个方向。","slot":"aoe","fx":"melee","cd":10,"cost":12,"mul":2,"reach":56,"arc":6.28,"pose":{"mode":"spin","a0":-0.95,"a1":0.3,"dur":0.34,"ease":"both"},"shape":"spiral","color":["#E8806F","#C8453B"],"snd":"qi","hitSnd":"forge"},"dual_4":{"id":"dual_4","fam":"dual","name":"千刃","desc":"刀刃成风，三息内十步方圆无人能立。","slot":"aoe","fx":"zone","cd":30,"cost":36,"mul":3.3,"reach":44,"arc":1.6,"pose":{"mode":"channel","a0":-0.53,"a1":0.4,"dur":0.46,"ease":"in"},"shape":"sigil","color":["#F2D089","#D9A441"],"snd":"windup","hitSnd":"quake"},"dual_5":{"id":"dual_5","fam":"dual","name":"影袭","desc":"闪到敌手背后，紧接着那一刀更狠。","slot":"move","fx":"dash","cd":8,"cost":9.6,"mul":3.6,"reach":44,"arc":1.6,"pose":{"mode":"reverse","a0":0.05,"a1":0.9,"dur":0.26,"ease":"out"},"shape":"point","color":["#C0A8E0","#8A6FC4"],"snd":"dash","hitSnd":"boomerang"},"dual_6":{"id":"dual_6","fam":"dual","name":"割喉","desc":"贴身一记，几乎必取要害，中者气息滞涩。","slot":"ctrl","fx":"melee","cd":12,"cost":14.4,"mul":5.4,"reach":32,"arc":1,"pose":{"mode":"guard","a0":0.26,"a1":1.2,"dur":0.3,"ease":"out"},"shape":"hook","color":["#C8453B","#7A2420"],"snd":"bell","hitSnd":"shield"},"dual_7":{"id":"dual_7","fam":"dual","name":"杀意","desc":"八息杀意翻涌，会心更重、脚下更快。","slot":"buff","fx":"buff","cd":22,"cost":26.4,"mul":6,"reach":44,"arc":1.6,"pose":{"mode":"slamLow","a0":1.23,"a1":1.7,"dur":0.4,"ease":"in"},"shape":"ring","color":["#8A6FC4","#4A3A6B"],"snd":"boss","hitSnd":"levelup"},"dual_8":{"id":"dual_8","fam":"dual","name":"疾影","desc":"三次短距闪烁，每次穿过敌手都留下一刀。","slot":"special","fx":"blink","cd":9,"cost":10.8,"mul":3.5,"reach":44,"arc":1.6,"pose":{"mode":"leap","a0":-1.45,"a1":-0.17,"dur":0.24,"ease":"out"},"shape":"chargeLine","color":["#FFFFFF","#C9BFA3"],"snd":"boomerang","hitSnd":"thunder2"},"hammer_1":{"id":"hammer_1","fam":"hammer","name":"碎骨锤","desc":"一锤碎骨，四息内对方防御减四成。","slot":"dmg","fx":"melee","cd":6,"cost":7.2,"mul":8.4,"reach":34,"arc":0.55,"pose":{"mode":"overhead","a0":-1.9,"a1":0.45,"dur":0.34,"ease":"in"},"shape":"point","color":["#E8DFC8","#C9BFA3"],"snd":"slash","hitSnd":"forge"},"hammer_2":{"id":"hammer_2","fam":"hammer","name":"回旋锤","desc":"锤脱手而出，走一圈再回手里，去回各伤一次。","slot":"dmg","fx":"boomerang","cd":5,"cost":6,"mul":8,"reach":44,"arc":1.6,"pose":{"mode":"throw","a0":-1.2,"a1":0.9,"dur":0.22,"ease":"out"},"shape":"boomerang","color":["#F2D089","#D9A441"],"snd":"boomerang","hitSnd":"hit"},"hammer_3":{"id":"hammer_3","fam":"hammer","name":"震地","desc":"锤落地面，一圈震波往外推开，八步内一并震起。","slot":"aoe","fx":"shockwave","cd":8,"cost":9.6,"mul":9.6,"reach":44,"arc":1.6,"pose":{"mode":"slam","a0":-2.6,"a1":1,"dur":0.42,"ease":"in"},"shape":"shockwave","color":["#D9A441","#8A6520"],"snd":"windup","hitSnd":"quake"},"hammer_4":{"id":"hammer_4","fam":"hammer","name":"地裂","desc":"一道裂地向前铺开，四息内踩着就伤。","slot":"aoe","fx":"zone","cd":12,"cost":14.4,"mul":1.65,"reach":44,"arc":1.6,"pose":{"mode":"slamLow","a0":-1.5,"a1":0.8,"dur":0.3,"ease":"in"},"shape":"crack","color":["#C8453B","#7A2420"],"snd":"forge","hitSnd":"wu"},"hammer_5":{"id":"hammer_5","fam":"hammer","name":"冲锋锤","desc":"低头撞出去八步，撞上第一个就停。","slot":"move","fx":"charge","cd":9,"cost":10.8,"mul":4.05,"reach":44,"arc":1.6,"pose":{"mode":"charge","a0":0,"a1":0,"dur":0.26,"ease":"out"},"shape":"chargeLine","color":["#C9BFA3","#8A8268"],"snd":"dash","hitSnd":"crit"},"hammer_6":{"id":"hammer_6","fam":"hammer","name":"眩晕击","desc":"一记闷锤，两息不知东西。","slot":"ctrl","fx":"melee","cd":16,"cost":19.2,"mul":7.2,"reach":36,"arc":1,"pose":{"mode":"sideSwing","a0":-2.2,"a1":0.25,"dur":0.3,"ease":"in"},"shape":"sideArc","color":["#C0A8E0","#8A6FC4"],"snd":"wu","hitSnd":"shield"},"hammer_7":{"id":"hammer_7","fam":"hammer","name":"铁壁","desc":"锤插地上，八息罡气护体，近身来打的都要还三成。","slot":"buff","fx":"buff","cd":20,"cost":24,"mul":6,"reach":44,"arc":1.6,"pose":{"mode":"plant","a0":-0.9,"a1":0.1,"dur":0.28,"ease":"in"},"shape":"plant","color":["#9BD4CC","#5FA8A0"],"snd":"levelup","hitSnd":"bell"},"hammer_8":{"id":"hammer_8","fam":"hammer","name":"开天辟地","desc":"举锤过顶，一记纵向巨劈，前方一条直线尽数裂开。","slot":"special","fx":"cleave","cd":32,"cost":38.4,"mul":22.8,"reach":44,"arc":1.6,"pose":{"mode":"overheadBig","a0":-2.7,"a1":1.2,"dur":0.62,"ease":"in"},"shape":"cleave","color":["#FFFFFF","#F2D089"],"snd":"boss","hitSnd":"thunder2"},"mage_1":{"id":"mage_1","fam":"mage","name":"灵珠","desc":"一枚灵珠，两息一发。","slot":"dmg","fx":"proj","cd":2,"cost":2.4,"mul":4,"reach":44,"arc":1.6,"pose":{"mode":"cast","a0":-2.45,"a1":-1.6,"dur":0.22,"ease":"out"},"shape":"point","color":["#9BD4CC","#5FA8A0"],"snd":"qi","hitSnd":"hit"},"mage_2":{"id":"mage_2","fam":"mage","name":"三珠连爆","desc":"三珠分袭，触地各炸一小片。","slot":"dmg","fx":"proj","cd":5,"cost":6,"mul":2,"reach":44,"arc":1.6,"pose":{"mode":"channel","a0":-1.95,"a1":-0.95,"dur":0.3,"ease":"out"},"shape":"fan","color":["#F2D089","#D9A441"],"snd":"thunder","hitSnd":"quake"},"mage_3":{"id":"mage_3","fam":"mage","name":"火雨","desc":"一片火云落定，四息不熄，沾着就灼。","slot":"aoe","fx":"zone","cd":12,"cost":14.4,"mul":1.08,"reach":44,"arc":1.6,"pose":{"mode":"overhead","a0":-1.45,"a1":-0.45,"dur":0.42,"ease":"in"},"shape":"rain","color":["#E8806F","#C8453B"],"snd":"windup","hitSnd":"forge"},"mage_4":{"id":"mage_4","fam":"mage","name":"雷链","desc":"一道雷串三人，每跳弱两成。","slot":"aoe","fx":"bolt","cd":10,"cost":12,"mul":2.75,"reach":44,"arc":1.6,"pose":{"mode":"lunge","a0":-0.45,"a1":0.2,"dur":0.26,"ease":"out"},"shape":"trail","color":["#C0A8E0","#8A6FC4"],"snd":"bell","hitSnd":"thunder2"},"mage_5":{"id":"mage_5","fam":"mage","name":"瞬闪","desc":"身影一晃已在九步外，原地只留残影。","slot":"move","fx":"dash","cd":8,"cost":9.6,"mul":2.7,"reach":44,"arc":1.6,"pose":{"mode":"leap","a0":0.05,"a1":0.88,"dur":0.24,"ease":"out"},"shape":"sigil","color":["#FFFFFF","#5FA8A0"],"snd":"dash","hitSnd":"boomerang"},"mage_6":{"id":"mage_6","fam":"mage","name":"冰封","desc":"寒气凝住两息，冻着的时候更禁打。","slot":"ctrl","fx":"melee","cd":10,"cost":12,"mul":3.4,"reach":44,"arc":1.6,"pose":{"mode":"plant","a0":0.51,"a1":1.1,"dur":0.34,"ease":"in"},"shape":"ring","color":["#5FA8A0","#2F6E6A"],"snd":"wu","hitSnd":"shield"},"mage_7":{"id":"mage_7","fam":"mage","name":"灵护","desc":"灵光覆身十息，替你挡下四分之一气血的伤。","slot":"buff","fx":"buff","cd":18,"cost":21.6,"mul":6,"reach":44,"arc":1.6,"pose":{"mode":"guard","a0":1.15,"a1":1.6,"dur":0.4,"ease":"out"},"shape":"plant","color":["#D9A441","#8A6520"],"snd":"levelup","hitSnd":"bell"},"mage_8":{"id":"mage_8","fam":"mage","name":"天雷引","desc":"五道天雷随机落下，各算各的。","slot":"special","fx":"bolt","cd":30,"cost":36,"mul":4.6,"reach":44,"arc":1.6,"pose":{"mode":"overheadBig","a0":-0.95,"a1":0.3,"dur":0.62,"ease":"in"},"shape":"crack","color":["#E8DFC8","#F2D089"],"snd":"boss","hitSnd":"crit"},"dart_1":{"id":"dart_1","fam":"dart","name":"飞蝗","desc":"一镖出手，全武器最短冷却。","slot":"dmg","fx":"proj","cd":1.8,"cost":2.16,"mul":3.5,"reach":44,"arc":1.6,"pose":{"mode":"flick","a0":-2.45,"a1":-1.25,"dur":0.2,"ease":"out"},"shape":"thrust","color":["#E8DFC8","#C9BFA3"],"snd":"qi","hitSnd":"hit"},"dart_2":{"id":"dart_2","fam":"dart","name":"三叠浪","desc":"三镖几乎同路，全中一处才见威力。","slot":"dmg","fx":"proj","cd":4,"cost":4.8,"mul":1.6,"reach":44,"arc":1.6,"pose":{"mode":"lunge","a0":-1.95,"a1":-0.85,"dur":0.24,"ease":"out"},"shape":"trail","color":["#9BD4CC","#5FA8A0"],"snd":"slash","hitSnd":"crit"},"dart_3":{"id":"dart_3","fam":"dart","name":"满天花雨","desc":"十二枚扇面齐撒，近处密远处疏。","slot":"aoe","fx":"proj","cd":10,"cost":12,"mul":0.75,"reach":44,"arc":1.6,"pose":{"mode":"throw","a0":-0.54,"a1":0.1,"dur":0.28,"ease":"out"},"shape":"fan","color":["#F2D089","#D9A441"],"snd":"windup","hitSnd":"forge"},"dart_4":{"id":"dart_4","fam":"dart","name":"万箭穿心","desc":"周身二十四镖一齐泼出去，四面皆到。","slot":"aoe","fx":"proj","cd":30,"cost":36,"mul":1,"reach":44,"arc":1.6,"pose":{"mode":"spin","a0":-0.53,"a1":0.6,"dur":0.44,"ease":"in"},"shape":"ring","color":["#E8806F","#C8453B"],"snd":"boomerang","hitSnd":"quake"},"dart_5":{"id":"dart_5","fam":"dart","name":"缩地","desc":"向后一纵七步，追兵一时失了你的踪迹。","slot":"move","fx":"dash","cd":12,"cost":14.4,"mul":4.05,"reach":44,"arc":1.6,"pose":{"mode":"reverse","a0":0.05,"a1":0.8,"dur":0.26,"ease":"out"},"shape":"sigil","color":["#C0A8E0","#8A6FC4"],"snd":"dash","hitSnd":"shield"},"dart_6":{"id":"dart_6","fam":"dart","name":"铁蒺藜","desc":"脚下撒五枚蒺藜，踩中定住一息。","slot":"ctrl","fx":"zone","cd":8,"cost":9.6,"mul":0.54,"reach":44,"arc":1.6,"pose":{"mode":"sweepLow","a0":0.6,"a1":1.2,"dur":0.32,"ease":"out"},"shape":"plant","color":["#C9BFA3","#8A8268"],"snd":"forge","hitSnd":"bell"},"dart_7":{"id":"dart_7","fam":"dart","name":"淬毒","desc":"八息内出手皆带毒，刀镖拳脚一视同仁。","slot":"buff","fx":"buff","cd":20,"cost":24,"mul":6,"reach":44,"arc":1.6,"pose":{"mode":"channel","a0":1.15,"a1":1.7,"dur":0.4,"ease":"in"},"shape":"cross","color":["#5FA8A0","#2F6E6A"],"snd":"levelup","hitSnd":"rare"},"dart_8":{"id":"dart_8","fam":"dart","name":"毒镖","desc":"淬毒六息；中毒者倒下时毒气四散，沾上的人一起中毒。","slot":"special","fx":"proj","cd":5,"cost":6,"mul":4.2,"reach":44,"arc":1.6,"pose":{"mode":"guard","a0":-1.45,"a1":-0.6,"dur":0.3,"ease":"out"},"shape":"point","color":["#C8453B","#7A2420"],"snd":"rare","hitSnd":"wu"}}}</script>
+<script>
+(function () {
+  'use strict';
+  var BASE = JSON.parse(document.getElementById('wbBase').textContent || '{}');
+  var ARTS = BASE.arts || {};
+  var DRAFT_KEY = 'xy_art_workbench_draft_v1';
+  var OVERRIDE_KEY = 'xy_art_overrides_v1';
+  var FPS = 30;
+  var draft = {};
+  var frameImgs = {};
+  var curId = null, playing = false, frame = 0, acc = 0, lastT = 0, speed = 1;
+
+  var $ = function (id) { return document.getElementById(id); };
+  function status(s) { $('status').textContent = s; }
+
+  function loadDraft() {
+    try { var j = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}'); return j && typeof j === 'object' ? j : {}; }
+    catch (e) { return {}; }
+  }
+  function saveDraft() {
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); }
+    catch (e) { status('草稿太大存不进浏览器（多半是 PNG 素材），请及时导出 JSON'); }
+  }
+  draft = loadDraft();
+
+  function defaultTimeline(b) {
+    var total = Math.max(6, Math.round((b.pose.dur || 0.3) * FPS));
+    return { fps: FPS, total: total, windup: Math.round(total * 0.25),
+      hit: Math.round(total * 0.35), fxStart: Math.round(total * 0.30),
+      fxLen: Math.max(3, Math.round(total * 0.3)), recover: Math.round(total * 0.35) };
+  }
+  function cur() {
+    if (!curId) return null;
+    var b = ARTS[curId], d = draft[curId] || {};
+    var o = {};
+    for (var k in b) o[k] = b[k];
+    for (var k2 in d) if (k2 !== 'pose' && k2 !== 'timeline') o[k2] = d[k2];
+    o.pose = Object.assign({}, b.pose, d.pose || {});
+    o.timeline = Object.assign(defaultTimeline(b), d.timeline || {});
+    o.color = d.color || b.color;
+    return o;
+  }
+  function edit() {
+    if (!draft[curId]) draft[curId] = {};
+    return draft[curId];
+  }
+  function setField(k, v) { edit()[k] = v; saveDraft(); renderList(); renderProps(); }
+  function setPose(k, v) { var d = edit(); if (!d.pose) d.pose = {}; d.pose[k] = v; saveDraft(); renderList(); }
+  function setTl(k, v) {
+    var d = edit(); if (!d.timeline) d.timeline = {};
+    d.timeline[k] = v; saveDraft(); renderList(); renderTimeline();
+  }
+  function setFrameImgs(id, frames) {
+    frameImgs[id] = (frames || []).map(function (s) { var im = new Image(); im.src = s; return im; });
+  }
+  Object.keys(draft).forEach(function (id) { if (draft[id].frames) setFrameImgs(id, draft[id].frames); });
+
+  // ---------- 列表 ----------
+  function renderList() {
+    var q = ($('search').value || '').trim().toLowerCase();
+    var html = '';
+    (BASE.fams || []).forEach(function (fam) {
+      var ids = Object.keys(ARTS).filter(function (id) { return ARTS[id].fam === fam; });
+      var shown = ids.filter(function (id) {
+        var a = ARTS[id];
+        return !q || a.name.toLowerCase().indexOf(q) >= 0 || id.indexOf(q) >= 0;
+      });
+      if (!shown.length) return;
+      html += '<div class="grp">' + (BASE.famLabel[fam] || fam) + '</div>';
+      shown.forEach(function (id) {
+        html += '<button class="it' + (id === curId ? ' on' : '') + '" data-id="' + id + '">' +
+          ARTS[id].name + (draft[id] ? '<i>已改</i>' : '') + '</button>';
+      });
+    });
+    $('list').innerHTML = html;
+    Array.prototype.forEach.call($('list').querySelectorAll('.it'), function (b) {
+      b.onclick = function () { curId = b.dataset.id; frame = 0; renderList(); renderProps(); renderTimeline(); };
+    });
+  }
+
+  // ---------- 属性面板 ----------
+  function opts(arr, v) {
+    return arr.map(function (x) { return '<option value="' + x + '"' + (x === v ? ' selected' : '') + '>' + x + '</option>'; }).join('');
+  }
+  function renderProps() {
+    var a = cur();
+    if (!a) { $('props').innerHTML = '<div class="note">左边选一招。</div>'; return; }
+    $('propTitle').textContent = a.name + ' · ' + a.id;
+    var pal = (BASE.palette || []).map(function (c) {
+      return '<button data-hex="' + c.hex + '" data-idx="0" style="background:' + c.hex + '" title="' + c.name + '"></button>' +
+        '<button data-hex="' + c.hex + '" data-idx="1" style="background:' + c.hex + ';outline:1px solid ' + c.hex + '" title="' + c.name + '（副色）"></button>';
+    }).join('');
+    var fr = a.frames || [];
+    var thumbs = fr.slice(0, 24).map(function (s) { return '<img src="' + s + '">'; }).join('');
+    $('props').innerHTML =
+      '<div class="grp">四条表现签名</div>' +
+      '<div class="row"><span>刀光形状</span><select id="p_shape">' + opts(BASE.shapes || [], a.shape) + '</select></div>' +
+      '<div class="row"><span>身体动作</span><select id="p_poseMode">' + opts(BASE.poses || [], a.pose.mode) + '</select></div>' +
+      '<div class="row"><span>起手音</span><select id="p_snd">' + opts(BASE.snds || [], a.snd) + '</select></div>' +
+      '<div class="row"><span>命中音</span><select id="p_hitSnd">' + opts(BASE.snds || [], a.hitSnd) + '</select></div>' +
+      '<div class="row"><span>主色</span><input id="p_c0" type="color" value="' + a.color[0] + '"></div>' +
+      '<div class="row"><span>副色</span><input id="p_c1" type="color" value="' + (a.color[1] || a.color[0]) + '"></div>' +
+      '<div class="sw" id="pal">' + pal + '</div>' +
+      '<div class="grp">动作曲线</div>' +
+      '<div class="row"><span>起手 a0</span><input id="p_a0" type="number" step="0.05" value="' + a.pose.a0 + '"></div>' +
+      '<div class="row"><span>收招 a1</span><input id="p_a1" type="number" step="0.05" value="' + a.pose.a1 + '"></div>' +
+      '<div class="grp">数值（判定沿用原语 ' + a.fx + '）</div>' +
+      '<div class="row"><span>倍率 mul</span><input id="p_mul" type="number" step="0.1" value="' + a.mul + '"></div>' +
+      '<div class="row"><span>冷却 cd</span><input id="p_cd" type="number" step="0.5" value="' + a.cd + '"></div>' +
+      '<div class="row"><span>真气 cost</span><input id="p_cost" type="number" step="0.1" value="' + a.cost + '"></div>' +
+      '<div class="row"><span>距离 reach</span><input id="p_reach" type="number" step="1" value="' + a.reach + '"></div>' +
+      '<div class="grp">自定义 PNG 序列帧 · ' + fr.length + ' 帧</div>' +
+      '<div class="row"><span>切片列/行</span><input id="p_cols" type="number" min="1" max="16" value="4" style="max-width:52px">' +
+      '<input id="p_rows" type="number" min="1" max="16" value="1" style="max-width:52px">' +
+      '<button id="p_reslice">重切</button><button id="p_delFrames">清除</button></div>' +
+      '<div class="row"><span>缩放</span><input id="p_scale" type="number" step="0.1" min="0.1" value="' + (a.frameScale || 1) + '">' +
+      '<label style="font-size:11px;color:#9BD4CC"><input id="p_rot" type="checkbox" style="flex:0 0 auto"' +
+      (a.frameRotate ? ' checked' : '') + '> 随刀光旋转</label></div>' +
+      '<div class="frames">' + thumbs + '</div>' +
+      '<div class="note">导入一张 PNG 序列图，按列×行切成帧；命中帧之后按刀光帧数依次播放。' +
+      '透明背景会自动保留。帧会随覆盖表一起导出（文件较大时优先用 JSON 文件，别用剪贴板）。</div>';
+    bindProps();
+  }
+  function bindProps() {
+    var map = {
+      p_shape: ['shape', 's'], p_poseMode: ['pose.mode', 's'], p_snd: ['snd', 's'], p_hitSnd: ['hitSnd', 's'],
+      p_c0: ['color.0', 's'], p_c1: ['color.1', 's'],
+      p_a0: ['pose.a0', 'n'], p_a1: ['pose.a1', 'n'],
+      p_mul: ['mul', 'n'], p_cd: ['cd', 'n'], p_cost: ['cost', 'n'], p_reach: ['reach', 'n'],
+      p_scale: ['frameScale', 'n']
+    };
+    Object.keys(map).forEach(function (id) {
+      var el = $(id); if (!el) return;
+      el.onchange = function () {
+        var path = map[id][0], v = map[id][1] === 'n' ? Number(el.value) : el.value;
+        if (path.indexOf('pose.') === 0) setPose(path.slice(5), v);
+        else if (path.indexOf('color.') === 0) {
+          var a = cur(), c = a.color.slice(); c[Number(path.slice(6))] = v; setField('color', c);
+        } else setField(path, v);
+      };
+    });
+    var rot = $('p_rot'); if (rot) rot.onchange = function () { setField('frameRotate', rot.checked); };
+    Array.prototype.forEach.call($('pal').querySelectorAll('button'), function (b) {
+      b.onclick = function () {
+        var a = cur(), c = a.color.slice(); c[Number(b.dataset.idx)] = b.dataset.hex;
+        setField('color', c);
+      };
+    });
+    var del = $('p_delFrames'); if (del) del.onclick = function () {
+      var d = edit(); delete d.frames; delete d.frameScale; delete d.frameRotate;
+      delete frameImgs[curId]; saveDraft(); renderList(); renderProps(); status('已清除自定义帧');
+    };
+    var re = $('p_reslice'); if (re) re.onclick = function () { if (lastPng) slicePNG(lastPng); else status('先导入一张 PNG'); };
+  }
+
+  // ---------- PNG 切片 ----------
+  var lastPng = null;
+  function slicePNG(dataUrl) {
+    var img = new Image();
+    img.onload = function () {
+      var cols = Math.max(1, Number(($('p_cols') || {}).value || 4) || 4);
+      var rows = Math.max(1, Number(($('p_rows') || {}).value || 1) || 1);
+      var w = img.width / cols, h = img.height / rows, frames = [];
+      for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) {
+        var cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(w)); cv.height = Math.max(1, Math.round(h));
+        cv.getContext('2d').drawImage(img, c * w, r * h, w, h, 0, 0, cv.width, cv.height);
+        frames.push(cv.toDataURL('image/png'));
+      }
+      setField('frames', frames);
+      setFrameImgs(curId, frames);
+      renderProps();
+      status('已切成 ' + frames.length + ' 帧（' + cv.width + '×' + cv.height + '）');
+    };
+    img.onerror = function () { status('这张图读不出来，换一张 PNG 试试'); };
+    img.src = dataUrl;
+  }
+  $('btnPng').onclick = function () { $('pngFile').click(); };
+  $('pngFile').onchange = function () {
+    var f = $('pngFile').files && $('pngFile').files[0]; if (!f) return;
+    var r = new FileReader();
+    r.onload = function () { lastPng = String(r.result); slicePNG(lastPng); };
+    r.readAsDataURL(f);
+  };
+
+  // ---------- 时间轴 ----------
+  var TL_KEYS = ['total', 'windup', 'hit', 'fxStart', 'fxLen', 'recover'];
+  var SEG = [
+    { k: 'windup', c: '#2F6E6A', label: '起手' },
+    { k: 'hit', c: '#C8453B', label: '命中' },
+    { k: 'fxLen', c: '#D9A441', label: '刀光' },
+    { k: 'recover', c: '#4A3A6B', label: '收招' }
+  ];
+  function renderTimeline() {
+    var a = cur(); if (!a) return;
+    var t = a.timeline, total = Math.max(1, t.total);
+    var bar = $('bar');
+    bar.innerHTML = '<div class="ptr" id="ptr"></div>';
+    var segs = [
+      { s: 0, n: t.windup, c: '#2F6E6A' },
+      { s: t.windup, n: Math.max(0, t.hit - t.windup), c: '#C8453B' },
+      { s: t.fxStart, n: t.fxLen, c: '#D9A441' },
+      { s: t.hit + t.fxLen, n: Math.max(0, total - t.hit - t.fxLen), c: '#4A3A6B' }
+    ];
+    segs.forEach(function (g) {
+      var d = document.createElement('div');
+      d.className = 'seg';
+      d.style.left = (g.s / total * 100) + '%';
+      d.style.width = (g.n / total * 100) + '%';
+      d.style.background = g.c;
+      bar.appendChild(d);
+    });
+    TL_KEYS.forEach(function (k) { var el = $('tl_' + k); if (el) el.value = t[k]; });
+    $('tlHint').textContent = '30fps · 全长 ' + (total / FPS).toFixed(2) + ' 秒 · 起手 ' +
+      (t.windup / FPS).toFixed(2) + 's · 刀光第 ' + t.fxStart + ' 帧起持续 ' + t.fxLen + ' 帧 · ' +
+      '判定与命中音落在第 ' + t.hit + ' 帧';
+    updatePointer();
+  }
+  function updatePointer() {
+    var a = cur(); if (!a) return;
+    var t = a.timeline, total = Math.max(1, t.total);
+    var p = $('ptr'); if (p) p.style.left = Math.min(100, frame / total * 100) + '%';
+    $('frameInfo').textContent = '第 ' + frame + ' / ' + t.total + ' 帧 · ' +
+      (frame < t.windup ? '起手' : frame < t.hit ? '发力' :
+        frame <= t.fxStart + t.fxLen ? '刀光' : '收招');
+  }
+  TL_KEYS.forEach(function (k) {
+    var el = $('tl_' + k);
+    el.onchange = function () {
+      var v = Math.max(k === 'fxLen' ? 1 : 0, Math.round(Number(el.value) || 0));
+      setTl(k, Math.min(120, v));
+    };
+  });
+
+  // ---------- 预览画布 ----------
+  var cv = $('cv'), g = cv.getContext('2d');
+  function ease(p, mode) {
+    if (mode === 'in') return p * p;
+    if (mode === 'inOut') return p * p * (3 - 2 * p);
+    return 1 - Math.pow(1 - p, 2);
+  }
+  function weaponAng(pose, e) {
+    var sweep = pose.a0 + (pose.a1 - pose.a0) * e;
+    switch (pose.mode) {
+      case 'ring': return -Math.PI * 1.1 + e * Math.PI * 2.2;
+      case 'thrust': return 0;
+      case 'cast': return -0.62 + e * 0.42;
+      case 'charge': return pose.a0;
+      case 'reverse': return sweep + Math.PI * 0.55;
+      case 'spin': return sweep + e * Math.PI;
+      default: return sweep;
+    }
+  }
+  function drawShape(x, y, ang, reach, col, alpha, shape) {
+    var R = Math.min(96, Math.max(24, reach * 1.1));
+    g.save(); g.globalAlpha = Math.max(0, Math.min(1, alpha));
+    g.strokeStyle = col[0]; g.fillStyle = col[1] || col[0]; g.lineWidth = 3; g.lineCap = 'round';
+    function line(a, len, w) {
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+      g.lineWidth = w || 3; g.stroke();
+    }
+    function ring(r) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); }
+    function arc(a0, a1, r) { g.beginPath(); g.arc(x, y, r, a0, a1); g.stroke(); }
+    function dot(dx, dy, r) { g.beginPath(); g.arc(x + dx, y + dy, r, 0, Math.PI * 2); g.fill(); }
+    switch (shape) {
+      case 'point': dot(Math.cos(ang) * R, Math.sin(ang) * R, 8); for (var i = 0; i < 4; i++) line(ang + (i - 1.5) * 0.4, 16, 1); break;
+      case 'overheadArc': line(Math.PI / 2, 34, 3); arc(ang - 0.6, ang + 0.6, R); break;
+      case 'shockwave': ring(R * 0.7); ring(R * 0.45); for (var j = 0; j < 8; j++) line(j / 8 * Math.PI * 2, R * 0.8, 1); break;
+      case 'crack': for (var c = 0; c < 4; c++) dot(Math.cos(ang) * R * (c + 1) / 4, Math.sin(ang) * R * (c + 1) / 4, 4 - c); break;
+      case 'cleave': line(ang, R * 1.25, 5); line(ang, R, 2); break;
+      case 'boomerang': arc(ang - 1.0, ang + 1.0, R * 0.8); line(ang + 1.0, R * 0.5, 3); break;
+      case 'sideArc': arc(ang - 1.3, ang + 0.2, R); break;
+      case 'chargeLine': line(ang, R * 1.4, 3); line(ang + 0.25, R * 1.1, 1); line(ang - 0.25, R * 1.1, 1); break;
+      case 'plant': line(Math.PI / 2, 30, 4); dot(0, 0, 5); break;
+      case 'arc': arc(ang - 0.8, ang + 0.8, R); break;
+      case 'ring': ring(R); break;
+      case 'thrust': line(ang, R * 1.2, 4); break;
+      case 'fan': for (var f = -2; f <= 2; f++) line(ang + f * 0.22, R, 2); break;
+      case 'cross': line(ang - 0.6, R, 3); line(ang + 0.6, R, 3); break;
+      case 'rain': for (var d = 0; d < 6; d++) { var px = (d - 2.5) * 18; g.beginPath(); g.moveTo(x + px, y - 50); g.lineTo(x + px, y - 18); g.stroke(); } break;
+      case 'sigil': ring(R * 0.7); ring(R * 0.4); for (var s = 0; s < 6; s++) line(s / 6 * Math.PI * 2, R * 0.6, 1); break;
+      case 'trail': for (var t = 1; t <= 4; t++) line(ang + (t % 2 ? 0.2 : -0.2), R * t / 4, 2); break;
+      case 'spiral': arc(ang - 1.2, ang + 2.6, R); ring(R * 0.45); break;
+      case 'hook': line(ang, R, 3); line(ang + 1.95, R * 0.45, 3); break;
+      default: arc(ang - 0.8, ang + 0.8, R);
+    }
+    g.restore();
+  }
+  function draw() {
+    var W = cv.width, H = cv.height;
+    g.fillStyle = '#12161F'; g.fillRect(0, 0, W, H);
+    g.strokeStyle = '#222A36'; g.lineWidth = 1;
+    for (var xx = 0; xx < W; xx += 32) { g.beginPath(); g.moveTo(xx, 0); g.lineTo(xx, H); g.stroke(); }
+    for (var yy = 0; yy < H; yy += 32) { g.beginPath(); g.moveTo(0, yy); g.lineTo(W, yy); g.stroke(); }
+    g.strokeStyle = '#3A352A'; g.beginPath(); g.moveTo(0, 250); g.lineTo(W, 250); g.stroke();
+    var a = cur();
+    if (!a) { g.fillStyle = '#8A8268'; g.font = '14px SimSun'; g.fillText('左边选一招', 24, 40); return; }
+    var t = a.timeline, total = Math.max(1, t.total);
+    var p = Math.min(1, frame / total), e = ease(p, a.pose.ease);
+    var cx = 260, cy = 220, ang = weaponAng(a.pose, e);
+    // 角色剪影
+    g.fillStyle = '#4A5568'; g.fillRect(cx - 7, cy - 34, 14, 30);
+    g.fillStyle = '#C9BFA3'; g.fillRect(cx - 6, cy - 50, 12, 12);
+    g.fillStyle = '#2A3140'; g.fillRect(cx - 9, cy - 4, 7, 14); g.fillRect(cx + 2, cy - 4, 7, 14);
+    // 武器
+    var hx = cx, hy = cy - 24, len = 46;
+    g.strokeStyle = a.color[0]; g.lineWidth = 4; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(hx, hy); g.lineTo(hx + Math.cos(ang) * len, hy + Math.sin(ang) * len); g.stroke();
+    g.fillStyle = a.color[1] || a.color[0];
+    g.fillRect(hx + Math.cos(ang) * len - 3, hy + Math.sin(ang) * len - 3, 6, 6);
+    // 刀光
+    if (frame >= t.fxStart && frame <= t.fxStart + t.fxLen) {
+      var k = (frame - t.fxStart) / Math.max(1, t.fxLen);
+      drawShape(hx + Math.cos(ang) * 22, hy + Math.sin(ang) * 22, ang, a.reach, a.color, 1 - k * 0.75, a.shape);
+      var ims = frameImgs[a.id] || [];
+      if (ims.length) {
+        var idx = Math.min(ims.length - 1, Math.floor(k * ims.length));
+        var im = ims[idx];
+        if (im && im.complete && im.naturalWidth) {
+          var sc = a.frameScale || 1, w = im.naturalWidth * sc, h = im.naturalHeight * sc;
+          g.save(); g.globalAlpha = Math.min(1, (1 - k) * 1.4);
+          g.translate(hx + Math.cos(ang) * 34, hy + Math.sin(ang) * 34);
+          if (a.frameRotate) g.rotate(ang);
+          g.drawImage(im, -w / 2, -h / 2, w, h); g.restore();
+        }
+      }
+    }
+    // 命中帧
+    if (frame === t.hit) {
+      g.strokeStyle = '#C8453B'; g.lineWidth = 2;
+      g.beginPath(); g.arc(hx + Math.cos(ang) * 60, hy + Math.sin(ang) * 60, 26, 0, Math.PI * 2); g.stroke();
+    }
+    g.fillStyle = '#E8DFC8'; g.font = '13px SimSun';
+    g.fillText(a.name + ' · ' + a.fam + ' · ' + a.fx, 16, 26);
+    g.fillStyle = '#9BD4CC'; g.font = '11px monospace';
+    g.fillText(a.shape + ' / ' + a.pose.mode + ' / ' + a.snd + '→' + a.hitSnd, 16, 44);
+    g.fillStyle = '#8A8268';
+    g.fillText('第 ' + frame + ' 帧  ' + (frame < t.windup ? '起手' : frame < t.hit ? '发力' : frame <= t.fxStart + t.fxLen ? '刀光' : '收招'), 16, H - 16);
+  }
+  function loop(ts) {
+    if (playing) {
+      if (!lastT) lastT = ts;
+      acc += (ts - lastT) / 1000 * FPS * speed;
+      lastT = ts;
+      if (acc >= 1) {
+        var step = Math.floor(acc); acc -= step; frame += step;
+        var total = cur() ? cur().timeline.total : 30;
+        if (frame > total) frame = 0;
+        updatePointer();
+      }
+    } else lastT = 0;
+    draw(); requestAnimationFrame(loop);
+  }
+  $('btnPlay').onclick = function () { playing = !playing; $('btnPlay').textContent = playing ? '暂停' : '播放'; };
+  $('btnStep').onclick = function () { frame++; var t = cur() ? cur().timeline.total : 30; if (frame > t) frame = 0; updatePointer(); };
+  $('btnReset').onclick = function () { frame = 0; updatePointer(); };
+  $('selSpeed').onchange = function () { speed = Number(this.value) || 1; };
+  $('search').oninput = renderList;
+
+  // ---------- 导出 ----------
+  function buildPack() {
+    var arts = {};
+    Object.keys(draft).forEach(function (id) {
+      var b = ARTS[id]; if (!b) return;
+      var a = curFor(id), o = {};
+      ['shape', 'snd', 'hitSnd', 'mul', 'cd', 'cost', 'reach', 'arc', 'name', 'desc'].forEach(function (k) {
+        if (a[k] !== b[k]) o[k] = a[k];
+      });
+      if (JSON.stringify(a.color) !== JSON.stringify(b.color)) o.color = a.color;
+      var pose = Object.assign({}, a.pose, { dur: a.timeline.total / a.timeline.fps });
+      if (JSON.stringify(pose) !== JSON.stringify(b.pose)) o.pose = pose;
+      o.timeline = a.timeline;
+      o.fxDelay = a.timeline.fxStart / a.timeline.fps;
+      o.fxLife = a.timeline.fxLen / a.timeline.fps;
+      if (a.frames && a.frames.length) {
+        o.frames = a.frames; o.frameScale = a.frameScale || 1; o.frameRotate = !!a.frameRotate;
+      }
+      arts[id] = o;
+    });
+    return { version: 1, arts: arts };
+  }
+  function curFor(id) {
+    var b = ARTS[id], d = draft[id] || {}, o = {};
+    for (var k in b) o[k] = b[k];
+    for (var k2 in d) if (k2 !== 'pose' && k2 !== 'timeline') o[k2] = d[k2];
+    o.pose = Object.assign({}, b.pose, d.pose || {});
+    o.timeline = Object.assign(defaultTimeline(b), d.timeline || {});
+    o.color = d.color || b.color;
+    return o;
+  }
+  // 把导出的覆盖表读回草稿：每招只留工作台认得的字段，结构字段（id/fam/slot）丢掉。
+  // 这样「下载 JSON → 换台机器继续改 → 再导出」是闭环的。
+  function importPack(txt) {
+    var j = typeof txt === 'string' ? JSON.parse(txt) : txt;
+    var src = (j && j.arts) || {};
+    Object.keys(src).forEach(function (id) {
+      if (!ARTS[id]) return;
+      var row = src[id], d = { timeline: row.timeline };
+      ['shape', 'snd', 'hitSnd', 'mul', 'cd', 'cost', 'reach', 'arc', 'color', 'pose', 'frames', 'frameScale', 'frameRotate'].forEach(function (k) {
+        if (row[k] !== undefined && k !== 'timeline') d[k] = row[k];
+      });
+      draft[id] = d;
+      if (d.frames) setFrameImgs(id, d.frames);
+    });
+    saveDraft(); renderList(); renderProps(); renderTimeline();
+    return Object.keys(src).length;
+  }
+  function packText() { return JSON.stringify(buildPack(), null, 2); }
+  function dataText() {
+    return '// 由招式工作台导出 · 覆盖 dawn-s1/art-overrides.data.js 后执行 node build.js\n' +
+      'window.__ART_OVERRIDES_FILE__ = ' + JSON.stringify(buildPack()) + ';\n';
+  }
+  function download(name, text) {
+    var b = new Blob([text], { type: 'application/octet-stream' });
+    var u = URL.createObjectURL(b), a = document.createElement('a');
+    a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(u); }, 1000);
+  }
+  $('btnJson').onclick = function () {
+    var n = Object.keys(buildPack().arts).length;
+    download('art-overrides.json', packText());
+    status('已导出 ' + n + ' 招 → 在游戏「招式」页点「导入工作台覆盖表」选这个文件');
+  };
+  $('btnData').onclick = function () {
+    download('art-overrides.data.js', dataText());
+    status('已导出 data.js → 放进 dawn-s1/ 覆盖同名文件，再 node build.js 即永久生效');
+  };
+  $('btnTry').onclick = function () {
+    try {
+      localStorage.setItem(OVERRIDE_KEY, packText());
+      status('已写入试玩覆盖：若游戏与工作台同一 http 源，刷新游戏页即生效；file:// 下请用 JSON 导入');
+    } catch (e) { status('写不进 localStorage：' + e.message + '，请用 JSON 导入'); }
+  };
+  $('btnCopy').onclick = function () {
+    var txt = packText();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function () { status('导入码已复制（' + txt.length + ' 字符）'); },
+        function () { status('复制被浏览器拦了，请改用下载 JSON'); });
+    } else {
+      var ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta);
+      ta.select(); try { document.execCommand('copy'); status('导入码已复制'); } catch (e) { status('复制失败，请下载 JSON'); }
+      ta.remove();
+    }
+  };
+  $('btnImport').onclick = function () { $('jsonFile').click(); };
+  $('jsonFile').onchange = function () {
+    var f = this.files && this.files[0];
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      try {
+        var n = importPack(String(r.result));
+        status('已导入 ' + n + ' 招草稿，可以继续改了');
+        $('jsonFile').value = '';
+      } catch (e) { status('草稿格式不对：' + e.message); }
+    };
+    r.readAsText(f);
+  };
+  // 原地清空：window.__wb.draft 是同一个对象引用，重新赋值会让自检拿到旧快照。
+  function clearDraft() {
+    Object.keys(draft).forEach(function (k) { delete draft[k]; });
+    frameImgs = {};
+    try { localStorage.removeItem(DRAFT_KEY); } catch (e) { }
+    renderList(); renderProps(); renderTimeline();
+  }
+  $('btnClear').onclick = function () {
+    if (!confirm('清空所有草稿？已导出的文件不受影响。')) return;
+    clearDraft(); status('草稿已清空');
+  };
+
+  // ---------- 启动 ----------
+  var ids = Object.keys(ARTS);
+  if (!ids.length) {
+    status('基线数据没内联进来：请在 dawn-s1/ 执行 node tools/gen-artworkbench.js');
+  } else {
+    curId = ids[0];
+    renderList(); renderProps(); renderTimeline();
+    status('已载入 ' + ids.length + ' 招基线 · ' + Object.keys(draft).length + ' 招草稿');
+  }
+  requestAnimationFrame(loop);
+
+  // 给自检脚本用的接口
+  window.__wb = {
+    base: BASE, draft: draft, get curId() { return curId; },
+    select: function (id) { if (ARTS[id]) { curId = id; frame = 0; renderList(); renderProps(); renderTimeline(); } },
+    cur: cur, curFor: curFor, buildPack: buildPack, packText: packText, dataText: dataText,
+    setField: setField, setTl: setTl, setPose: setPose,
+    setFrame: function (f) { frame = f; updatePointer(); draw(); },
+    importPack: importPack,
+    clear: clearDraft
+  };
+  window.__wbReady = true;
+})();
+</script>
+</body>
+</html>

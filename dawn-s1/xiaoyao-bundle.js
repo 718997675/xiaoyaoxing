@@ -55005,7 +55005,7 @@ const ARTS = {
     dur: 2.0, tick: 0.25, mul: 2.2, kb: 7, radius: 52, lifeOnHit: 0.02,
     pose: { mode: 'slamLow', a0: -0.95, a1: 0.40, dur: 0.42, ease: 'in' },
     shape: 'cross', color: [C.gold2, C.red2],
-    snd: 'thunder2', hitSnd: 'thunder2',
+    snd: 'thunder2', hitSnd: 'thunder',
     desc: '八段环斩，每一段命中都回两分气血。',
   },
 
@@ -55100,7 +55100,7 @@ const ARTS = {
     reach: 40, arc: 1.3, mul: 8.0, kb: 18,
     pose: { mode: 'flick', a0: -1.95, a1: -0.61, dur: 0.20, ease: 'out' },
     shape: 'point', color: [C.jade3, C.jade2],
-    snd: 'forge', hitSnd: 'forge',
+    snd: 'forge', hitSnd: 'bell',
     desc: '棍尾一崩，只打一人，打得最远。',
   },
   staff_3: {
@@ -55144,7 +55144,7 @@ const ARTS = {
     buff: { dur: 5, dmgReduce: 50, shieldPct: 10 },
     pose: { mode: 'plant', a0: 1.15, a1: 1.60, dur: 0.34, ease: 'in' },
     shape: 'sigil', color: [C.gold2, C.gold1],
-    snd: 'levelup', hitSnd: 'levelup',
+    snd: 'levelup', hitSnd: 'forge',
     desc: '五息横练，挨打只剩一半疼。',
   },
   staff_8: {
@@ -55600,6 +55600,137 @@ function artBrief(a) {
 }
 
 return { PROF_MAX, PROF_NEED, PROF_WEIGHT, profLevel, profLeft, profFrac, ARTS, ART_FX, ART_SHAPES, ART_POSES, ART_SNDS, artShape, artPose, artColor, ART_IDS, ART_SLOTS, ART_KEYS, artById, artsOfWeapon, artUnlocked, unlockedArts, ART_SLOT_LABEL, artPower, artBrief };
+})();
+
+/* ==================== artoverrides.js ==================== */
+__M.artoverrides = (function () {
+// artoverrides.js · 招式工作台的覆盖层
+//
+// 为什么需要它：arts.js 里 64 招是「基线」，工作台设计出来的招式不能每次都去改
+// 600 行数据表。这里按招式 id 存一份覆盖表，启动时原地改 ARTS 的字段 ——
+// 所有持有 ARTS 引用的地方自动生效，删掉覆盖表就回到基线，回滚零成本。
+//
+// 两个来源，后面的优先：
+//   1. art-overrides.data.js 写入的 window.__ART_OVERRIDES_FILE__（放进仓库 / build 内联）
+//   2. localStorage 的 xy_art_overrides_v1（工作台一键试玩，模块版和单文件版都支持）
+//
+// 白名单是硬规矩：id / fam / slot / prof 这些结构字段不许覆盖，
+// 否则会破坏专精解锁、装配页和存档。能改的只有表现层与数值层。
+
+const OVERRIDE_KEY = 'xy_art_overrides_v1';
+const OVERRIDE_SAFE = [
+  'name', 'desc', 'cd', 'cost', 'mul', 'reach', 'arc', 'radius', 'len', 'width',
+  'kb', 'pierceDef', 'status', 'fx',
+  'color', 'shape', 'pose', 'snd', 'hitSnd',
+  'fxDelay', 'fxLife', 'timeline',
+  'frames', 'frameScale', 'frameRotate',
+];
+
+function fileArts() {
+  const f = typeof window !== 'undefined' ? window.__ART_OVERRIDES_FILE__ : null;
+  if (!f || typeof f !== 'object') return {};
+  const a = f.arts || f;
+  return (a && typeof a === 'object') ? a : {};
+}
+
+function localArts() {
+  try {
+    if (typeof localStorage === 'undefined') return {};
+    const raw = localStorage.getItem(OVERRIDE_KEY);
+    if (!raw) return {};
+    const j = JSON.parse(raw);
+    const a = j && (j.arts || j);
+    return (a && typeof a === 'object') ? a : {};
+  } catch (e) { return {}; }
+}
+
+function readOverrides() {
+  return Object.assign({}, fileArts(), localArts());
+}
+
+function overrideCount() {
+  return Object.keys(readOverrides()).length;
+}
+
+// 原地改 ARTS：注意不能换成新对象，game.js 里很多地方缓存了 ARTS 的引用。
+function applyArtOverrides(ARTS) {
+  const ov = readOverrides();
+  let n = 0;
+  for (const id of Object.keys(ov)) {
+    const dst = ARTS[id];
+    const src = ov[id];
+    if (!dst || !src || typeof src !== 'object') continue;
+    for (const k of OVERRIDE_SAFE) {
+      if (Object.prototype.hasOwnProperty.call(src, k)) dst[k] = src[k];
+    }
+    n++;
+  }
+  return n;
+}
+
+function cleanPack(j) {
+  if (!j || typeof j !== 'object' || Array.isArray(j)) throw new Error('不是覆盖表对象');
+  // 认两种形状：工作台导出的 {version, arts}，以及直接按招式 id 写的裸表。
+  // 不能像早先那样 `j.arts || j` 兜底 —— 用户选错文件（比如 {"version":1}）
+  // 会被当成一张空覆盖表静默吞掉，界面还提示"已导入 0 招"，很难查。
+  let src;
+  if (j.arts && typeof j.arts === 'object' && !Array.isArray(j.arts)) src = j.arts;
+  else if (Object.keys(j).some(k => /^[a-z]+_\d+$/.test(k))) src = j;
+  else throw new Error('缺少 arts 表（不是工作台导出的覆盖表）');
+  const out = {};
+  for (const id of Object.keys(src)) {
+    const row = src[id];
+    if (!row || typeof row !== 'object') continue;
+    const o = {};
+    for (const k of OVERRIDE_SAFE) if (row[k] !== undefined) o[k] = row[k];
+    out[id] = o;
+  }
+  return out;
+}
+
+function importOverrides(text) {
+  const arts = cleanPack(typeof text === 'string' ? JSON.parse(text) : text);
+  if (typeof localStorage === 'undefined') throw new Error('这个环境没有 localStorage');
+  localStorage.setItem(OVERRIDE_KEY, JSON.stringify({ version: 1, arts }));
+  return Object.keys(arts).length;
+}
+
+function clearOverrides() {
+  try { if (typeof localStorage !== 'undefined') localStorage.removeItem(OVERRIDE_KEY); } catch (e) { }
+}
+
+function exportOverrides() {
+  return JSON.stringify({ version: 1, arts: readOverrides() }, null, 2);
+}
+
+// 时间轴（30fps 帧数）→ 秒。工作台只写 fxStart / fxLen，这里换算成
+// slashGhosts 认识的 delay / t。基线 64 招没有 timeline，算出来全是 0，
+// 所以默认行为一个字节都不变。
+function artTiming(a) {
+  const t = a && a.timeline;
+  const fps = (t && t.fps) || 30;
+  const delay = (a && a.fxDelay !== undefined) ? a.fxDelay
+    : (t && t.fxStart !== undefined) ? t.fxStart / fps
+      : (t && t.windup !== undefined) ? t.windup / fps : 0;
+  const life = (a && a.fxLife !== undefined) ? a.fxLife
+    : (t && t.fxLen !== undefined) ? t.fxLen / fps : 0;
+  return { delay: Math.max(0, delay || 0), life: Math.max(0, life || 0), fps };
+}
+
+// PNG 序列帧（dataURL 数组）→ Image 数组，按 id + 首帧指纹缓存。
+// Image 的 src 赋值是异步的，绘制循环里要判 complete / naturalWidth，没解好就跳过。
+const frameCache = new Map();
+function artFrames(a) {
+  const src = a && a.frames;
+  if (!src || !src.length || typeof Image === 'undefined') return null;
+  const key = (a.id || '?') + '|' + src.length + '|' + String(src[0]).slice(-32);
+  if (frameCache.has(key)) return frameCache.get(key);
+  const arr = src.map(s => { const im = new Image(); im.src = s; return im; });
+  frameCache.set(key, arr);
+  return arr;
+}
+
+return { OVERRIDE_KEY, OVERRIDE_SAFE, readOverrides, overrideCount, applyArtOverrides, importOverrides, clearOverrides, exportOverrides, artTiming, artFrames };
 })();
 
 /* ==================== mantras.js ==================== */
@@ -58232,6 +58363,11 @@ const { DG, DGT, DG_FLOORS, FLOOR_MOBS, inDungeon, genFloor, paintDungeon, dunge
 const { ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_SLOT_LABEL, ART_FX, PROF_MAX, PROF_WEIGHT, artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower, artShape, artPose, artColor, ART_SHAPES, ART_POSES, ART_SNDS } = __M.arts;
 const { MAIN, SUB, MANTRAS, MAIN_IDS, SUB_IDS, MANTRA_IDS, MANTRA_MAX_LV, SUB_SLOTS, mantraById, isMain, emptyMod, mantraMod, mainOf, install: mantraInstall, uninstall: mantraUninstall, sanitize: mantraSanitize, lvOf, mantraBrief } = __M.mantras;
 const { POI, ACTS, STORY, STORY_IDS, CLUES, CLUE_IDS, ENV_TEXTS, ENV_IDS, NPC_LAYERS, NPC_LINES, storyByAct, npcLayer, npcLines, storyReady, storyHint } = __M.story;
+const { applyArtOverrides, artFrames, artTiming, OVERRIDE_KEY, importOverrides, clearOverrides, overrideCount, readOverrides, exportOverrides } = __M.artoverrides;
+
+// 招式工作台覆盖表：原地改 ARTS 的字段，所有持有 ARTS 引用的地方自动生效。
+// 默认覆盖表是空的，64 招行为一字不变 —— 回归自检靠这一点保证。
+applyArtOverrides(ARTS);
 
 const LW = 480, LH = 270, TILE = 16, MAPW = 144, MAPH = 104;
 const SAVE_KEY = 'xiaoyao-save-v5';
@@ -60987,6 +61123,7 @@ function orbTexture() {
 function artSwingFx(a, base, reach, arc, ox, oy) {
   const W = WEAPONS[a.fam];
   const col = artColor(a, W.trail);
+  const from = slashGhosts.length;   // 工作台覆盖层要对这一招新加的 ghost 统一后处理
   // 位移招把起点传进来：刀光要留在走过的路上，不是落点前方
   const x = ox === undefined ? player.x : ox;
   const y = oy === undefined ? player.y - 8 : oy;
@@ -61161,6 +61298,26 @@ function artSwingFx(a, base, reach, arc, ox, oy) {
 
   } else {
     push({ a0: base - arc / 2, a1: base + arc / 2, R: reach * 0.85, t: 0.26, max: 0.26 });
+  }
+
+  // 工作台覆盖层：帧数时间轴换算成刀光延迟 / 寿命；自定义 PNG 序列帧
+  // 追加一个图片 ghost。放在末尾统一后处理，19 个形状分支一个都不用改
+  // （有些分支是直接 slashGhosts.push，没走上面的 push()）。
+  const tm = artTiming(a);
+  if (tm.delay || tm.life) {
+    for (let i = from; i < slashGhosts.length; i++) {
+      const g = slashGhosts[i];
+      if (tm.delay) g.delay = (g.delay || 0) + tm.delay;
+      if (tm.life) { g.t = tm.life; g.max = tm.life; }
+    }
+  }
+  const fr = artFrames(a);
+  if (fr) {
+    const life = tm.life || 0.30;
+    slashGhosts.push({
+      x, y, frames: fr, colors: col, base, delay: tm.delay, t: life, max: life,
+      scale: a.frameScale || 1, rotate: !!a.frameRotate,
+    });
   }
 }
 
@@ -63369,6 +63526,39 @@ function toggleSkills(force) {
 // 道行与招式合成一个面板的两页：都是"我这套东西怎么配"，分成两个入口
 // 玩家会忘记另一个的存在。
 const artPageEl = document.getElementById('artPage');
+
+// 招式页里的「导入工作台覆盖表」：file:// 下单文件、http 模块版、线上打包版都走同一条路。
+// 选 .json 文件 → 写游戏自己的 localStorage → 刷新生效，不依赖工作台与游戏同源。
+function initArtOverrideUI() {
+  const file = document.getElementById('artOvFile');
+  const btn = document.getElementById('btnArtOv');
+  const clr = document.getElementById('btnArtOvClear');
+  const info = document.getElementById('artOvInfo');
+  const refresh = () => { if (info) info.textContent = '已覆盖 ' + overrideCount() + ' 招'; };
+  if (btn && file) {
+    btn.onclick = () => file.click();
+    file.onchange = () => {
+      const f = file.files && file.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const n = importOverrides(String(r.result));
+          alert('已导入 ' + n + ' 招，刷新后生效。');
+          location.reload();
+        } catch (e) { alert('覆盖表格式不对：' + e.message); }
+      };
+      r.readAsText(f);
+    };
+  }
+  if (clr) clr.onclick = () => {
+    clearOverrides();
+    alert('已清除试玩覆盖，刷新后回到基线（仓库里的 data.js 覆盖仍有效）。');
+    location.reload();
+  };
+  refresh();
+}
+initArtOverrideUI();
 const daoPageEl = document.getElementById('daoPage');
 const skillTitleEl = document.getElementById('skillTitle');
 let artPageOn = false;
@@ -65379,6 +65569,22 @@ function drawOverlay(camX, camY) {
   for (const g of slashGhosts) {
     if (g.delay > 0) continue;
     const a = Math.max(0, g.t / g.max);
+    if (g.frames) {
+      // 序列帧按 ghost 的淡出进度推进：t/max 从 1 走到 0，帧号从 0 走到最后一帧。
+      const k = Math.min(g.frames.length - 1,
+        Math.max(0, Math.floor((1 - a) * g.frames.length)));
+      const im = g.frames[k];
+      if (im && im.complete && im.naturalWidth) {
+        const w = im.naturalWidth * (g.scale || 1), h = im.naturalHeight * (g.scale || 1);
+        octx.save();
+        octx.globalAlpha = Math.min(1, a * 1.6);
+        octx.translate(g.x - camX, g.y - camY);
+        if (g.rotate) octx.rotate(g.base || 0);
+        octx.drawImage(im, -w / 2, -h / 2, w, h);
+        octx.restore();
+      }
+      continue;
+    }
     if (g.ring) {
       // grow：从 r0 长到 r1（冲击波 / 扩散环）；否则是原来"由外收拢"的收势
       const R = g.grow ? g.grow[0] + (g.grow[1] - g.grow[0]) * (1 - a) : g.R * (1.4 - a * 0.4);
@@ -66035,6 +66241,10 @@ loadArt().then(ok => {
 
 // ============ 测试钩子 ============
 window.__game = {
+  artOverrides: {
+    apply: applyArtOverrides, importText: importOverrides, clear: clearOverrides,
+    count: overrideCount, read: readOverrides, dump: exportOverrides, key: OVERRIDE_KEY,
+  },
   get state() { return state; },
   get touch() { return touch; },
   get inputMode() { return touch.enabled ? 'touch' : 'keyboard'; },

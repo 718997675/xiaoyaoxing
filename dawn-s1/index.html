@@ -213,6 +213,12 @@
   #artPage .artHead .cur b{color:#12161F;letter-spacing:1px}
   #artPage .artHead .cur em{font-style:normal;color:#C8453B;font-weight:bold}
   #artPage .artHead .hint{font:9px SimSun;color:#6B6248;flex:0 0 100%}
+#artPage .artHead .ovBar{display:flex;align-items:center;gap:6px;flex:0 0 100%;margin-top:5px}
+#artPage .artHead .ovBar button{width:auto;flex:0 0 auto;padding:2px 8px;font:10px SimSun;
+  cursor:pointer;background:#EFE7D2;color:#12161F;border:1px solid #8A6520}
+#artPage .artHead .ovBar a{width:auto;flex:0 0 auto;padding:2px 8px;font:10px SimSun;
+  text-decoration:none;background:#2F6E6A;color:#E8DFC8;border:1px solid #5FA8A0}
+#artPage .artHead .ovBar span{font:9px SimSun;color:#6B6248;margin-left:auto}
 
   #artPage .artWrap{display:flex;gap:11px;align-items:stretch}
 
@@ -574,6 +580,13 @@
         <div class="seal">招 式</div>
         <div class="cur" id="artSub">持兵器杀敌可长专精</div>
         <div class="hint">拖到左格上阵 · 点卡装上或卸下 · 点格卸下 · 格中有招时可拖去交换</div>
+        <div class="ovBar">
+          <a href="art-workbench.html" target="_blank" rel="noopener" id="lnkArtWb">打开招式工作台</a>
+          <button id="btnArtOv" type="button">导入工作台覆盖表</button>
+          <button id="btnArtOvClear" type="button">清除试玩覆盖</button>
+          <span id="artOvInfo"></span>
+          <input id="artOvFile" type="file" accept=".json,application/json" hidden>
+        </div>
       </div>
       <div class="artWrap">
         <div id="artQuiver"></div>
@@ -593,6 +606,7 @@
 </div>
 <div id="tip"></div>
 <div id="rot">建议横屏游玩 · 左下摇杆走位，右侧按键出招</div>
+<script src="art-overrides.data.js"></script>
 <script id="boot">
   // 双击打开（file://）时浏览器会用 origin 'null' 去取 ES module，被 CORS 直接拦掉，
   // game.js 一行都不会执行 —— 表现就是「只有菜单外壳，按钮点了没反应」。

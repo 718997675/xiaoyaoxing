@@ -39,8 +39,15 @@ node tools/run.js eval tools/quests.js    # 任务（12 条全通/三物门禁/�
 node tools/run.js eval tools/arts.js      # 招式（64 招/十四种原语/专精/装配拖拽/签名查重/平衡/存档），当前 131 pass / 0 fail
 node tools/run.js eval tools/mantras.js   # 心法（22 条/互斥/12 个机制/200 组 DPS 分布），当前 75 pass / 0 fail
 STORY=1 QS=x=1 node tools/run.js eval tools/story.js   # 剧情（28 节点/七种触发/终章选择/旧事页/存档），当前 96 pass / 0 fail
+PAGE=art-workbench.html node tools/run.js eval tools/art-workbench.js   # 工作台页，当前 31 pass / 0 fail
+node tools/run.js eval tools/art-overrides.js                            # 游戏侧覆盖层，当前 29 pass / 0 fail
 node tools/run.js shot out.png 1440 900   # 截图
 ```
+
+> 工作台页没有 `window.__game`，`tools/run.js` 的就绪等待同时认
+> `!!(window.__game || window.__wbReady)`，所以同一套 runner 能开它。
+> 两套新自检都要在**模块版 / `逍遥行.html` / `dist/index.html`** 三处跑：
+> 覆盖层自检尤其要验单文件版（`build.js` 把 ESM 拆成 `__M.artoverrides`）。
 
 > **`STORY=1` 不能省。** `tools/run.js` 默认给 URL 加 `story=0`，
 > 关掉剧情的自动播放 —— 剧情一播世界就暂停，而所有回归套件都靠 `tick()` 手动步进世界。
@@ -119,7 +126,24 @@ for(let i=0;i<25;i++)g.tick(0.016)" \
 | **P9 第三幕 + 终章：`story.js` 20 → 28 节点 · `floor` 触发器 · 终章「选择」分支 · 支线 7 → 9 · 第 4 个野外 NPC** | ✅ 2026-11-10 |
 | **P10 招式重做（锤试点）：`pose` 字段 + 12 种动作 · 刀光 3 → 11 形 · 四种新原语（boomerang/shockwave/charge/cleave）· 锤 8 招按名字重写 · 签名查重断言** | ✅ 2026-11-11 |
 | **P11 招式收口（其余七件）：56 招补齐四条签名 · 19 形 / 20 式 / 17 音 · 八兵器连拍 · 贯甲刺 → `cleave` · 跃棍 → `shockwave` · 欠账 7 → 0（arts.js 131 条）** | ✅ 2026-11-11 |
+| **招式工作台**：单文件 HTML 编辑 64 招 · 30fps 时间轴 · PNG 序列帧 · 覆盖表白名单合并 · 试玩 / 导入 / 永久三通道 | ✅ 2026-11-11 |
 | **单一分发地址**：`https://718997675.github.io/xiaoyaoxing/`（2026-11-11 起，workbuddy 旧分享链接弃用） | ✅ |
+
+### 招式工作台（2026-11-11）
+
+完整使用说明在 `ART-WORKBENCH.md`。这里只留交接要点：
+
+- **架构**：工作台 → `{version:1, arts}` 覆盖表 → `artoverrides.js` 启动时**原地**合并进
+  `ARTS` → `game.js` 照常画。`arts.js` 一行没改，删掉覆盖表即回滚。
+- **三个入口**：双击 `art-workbench.html` / 线上 `/art-workbench.html` / 游戏招式页
+  「打开招式工作台」。`build.js` 会把工作台一起拷进 `dist/`，这样线上与游戏同源，
+  「写入试玩」的 localStorage 才真能被游戏读到。
+- **白名单**：`OVERRIDE_SAFE` 只放表现层与数值层；`id / fam / slot / prof` 在
+  `cleanPack()` 就被剥掉，防止破坏专精解锁 / 装配页 / 存档。
+- **改了 `arts.js` 必须重跑** `node tools/gen-artworkbench.js` 再 `node build.js`。
+  生成器现在锚定招式顶层行取 `shape / color`，并用登记池逐项校验 ——
+  早先一版把 `zone: { shape: 'circle' }` 当成招式形状，害 5 招下拉框空白。
+- **基线不变**：默认覆盖表为空，`artTiming()` 对 64 招算出 0，既有 553 条回归一条没动。
 
 ### P11 发布验证（2026-11-11）
 
@@ -152,6 +176,8 @@ for(let i=0;i<25;i++)g.tick(0.016)" \
 | `HANDOFF.md` | 就是这份。现状 + 怎么跑 + 下一步 |
 | `CHAPTER-1-EXPANSION.md` | 第一章地图/营地/首领/NPC 扩容的施工图，含 P1~P4 施工单和技术坑 |
 | `SKILLS-STORY-PLAN.md` | 武器技能 64 个 + 心法 22 条 + 剧情三幕的完整设计 |
+| `ART-WORKBENCH.md` | 招式工作台：覆盖表协议、30fps 帧数、PNG 切片、三种导入方式与自检 |
+| `ARTS-DESIGN.md` | 招式重做设计总纲（P10 锤试点 + P11 七件收口） |
 | `README.md`（仓库根） | 项目简介与进度 |
 
 **两份设计文档都是自包含的**：里面有需求原话、结论、数值表、数据结构、验收标准。
