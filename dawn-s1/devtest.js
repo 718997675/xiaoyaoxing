@@ -107,7 +107,9 @@ export function runDevTests() {
   T('开局进入 play', g.state === 'play', g.state);
   T('营地敌人成建制生成', g.enemies.length >= 26, g.enemies.length);
   T('章尾首领存在', !!g.boss, g.boss && Math.round(g.boss.hp));
-  T('地图扩大为 144×104', g.MAPW === 144 && g.MAPH === 104, g.MAPW + '×' + g.MAPH);
+  T('第一章 144×104 不变，第二章南扩到 144 行',
+    g.MAPW === 144 && g.CH1_H === 104 && g.MAPH === 144,
+    g.MAPW + '×' + g.MAPH + '（第一章 ' + g.CH1_H + ' 行）');
 
   // --- T2 斩击命中 / 顿帧 / 连击 ---
   const e = alive().find(x => x.type === 'zhiren');

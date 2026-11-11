@@ -44,7 +44,10 @@ import {
 // 默认覆盖表是空的，64 招行为一字不变 —— 回归自检靠这一点保证。
 applyArtOverrides(ARTS);
 
-const LW = 480, LH = 270, TILE = 16, MAPW = 144, MAPH = 104;
+const LW = 480, LH = 270, TILE = 16, MAPW = 144, MAPH = 144;
+// 第二章只往南加行、不动 MAPW —— tiles 索引是 y*MAPW+x，stride 不变，
+// 第一章每个格子的下标、坐标、存档位置就都还是原样。
+const CH1_H = 104;
 const SAVE_KEY = 'xiaoyao-save-v5';
 const LEGACY_KEYS = ['xiaoyao-save-v4', 'xiaoyao-save-v3', 'xiaoyao-save-v2', 'xiaoyao-ch1-v1'];
 // 当前画布缩放倍率（resize 里算），面板自适应要用
@@ -356,6 +359,9 @@ function beamTexture(hex) {
 // ============ 世界：青云野 96×72 ============
 function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const rng = mulberry32(20261109);
+// 新区独立随机源：改 MAPH 之后，第一章所有 rng() 调用的次数与顺序必须一字不改，
+// 否则斑块 / 风物 / 路网会整片重排，旧存档和既有回归都得重校。
+const rng2 = mulberry32(20261111);
 const tiles = new Uint8Array(MAPW * MAPH);
 const solid = new Uint8Array(MAPW * MAPH);
 const objects = [];
@@ -382,6 +388,9 @@ const REGION = {
   cave:   { x0: 4,  y0: 6,  x1: 52,  y1: 46,  label: '西荒石窟' },
   grave:  { x0: 92, y0: 4,  x1: 140, y1: 44,  label: '北坡乱葬岗' },
   bamboo: { x0: 4,  y0: 52, x1: 62,  y1: 100, label: '南岭竹海' },
+  // —— 第二章 P12-A：只落在 CH1_H 以南，绝不碰上面三区 ——
+  south:  { x0: 4,  y0: 106, x1: 64,  y1: 140, label: '南疆瘴林' },
+  river:  { x0: 80, y0: 106, x1: 140, y1: 140, label: '江岸渡口' },
 };
 
 // ============ 营地 ============
@@ -425,6 +434,17 @@ const camps = [
   { x: 122 * TILE, y: 32 * TILE, tier: 2, name: '守墓人小屋',
     types: ['yinhun', 'shadow', 'yinhun'], night: ['yinhun'],
     alert: 150, patrol: 3, lord: { type: 'yinhun', name: '守墓人' } },
+  // —— 第二章 P12-A：南疆与江岸。复用现有怪种与 AI，不新增行为代码 ——
+  { x: 22 * TILE, y: 116 * TILE, tier: 1, name: '瘴林蛊寨',
+    types: ['snake', 'fox', 'shanxiao', 'fukui'], night: ['ghost'], alert: 120, patrol: 4 },
+  { x: 48 * TILE, y: 132 * TILE, tier: 2, name: '赤土墟',
+    types: ['brute', 'shigan', 'shadow'], night: ['yinhun'], alert: 145, patrol: 3,
+    lord: { type: 'brute', name: '墟主' } },
+  { x: 92 * TILE, y: 114 * TILE, tier: 1, name: '渡口棚',
+    types: ['zhiren', 'fox', 'ghost'], night: ['ghost'], alert: 130, patrol: 4 },
+  { x: 124 * TILE, y: 134 * TILE, tier: 2, name: '江匪坞',
+    types: ['zhiren', 'brute', 'shadow'], night: ['fukui'], alert: 160, patrol: 5,
+    lord: { type: 'shadow', name: '坞主' } },
 ];
 
 // 夜行的：白天在睡，可以摸过去偷袭
@@ -463,19 +483,33 @@ function carveDen(d) {
 
 for (let y = 0; y < MAPH; y++) for (let x = 0; x < MAPW; x++) {
   const i = y * MAPW + x;
-  tiles[i] = rng() < 0.22 ? 1 : 0;
+  // 前 CH1_H 行沿用 rng、新区用 rng2：第一章逐格不变，新区不插队。
+  tiles[i] = (y < CH1_H ? rng() : rng2()) < 0.22 ? 1 : 0;
   if (x < 2 || y < 2 || x >= MAPW - 2 || y >= MAPH - 2) { tiles[i] = 4; solid[i] = 1; }
+}
+// 第一章原底边（y=102/103）本来是实心边界，MAPH 变大后边界判定会把它放开。
+// 整行放开会变成 140 格宽的大马路，所以先原样封回去，再只凿两个关口 ——
+// 和第一章「每区至少两条通道」的规矩一致，也从这里接第二章的官道。
+for (let y = CH1_H - 2; y < CH1_H; y++) for (let x = 0; x < MAPW; x++) {
+  const i = y * MAPW + x;
+  tiles[i] = 4; solid[i] = 1;
+}
+for (const gx of [34, 119]) {
+  for (let y = CH1_H - 2; y < CH1_H; y++) for (let x = gx - 2; x <= gx + 2; x++) {
+    const i = y * MAPW + x;
+    tiles[i] = 2; solid[i] = 0;
+  }
 }
 // 荒地斑块与野花：数量按面积比放大（96×72 → 144×104 约 2.17 倍），
 // 照旧数量撒的话大图会稀得像没画完。
 for (let p = 0; p < 195; p++) {
-  const cx = 3 + (rng() * (MAPW - 6)) | 0, cy = 3 + (rng() * (MAPH - 6)) | 0, r = 1 + (rng() * 2) | 0;
+  const cx = 3 + (rng() * (MAPW - 6)) | 0, cy = 3 + (rng() * (CH1_H - 6)) | 0, r = 1 + (rng() * 2) | 0;
   for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
-    if (x > 2 && y > 2 && x < MAPW - 3 && y < MAPH - 3 && (x - cx) ** 2 + (y - cy) ** 2 <= r * r) tiles[y * MAPW + x] = 2;
+    if (x > 2 && y > 2 && x < MAPW - 3 && y < CH1_H - 3 && (x - cx) ** 2 + (y - cy) ** 2 <= r * r) tiles[y * MAPW + x] = 2;
   }
 }
 for (let f = 0; f < 700; f++) {
-  const x = 3 + (rng() * (MAPW - 6)) | 0, y = 3 + (rng() * (MAPH - 6)) | 0;
+  const x = 3 + (rng() * (MAPW - 6)) | 0, y = 3 + (rng() * (CH1_H - 6)) | 0;
   if (tiles[y * MAPW + x] === 0) tiles[y * MAPW + x] = 3;
 }
 
@@ -539,14 +573,15 @@ for (const d of dens) carveDen(d);
 
 // 路网。先在 tile 空间里走，主方向多走、次方向偶尔拐 ——
 // 这样出来的是"人踩出来的路"，不是尺子画出来的 45° 斜线。
-function carveRoad(tx0, ty0, tx1, ty1, halfW) {
+function carveRoad(tx0, ty0, tx1, ty1, halfW, rand) {
+  const R = rand || rng;
   let x = tx0, y = ty0, guard = 0;
   while ((x !== tx1 || y !== ty1) && guard++ < 8000) {
     const dx = Math.sign(tx1 - x), dy = Math.sign(ty1 - y);
     if (Math.abs(tx1 - x) >= Math.abs(ty1 - y)) {
-      if (rng() < 0.82 || !dy) x += dx; else y += dy;
+      if (R() < 0.82 || !dy) x += dx; else y += dy;
     } else {
-      if (rng() < 0.82 || !dx) y += dy; else x += dx;
+      if (R() < 0.82 || !dx) y += dy; else x += dx;
     }
     for (let oy = -halfW; oy <= halfW; oy++) for (let ox = -halfW; ox <= halfW; ox++) {
       const px = x + ox, py = y + oy;
@@ -577,6 +612,45 @@ carveRoad(16, 70, 18, 88, 1);          // 猎户棚 → 青鳞潭
 carveRoad(84, 60, 54, 76, 1);          // 三岔口 → 废弃机坊
 carveRoad(12, 20, 9, 34, 1);           // 矿口 → 石母洞
 carveRoad(22, 10, 40, 20, 1);          // 火鸦巢 → 火鸦绝壁
+
+// ============ 第二章 P12-A：南疆 / 江岸 ============
+// 顺序要紧：先铺两区底材，再挖江，最后开路；路穿过江的那几格回头换成桥面。
+regionFloor(REGION.south, 11);
+regionFloor(REGION.river, 12);
+
+// 江水：斜贯江岸，7 格宽，实心。玩家过江只能走桥。
+const RIVER_MID = x => 124 + Math.round(Math.sin(x * 0.11) * 2.2);
+for (let x = REGION.river.x0 + 2; x < REGION.river.x1 - 2; x++) {
+  const mid = RIVER_MID(x);
+  for (let y = mid - 3; y <= mid + 3; y++) {
+    const i = y * MAPW + x;
+    if (tiles[i] === 4) continue;
+    tiles[i] = 13; solid[i] = 1;
+  }
+}
+
+// 官道南延。两条岔路各从一个关口下来，中间再用一条横向小路串起来 ——
+// 不用绕回青云集，这也是第一章就定下的连通规矩。
+const chRoad = (x0, y0, x1, y1) => carveRoad(x0, y0, x1, y1, 1, rng2);
+chRoad(34, 104, 34, 116);          // 南疆关口 → 蛊寨岔口
+chRoad(34, 116, 22, 116);         // → 瘴林蛊寨
+chRoad(34, 116, 48, 132);         // → 赤土墟
+chRoad(119, 104, 119, 108);       // 江岸关口 → 分岔
+chRoad(119, 108, 100, 116);       // → 江北渡口
+chRoad(100, 116, 92, 114);        // → 渡口棚
+chRoad(100, 116, 100, 134);       // 跨江（桥）
+chRoad(100, 134, 124, 134);       // → 江匪坞
+chRoad(119, 108, 64, 108);        // 两区之间的捷径，不必绕回青云集
+chRoad(64, 108, 34, 116);
+
+// 桥面：江带里被路啃开的格子换成木板，别让石桥看着像土路插进水里。
+for (let x = REGION.river.x0 + 2; x < REGION.river.x1 - 2; x++) {
+  const mid = RIVER_MID(x);
+  for (let y = mid - 3; y <= mid + 3; y++) {
+    const i = y * MAPW + x;
+    if (tiles[i] === 2) { tiles[i] = 9; solid[i] = 0; }
+  }
+}
 
 // —— 青云集：先把村址从野地里"清"出来 ——
 // 顺序很关键：必须在 nearClear / 物件生成之前改地块，否则竹子会照常长在街上。
@@ -614,40 +688,44 @@ function nearClear(x, y) {
 // —— 分区撒风物 ——
 // 每个区只在自己那片地上长东西：竹海是密竹、石窟是石笋与火把、乱葬岗是坟与枯树。
 // 通用草地仍然撒桃树和竹子，保留"野地"的底子。
-function scatterOn(id, r, count, kinds) {
+function scatterOn(id, r, count, kinds, rand) {
+  const R = rand || rng;
   const w = r.x1 - r.x0, h = r.y1 - r.y0;
   for (let c = 0; c < count; c++) {
-    const x = r.x0 + 2 + ((rng() * (w - 4)) | 0), y = r.y0 + 2 + ((rng() * (h - 4)) | 0);
+    const x = r.x0 + 2 + ((R() * (w - 4)) | 0), y = r.y0 + 2 + ((R() * (h - 4)) | 0);
     const i = y * MAPW + x;
     if (tiles[i] !== id || solid[i]) continue;
     if (nearClear(x * TILE + 8, y * TILE + 16)) continue;
     solid[i] = 1;
-    objects.push({ kind: kinds[(rng() * kinds.length) | 0], x: x * TILE + 8, y: y * TILE + 16 });
+    objects.push({ kind: kinds[(R() * kinds.length) | 0], x: x * TILE + 8, y: y * TILE + 16 });
   }
 }
 scatterOn(6, REGION.bamboo, 420, ['bamboo', 'bamboo', 'bamboo', 'peach']);
 scatterOn(7, REGION.cave, 150, ['stalag', 'stalag', 'stone', 'torch']);
 scatterOn(8, REGION.grave, 260, ['grave', 'grave', 'grave', 'deadtree']);
+// 第二章两区复用现有点阵：辨识度先靠底材与地名，专属贴图留到 P12-B。
+scatterOn(11, REGION.south, 260, ['bamboo', 'deadtree', 'peach'], rng2);
+scatterOn(12, REGION.river, 190, ['stone', 'lantern', 'peach'], rng2);
 
 for (let c = 0; c < 300; c++) {
-  const cx = 4 + (rng() * (MAPW - 8)) | 0, cy = 4 + (rng() * (MAPH - 8)) | 0;
+  const cx = 4 + (rng() * (MAPW - 8)) | 0, cy = 4 + (rng() * (CH1_H - 8)) | 0;
   const n = 2 + (rng() * 4) | 0;
   for (let k = 0; k < n; k++) {
     const x = cx + ((rng() * 5) | 0) - 2, y = cy + ((rng() * 5) | 0) - 2;
     const i = y * MAPW + x;
-    if (x > 2 && y > 2 && x < MAPW - 3 && y < MAPH - 3 && tiles[i] < 2 && !solid[i] && !nearClear(x * TILE + 8, y * TILE + 16)) {
+    if (x > 2 && y > 2 && x < MAPW - 3 && y < CH1_H - 3 && tiles[i] < 2 && !solid[i] && !nearClear(x * TILE + 8, y * TILE + 16)) {
       solid[i] = 1; objects.push({ kind: rng() < 0.5 ? 'bamboo' : 'peach', x: x * TILE + 8, y: y * TILE + 16 });
     }
   }
 }
 for (let r = 0; r < 87; r++) {
-  const x = 3 + (rng() * (MAPW - 6)) | 0, y = 3 + (rng() * (MAPH - 6)) | 0, i = y * MAPW + x;
+  const x = 3 + (rng() * (MAPW - 6)) | 0, y = 3 + (rng() * (CH1_H - 6)) | 0, i = y * MAPW + x;
   if (tiles[i] < 2 && !solid[i] && !nearClear(x * TILE + 8, y * TILE + 12)) {
     solid[i] = 1; objects.push({ kind: 'lantern', x: x * TILE + 8, y: y * TILE + 12 });
   }
 }
 for (let r = 0; r < 39; r++) {
-  const x = 4 + (rng() * (MAPW - 8)) | 0, y = 4 + (rng() * (MAPH - 8)) | 0, i = y * MAPW + x;
+  const x = 4 + (rng() * (MAPW - 8)) | 0, y = 4 + (rng() * (CH1_H - 8)) | 0, i = y * MAPW + x;
   if (tiles[i] < 2 && !solid[i] && !nearClear(x * TILE + 8, y * TILE + 12)) {
     solid[i] = 1; objects.push({ kind: 'stone', x: x * TILE + 8, y: y * TILE + 10 });
   }
@@ -676,9 +754,12 @@ groundC.width = MAPW * TILE; groundC.height = MAPH * TILE;
 {
   const g = groundC.getContext('2d');
   // 索引：0/1 草 2 土路 3 野花 4 边界 5 石板街 6 竹海 7 石窟 8 荒土 9 竹桥 10 溪水
+  //       11 南疆赤土 12 江岸沙地 13 江水
   const cols = [C.jade1, C.jade1, C.paper1, C.jade1, C.ink1, '#8A8268',
-    '#2A5B54', '#3B3C3D', '#59523F', '#6B4B2E', '#1D4A56'];
+    '#2A5B54', '#3B3C3D', '#59523F', '#6B4B2E', '#1D4A56',
+    '#6A3B32', '#8A7C58', '#163B52'];
   for (let y = 0; y < MAPH; y++) for (let x = 0; x < MAPW; x++) {
+    const PR = y < CH1_H ? rng : rng2;
     const t = tiles[y * MAPW + x];
     // 草地做低频色块：同一片草不必一个颜色，远看有起伏
     let base = cols[t];
@@ -689,18 +770,18 @@ groundC.width = MAPW * TILE; groundC.height = MAPH * TILE;
     g.fillStyle = base; g.fillRect(x * TILE, y * TILE, TILE, TILE);
     if (t <= 1) {
       g.fillStyle = grassN(x, y) > 0 ? C.jade2 : '#4A8C85';
-      for (let k = 0; k < 5; k++) g.fillRect(x * TILE + ((rng() * 16) | 0), y * TILE + ((rng() * 16) | 0), 1, 1);
+      for (let k = 0; k < 5; k++) g.fillRect(x * TILE + ((PR() * 16) | 0), y * TILE + ((PR() * 16) | 0), 1, 1);
     }
     if (t === 2) {
       // 土路：碎石 / 车辙 / 深浅斑。只铺 3 个亮点会让大片路面平得像一块色块
       const bx = x * TILE, by = y * TILE;
-      if (rng() < 0.6) { g.fillStyle = '#79725A'; g.fillRect(bx + ((rng() * 12) | 0), by + ((rng() * 13) | 0), 3, 2); }
+      if (PR() < 0.6) { g.fillStyle = '#79725A'; g.fillRect(bx + ((PR() * 12) | 0), by + ((PR() * 13) | 0), 3, 2); }
       g.fillStyle = C.paper2;
-      for (let k = 0; k < 4; k++) g.fillRect(bx + ((rng() * 15) | 0), by + ((rng() * 15) | 0), 2, 1);
+      for (let k = 0; k < 4; k++) g.fillRect(bx + ((PR() * 15) | 0), by + ((PR() * 15) | 0), 2, 1);
       g.fillStyle = '#5F5A46';
-      for (let k = 0; k < 2; k++) g.fillRect(bx + ((rng() * 15) | 0), by + ((rng() * 15) | 0), 1, 1);
+      for (let k = 0; k < 2; k++) g.fillRect(bx + ((PR() * 15) | 0), by + ((PR() * 15) | 0), 1, 1);
     }
-    if (t === 3) { g.fillStyle = rng() < 0.5 ? C.red3 : C.gold3; g.fillRect(x * TILE + 6 + ((rng() * 5) | 0), y * TILE + 5 + ((rng() * 6) | 0), 2, 2); }
+    if (t === 3) { g.fillStyle = PR() < 0.5 ? C.red3 : C.gold3; g.fillRect(x * TILE + 6 + ((PR() * 5) | 0), y * TILE + 5 + ((PR() * 6) | 0), 2, 2); }
     if (t === 5) {
       // 石板街。三个要点：
       // ① 比外面的土路冷、比它暗，才一进村就知道"这是铺过的地"；
@@ -722,53 +803,53 @@ groundC.width = MAPW * TILE; groundC.height = MAPH * TILE;
       }
       g.restore();
       // 缝隙里的苔与土
-      if (rng() < 0.16) {
+      if (PR() < 0.16) {
         g.fillStyle = '#3F6E63';
-        g.fillRect(bx + ((rng() * 14) | 0), by + ((rng() * 14) | 0), 2, 1);
+        g.fillRect(bx + ((PR() * 14) | 0), by + ((PR() * 14) | 0), 2, 1);
       }
-      if (rng() < 0.1) {
+      if (PR() < 0.1) {
         g.fillStyle = '#8A8268';
-        g.fillRect(bx + ((rng() * 14) | 0), by + ((rng() * 14) | 0), 1, 1);
+        g.fillRect(bx + ((PR() * 14) | 0), by + ((PR() * 14) | 0), 1, 1);
       }
     }
-    if (t === 4) { g.fillStyle = C.jade2; g.fillRect(x * TILE + 2, y * TILE + 4 + ((rng() * 8) | 0), 6, 1); g.fillRect(x * TILE + 9, y * TILE + 2 + ((rng() * 10) | 0), 5, 1); }
+    if (t === 4) { g.fillStyle = C.jade2; g.fillRect(x * TILE + 2, y * TILE + 4 + ((PR() * 8) | 0), 6, 1); g.fillRect(x * TILE + 9, y * TILE + 2 + ((PR() * 10) | 0), 5, 1); }
     if (t === 6) {
       // 竹海：湿、暗、落叶多。不铺满，留 40% 干净的底，否则整片像地毯
       const bx = x * TILE, by = y * TILE;
       g.fillStyle = '#35706A';
-      for (let k = 0; k < 4; k++) g.fillRect(bx + ((rng() * 15) | 0), by + ((rng() * 15) | 0), 1, 2);
-      if (rng() < 0.45) {
+      for (let k = 0; k < 4; k++) g.fillRect(bx + ((PR() * 15) | 0), by + ((PR() * 15) | 0), 1, 2);
+      if (PR() < 0.45) {
         g.fillStyle = '#8A7A3C';
-        g.fillRect(bx + ((rng() * 13) | 0), by + ((rng() * 13) | 0), 2, 1);
+        g.fillRect(bx + ((PR() * 13) | 0), by + ((PR() * 13) | 0), 2, 1);
       }
-      if (rng() < 0.18) {
+      if (PR() < 0.18) {
         g.fillStyle = '#244F49';
-        g.fillRect(bx + ((rng() * 12) | 0), by + ((rng() * 12) | 0), 4, 3);
+        g.fillRect(bx + ((PR() * 12) | 0), by + ((PR() * 12) | 0), 4, 3);
       }
     }
     if (t === 7) {
       // 石窟：碎岩 + 一道裂缝。岩面比外面冷，靠裂纹读"石头"而不是靠颜色
       const bx = x * TILE, by = y * TILE;
       g.fillStyle = '#4A4B4C';
-      for (let k = 0; k < 3; k++) g.fillRect(bx + ((rng() * 14) | 0), by + ((rng() * 14) | 0), 2, 1);
-      if (rng() < 0.3) {
+      for (let k = 0; k < 3; k++) g.fillRect(bx + ((PR() * 14) | 0), by + ((PR() * 14) | 0), 2, 1);
+      if (PR() < 0.3) {
         g.fillStyle = '#2A2B2C';
-        let cx2 = bx + ((rng() * 10) | 0) + 3, cy2 = by + ((rng() * 6) | 0) + 2;
-        for (let k = 0; k < 5; k++) { g.fillRect(cx2, cy2, 1, 1); cx2 += ((rng() * 3) | 0) - 1; cy2 += 1; }
+        let cx2 = bx + ((PR() * 10) | 0) + 3, cy2 = by + ((PR() * 6) | 0) + 2;
+        for (let k = 0; k < 5; k++) { g.fillRect(cx2, cy2, 1, 1); cx2 += ((PR() * 3) | 0) - 1; cy2 += 1; }
       }
     }
     if (t === 8) {
       // 乱葬岗：干裂的土 + 零星白骨。刻意压低饱和，和竹海的湿绿正好相反
       const bx = x * TILE, by = y * TILE;
       g.fillStyle = '#6A6250';
-      for (let k = 0; k < 3; k++) g.fillRect(bx + ((rng() * 14) | 0), by + ((rng() * 14) | 0), 3, 1);
-      if (rng() < 0.12) {
+      for (let k = 0; k < 3; k++) g.fillRect(bx + ((PR() * 14) | 0), by + ((PR() * 14) | 0), 3, 1);
+      if (PR() < 0.12) {
         g.fillStyle = C.paper1;
-        g.fillRect(bx + ((rng() * 13) | 0), by + ((rng() * 13) | 0), 2, 1);
+        g.fillRect(bx + ((PR() * 13) | 0), by + ((PR() * 13) | 0), 2, 1);
       }
-      if (rng() < 0.06) {
+      if (PR() < 0.06) {
         g.fillStyle = '#3A3529';
-        g.fillRect(bx + ((rng() * 10) | 0), by + ((rng() * 12) | 0), 1, 4);
+        g.fillRect(bx + ((PR() * 10) | 0), by + ((PR() * 12) | 0), 1, 4);
       }
     }
     if (t === 9) {
@@ -786,12 +867,35 @@ groundC.width = MAPW * TILE; groundC.height = MAPH * TILE;
       g.fillStyle = '#2C6A78';
       g.fillRect(bx, by + 3, 16, 1);
       g.fillRect(bx + 2, by + 10, 12, 1);
-      if (rng() < 0.22) { g.fillStyle = '#5FA6AE'; g.fillRect(bx + ((rng() * 11) | 0), by + ((rng() * 14) | 0), 3, 1); }
+      if (PR() < 0.22) { g.fillStyle = '#5FA6AE'; g.fillRect(bx + ((PR() * 11) | 0), by + ((PR() * 14) | 0), 3, 1); }
+    }
+    if (t === 11) {
+      // 南疆赤土：干裂的红岩 + 几点瘴斑。和竹海的湿绿正好反着来
+      const bx = x * TILE, by = y * TILE;
+      g.fillStyle = '#7C4638';
+      for (let k = 0; k < 3; k++) g.fillRect(bx + ((PR() * 14) | 0), by + ((PR() * 14) | 0), 3, 1);
+      if (PR() < 0.16) { g.fillStyle = '#3B5A3E'; g.fillRect(bx + ((PR() * 12) | 0), by + ((PR() * 12) | 0), 3, 2); }
+    }
+    if (t === 12) {
+      // 江岸沙地：浅色横纹 + 零星贝壳点
+      const bx = x * TILE, by = y * TILE;
+      g.fillStyle = '#9C8E68';
+      for (let k = 0; k < 2; k++) g.fillRect(bx + ((PR() * 12) | 0), by + ((PR() * 14) | 0), 4, 1);
+      if (PR() < 0.14) { g.fillStyle = C.paper1; g.fillRect(bx + ((PR() * 13) | 0), by + ((PR() * 13) | 0), 2, 1); }
+    }
+    if (t === 13) {
+      // 江水：比溪水深、纹更密。静态水面在俯视角下够用
+      const bx = x * TILE, by = y * TILE;
+      g.fillStyle = '#245A70';
+      g.fillRect(bx, by + 2, 16, 1);
+      g.fillRect(bx + 3, by + 8, 11, 1);
+      g.fillRect(bx, by + 13, 16, 1);
+      if (PR() < 0.2) { g.fillStyle = '#6BB0BC'; g.fillRect(bx + ((PR() * 11) | 0), by + ((PR() * 14) | 0), 3, 1); }
     }
   }
   // 大尺度明暗斑块：打散"一格一格"的棋盘感
   for (let i = 0; i < 900; i++) {
-    const cx = rng() * groundC.width, cy = rng() * groundC.height;
+    const cx = rng() * groundC.width, cy = rng() * CH1_H * TILE;
     const r = 40 + rng() * 110;
     g.save();
     g.globalAlpha = 0.05;
@@ -799,8 +903,19 @@ groundC.width = MAPW * TILE; groundC.height = MAPH * TILE;
     g.beginPath(); g.ellipse(cx, cy, r, r * (0.5 + rng() * 0.6), rng() * 3, 0, 6.28); g.fill();
     g.restore();
   }
+  // 新区另补一层大尺度明暗，免得新地图平得像一张色卡。同样只用 rng2。
+  for (let i = 0; i < 260; i++) {
+    const cx = rng2() * groundC.width, cy = (CH1_H + rng2() * (MAPH - CH1_H)) * TILE;
+    const r = 40 + rng2() * 110;
+    g.save();
+    g.globalAlpha = 0.05;
+    g.fillStyle = rng2() < 0.5 ? '#12352F' : '#7FB7A8';
+    g.beginPath(); g.ellipse(cx, cy, r, r * (0.5 + rng2() * 0.6), rng2() * 3, 0, 6.28); g.fill();
+    g.restore();
+  }
   // 土路边缘打散：先铺一圈中间色（草地→中间色→路面，三阶过渡），再把直角阶梯啃成碎边
   for (let y = 0; y < MAPH; y++) for (let x = 0; x < MAPW; x++) {
+    const PR = y < CH1_H ? rng : rng2;
     if (tiles[y * MAPW + x] !== 2) continue;
     const up = y > 0 && tiles[(y - 1) * MAPW + x] === 2;
     const dn = y < MAPH - 1 && tiles[(y + 1) * MAPW + x] === 2;
@@ -815,13 +930,13 @@ groundC.width = MAPW * TILE; groundC.height = MAPH * TILE;
     if (!rt) g.fillRect(bx + TILE - 2, by, 2, TILE);
     // 碎边
     g.fillStyle = C.jade1;
-    for (let k = 0; k < (up ? 0 : 3); k++) g.fillRect(bx + ((rng() * 16) | 0), by + ((rng() * 3) | 0), 2, 2);
-    for (let k = 0; k < (dn ? 0 : 3); k++) g.fillRect(bx + ((rng() * 16) | 0), by + 13 + ((rng() * 3) | 0), 2, 2);
-    for (let k = 0; k < (lf ? 0 : 3); k++) g.fillRect(bx + ((rng() * 3) | 0), by + ((rng() * 16) | 0), 2, 2);
-    for (let k = 0; k < (rt ? 0 : 3); k++) g.fillRect(bx + 13 + ((rng() * 3) | 0), by + ((rng() * 16) | 0), 2, 2);
+    for (let k = 0; k < (up ? 0 : 3); k++) g.fillRect(bx + ((PR() * 16) | 0), by + ((PR() * 3) | 0), 2, 2);
+    for (let k = 0; k < (dn ? 0 : 3); k++) g.fillRect(bx + ((PR() * 16) | 0), by + 13 + ((PR() * 3) | 0), 2, 2);
+    for (let k = 0; k < (lf ? 0 : 3); k++) g.fillRect(bx + ((PR() * 3) | 0), by + ((PR() * 16) | 0), 2, 2);
+    for (let k = 0; k < (rt ? 0 : 3); k++) g.fillRect(bx + 13 + ((PR() * 3) | 0), by + ((PR() * 16) | 0), 2, 2);
     // 边上的杂草：路面和草地咬合更自然
     g.fillStyle = '#4A8C85';
-    for (let k = 0; k < 2; k++) g.fillRect(bx + ((rng() * 16) | 0), by + ((rng() * 16) | 0), 1, 1);
+    for (let k = 0; k < 2; k++) g.fillRect(bx + ((PR() * 16) | 0), by + ((PR() * 16) | 0), 1, 1);
   }
   // 营地：一小片被踩秃的空地 + 一圈柴火痕，别做成一整块大土斑
   for (const c of camps) {
@@ -995,6 +1110,19 @@ const WANDERERS = [
     x: 352, y: 752, phases: 'always',
     greet: ['你从上面下来的？', '……上面现在什么时辰。', '别站在门口，风里有味道。'],
     ask: '洞里别点火把。点了，它们就来。',
+  },
+  // 第二章：新区不能只有怪。一个认路、一个摆渡，玩家南下先听见人话。
+  {
+    id: 'w_gu', art: 'npcYu', name: '蛊婆', role: '南疆药婆',
+    x: 34 * TILE + 24, y: 116 * TILE + 16, phases: 'always',
+    greet: ['往北走，别往南。', '这土是红的，不是染的。', '你听见虫子叫了吗？'],
+    ask: '瘴气夜里最重。白天来，我还能替你认路。',
+  },
+  {
+    id: 'w_ferry', art: 'npcGeng', name: '周摆渡', role: '江岸渡子',
+    x: 100 * TILE - 32, y: 116 * TILE + 16, phases: 'always',
+    greet: ['桥是去年才架的。', '水底下有东西，别往下看。', '过江往东，是江匪的地界。'],
+    ask: '铁链还在水底。上游冲下来的东西，都挂在链子上。',
   },
 ];
 for (const w of WANDERERS) {
@@ -8216,7 +8344,7 @@ window.__game = {
   debugArc(a0, a1, R) {
     drawArcFx(octx, 240, 135, a0 === undefined ? -2 : a0, a1 === undefined ? 1 : a1, R || 40, [C.red3, C.red2], 1, 1.5);
   },
-  MAPW, MAPH, SPAWN, camps, dens, WEAPONS, WEAPON_IDS, MONSTERS, NODES, SLOTS,
+  MAPW, MAPH, CH1_H, SPAWN, camps, dens, WEAPONS, WEAPON_IDS, MONSTERS, NODES, SLOTS,
   get solid() { return solid; }, REGION,
   get objects() { return objects; },
   get hazards() { return hazards; }, addHazard, clearHazards, UNIQUES, makeUnique,

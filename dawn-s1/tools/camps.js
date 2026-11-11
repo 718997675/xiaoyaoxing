@@ -15,7 +15,7 @@
   // ---------- 1. 营地道具 ----------
   const noFire = g.camps.filter(c => !g.objects.some(o => o.kind === 'campfire'
     && Math.hypot(o.x - c.x, o.y - c.y) < 20));
-  T('12 个营地都有篝火', g.camps.length === 12 && noFire.length === 0,
+  T('16 个营地都有篝火', g.camps.length === 16 && noFire.length === 0,
     g.camps.length + ' 个' + (noFire.length ? '，缺：' + noFire.map(c => c.name).join('/') : ''));
   const tents = g.objects.filter(o => o.kind === 'tent').length;
   const towers = g.objects.filter(o => o.kind === 'tower').length;
@@ -130,7 +130,10 @@
   // ---------- 8. 营地首领 ----------
   {
     const lords = g.enemies.filter(e => e.lord);
-    T('三个营地首领都在', lords.length === 3, lords.map(e => e.lord).join('/'));
+    // 第一章 3 个（教头 / 蛇母 / 守墓人）+ 第二章 2 个（墟主 / 坞主）
+    T('五个营地首领都在', lords.length === 5 &&
+      ['教头', '蛇母', '守墓人', '墟主', '坞主'].every(n => lords.some(e => e.lord === n)),
+      lords.map(e => e.lord).join('/'));
     T('首领比普通怪硬', lords.every(e => e.elite && e.elite.hp > 2), lords.map(e => e.elite && e.elite.hp).join('/'));
     const lord = lords[0];
     if (lord) {
@@ -148,9 +151,9 @@
     g.startGame(false); step(2);
     const perCamp = g.camps.map(c => alive().filter(e => e.camp === c).length);
     T('每个营地 4~8 只（含夜行与首领）', perCamp.every(n => n >= 4 && n <= 8), perCamp.join('/'));
-    // 92 = 12 营地 87 + 4 个巢穴首领 + 偶尔刷出的精英。上限放到 100，
-    // 但下限守住 55 —— 掉到 55 以下说明有营地没刷满。
-    T('怪总数在合理范围', alive().length >= 55 && alive().length <= 100, alive().length + ' 只');
+    // 16 营地后基线约 110 只 + 4 个巢穴首领 + 偶尔的精英。上限放到 130，
+    // 下限守住 55 —— 掉到 55 以下说明有营地没刷满。
+    T('怪总数在合理范围', alive().length >= 55 && alive().length <= 130, alive().length + ' 只');
   }
 
   R.ok = R.checks.every(c => c.startsWith('PASS'));
