@@ -650,6 +650,65 @@ export function runDevTests() {
     g.collectLights();
     T('出洞后光源恢复野外', g.lights.length > n, n + ' → ' + g.lights.length);
   }
+
+  // ============ T27b · 洞内火把会灭（P12 前置项 ③）============
+  {
+    g.dgReset(); step(2);
+    const d = g.dgData;
+    g.setPos(d.doorX, d.doorY - 8); step(2);
+    const bz = g.dgObjs.filter(o => o.kind === 'brazier');
+    T('进洞时火把与火盆都亮着', !!g.torch && g.torch.lit === true &&
+      bz.length > 0 && bz.every(o => o.lit === true),
+      '火把=' + (g.torch && g.torch.lit) + '　火盆 ' + bz.length + ' 盏');
+    g.collectLights();
+    const n0 = g.lights.length, r0 = g.lights[0].r;
+    T('洞里火把是最大那盏光源', r0 >= 80, Math.round(r0) + 'px');
+
+    g.torch.fuel = 0.001; step(2);
+    T('油烧完火把真的会灭', g.torch.lit === false && g.torch.outs === 1,
+      'outs=' + g.torch.outs);
+    g.collectLights();
+    T('火把灭了可视半径收窄', g.lights[0].r < r0 && g.lights[0].r > 0,
+      Math.round(r0) + ' → ' + Math.round(g.lights[0].r));
+
+    const one = bz[0];
+    g.douseBrazier(one, '测试'); step(1);
+    g.collectLights();
+    T('火盆灭了光源真的少一个', g.lights.length === n0 - 1,
+      n0 + ' → ' + g.lights.length);
+    T('灭掉的火盆贴图压暗了', one.mesh.material.color.getHex() === 0x555a66,
+      '#' + one.mesh.material.color.getHexString());
+
+    g.setPos(one.x, one.y); step(1);
+    T('走近火盆能借火', g.nearBrazier() === one, g.nearBrazier() ? '找到了' : '没找到');
+    g.dgRelight(one); step(1); g.collectLights();
+    T('借火后火把与火盆都回来', g.torch.lit === true && g.lights.length === n0,
+      g.torch.lit + ' / ' + g.lights.length);
+
+    // 第一次灭是被风
+    const out0 = bz.filter(o => o.lit === false).length;
+    g.dgGustT = 0.001; step(1);
+    const out1 = bz.filter(o => o.lit === false).length;
+    T('穿堂风会吹灭一盏火盆', out1 > out0, out0 + ' → ' + out1);
+
+    // 第二次灭是被翅膀
+    const target = bz.find(o => o.lit !== false);
+    if (target) {
+      g.dgRelight(target);
+      g.setPos(target.x, target.y); step(1);
+      const cr = g.spawnEnemy('crow', target.x + 8, target.y, { x: target.x, y: target.y });
+      if (cr) g.hitEnemy(cr, { dmg: 99999, crit: false }, 0, 0);
+      T('火鸦扑棱会扇灭近旁火盆', target.lit === false, target.lit ? '还亮着' : '灭了');
+    } else {
+      T('火鸦扑棱会扇灭近旁火盆', false, '没有亮着的火盆');
+    }
+
+    // 第三次：不点了
+    g.torch.lit = true; g.torch.fuel = 0.001; step(1);
+    g.torch.lit = true; g.torch.fuel = 0.001; step(1);
+    T('灭到第三回换一句台词', g.torch.outs === 3 &&
+      g.messages.some(m => m.txt.indexOf('第三回了') >= 0), 'outs=' + g.torch.outs);
+  }
   {
     const d = g.dgData;
     g.setPos(d.deepC.x, d.deepC.y + 36); step(2);

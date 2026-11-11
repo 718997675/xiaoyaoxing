@@ -112,6 +112,53 @@
     }
   }
 
+  // ---------- 5.5 无面剑客三阶段换兵器（P12 前置项 ②）----------
+  {
+    const ph = g.MONSTERS.wumian.phases;
+    T('无面剑客有三阶段', Array.isArray(ph) && ph.length === 3, ph ? ph.length + ' 段' : '没有');
+    const fams = ph ? ph.map(p => p.weapon) : [];
+    T('三阶段各换一件真兵器', new Set(fams).size === 3 && fams.every(f => !!g.WEAPONS[f]),
+      fams.join(' / '));
+    T('旧 skills 仍指向第一阶段（兼容旧文档）', !!ph && g.MONSTERS.wumian.skills === ph[0].skills,
+      '同一张表');
+    const fxSets = ph ? ph.map(p => [...new Set(p.skills.map(s => s.fx))].sort().join(',')) : [];
+    T('三阶段招式组合各不相同', new Set(fxSets).size === 3, fxSets.join(' | '));
+    const artBad = [];
+    for (const p of ph || []) for (const s of p.skills) {
+      const a = s.art && g.artById(s.art);
+      if (!a || a.fam !== p.weapon) artBad.push(s.name + '→' + s.art);
+    }
+    T('每招都指回本阶段兵器的玩家招式', artBad.length === 0, artBad.join('/') || 'OK');
+    const c = g.bossArtColors({ art: 'dual_3', weapon: 'dual' }, ['#fff', '#fff']);
+    T('招式色彩取自 arts.js 而不是写死', Array.isArray(c) && c.length === 2 && c[0] !== '#fff',
+      c.join('/'));
+  }
+  {
+    g.startGame(false); step(2);
+    const e = g.spawnEnemy('wumian', g.player.x + 60, g.player.y, { x: g.player.x, y: g.player.y });
+    if (e) {
+      const ph = g.MONSTERS.wumian.phases;
+      e.hp = e.maxHp;
+      T('满血走第一阶段的剑', g.wumianPhase(e) === 0 && g.bossSkillsOf(e) === ph[0].skills,
+        'phase=0');
+      e.hp = e.maxHp * 0.5;
+      const s1 = g.bossSkillsOf(e);
+      T('半血换枪且冷却表作废', e.wmPhase === 1 && s1 === ph[1].skills && e.skillCds === null,
+        'phase=1');
+      e.hp = e.maxHp * 0.2;
+      const s2 = g.bossSkillsOf(e);
+      T('残血换双刃', e.wmPhase === 2 && s2 === ph[2].skills, 'phase=2');
+      e.skillGap = 0; e.skill = null; e.skillCds = s2.map(() => 0);
+      const used = g.runBossSkills(e, 0.016, 30);
+      T('选招只用当前阶段那张表', used === true && s2.indexOf(e.skill) >= 0,
+        e.skill ? e.skill.name : '没选出来');
+      T('换段会报出兵器名', g.messages.some(m => m.txt.indexOf('换「') >= 0),
+        g.messages.map(m => m.txt).join(' / '));
+    } else {
+      T('满血走第一阶段的剑', false, '无面剑客没刷出来');
+    }
+  }
+
   // ---------- 6. 首杀唯一装备 ----------
   {
     g.startGame(false); step(2);

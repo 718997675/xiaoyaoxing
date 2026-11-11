@@ -11,6 +11,37 @@ const P = {
   c: '#6B3B32', u: '#8A6FC4', U: '#4A3A6B',
 };
 
+// 无面剑客：三阶段，每阶段换一件兵器。
+// 不新写一套 AI —— runBossSkills 只认「当前这张招式表」，换段就是把表换掉。
+// 每条招式用 art 指回 arts.js 里的玩家招式：终章写「招式和你一模一样」，
+// 这里让它真的引用同一张表，而不是抄一遍名字。
+const WUMIAN_S1 = [
+  { name: '拔刀斩', fx: 'slam', cd: 6, windup: 1.0, range: 120, r: 104, dmg: 2.2,
+    weapon: 'sword', art: 'sword_1' },
+  { name: '剑气', fx: 'fan', cd: 3.6, windup: 0.35, range: 260, count: 3, spread: 0.34, speed: 210, dmg: 0.9,
+    weapon: 'sword', art: 'sword_4' },
+  { name: '镜像', fx: 'summon', cd: 11, windup: 0.8, range: 320, kind: 'shadow', count: 2,
+    art: 'sword_8' },
+];
+const WUMIAN_S2 = [
+  { name: '贯甲刺', fx: 'fan', cd: 3.0, windup: 0.5, range: 300, count: 1, spread: 0, speed: 300, dmg: 1.25,
+    weapon: 'spear', art: 'spear_3' },
+  { name: '横扫千军', fx: 'slam', cd: 5.2, windup: 0.72, range: 150, r: 132, dmg: 1.6,
+    weapon: 'spear', art: 'spear_5' },
+  { name: '落石阵', fx: 'rain', cd: 7.2, windup: 0.7, range: 300, count: 4, spreadR: 92,
+    r: 34, delay: 0.8, dmg: 1.0, color: C.gold2, art: 'spear_6' },
+];
+const WUMIAN_S3 = [
+  { name: '双刀合击', fx: 'slam', cd: 4.2, windup: 0.58, range: 140, r: 116, dmg: 1.8,
+    weapon: 'dual', art: 'dual_3' },
+  { name: '漫天飞刃', fx: 'fan', cd: 3.0, windup: 0.36, range: 280, count: 5, spread: 0.62, speed: 240, dmg: 0.72,
+    weapon: 'dual', art: 'dual_5' },
+  { name: '影分身', fx: 'summon', cd: 9, windup: 0.7, range: 320, kind: 'shadow', count: 2,
+    art: 'dual_8' },
+  { name: '地裂', fx: 'zone', cd: 6.5, windup: 0.75, range: 260, count: 3,
+    r: 36, delay: 0.7, life: 2.2, dmg: 1.1, color: C.pur3, art: 'dual_4' },
+];
+
 export const MONSTERS = {
   zhiren: {
     name: '山贼', behavior: 'melee', tier: 0,
@@ -492,10 +523,14 @@ export const MONSTERS = {
       '..pp...pp..ppp..',
       '..pp...pp...pp..',
     ],
-    skills: [
-      { name: '拔刀斩', fx: 'slam', cd: 6, windup: 1.0, range: 120, r: 104, dmg: 2.2 },
-      { name: '剑气', fx: 'fan', cd: 3.6, windup: 0.35, range: 260, count: 3, spread: 0.34, speed: 210, dmg: 0.9 },
-      { name: '镜像', fx: 'summon', cd: 11, windup: 0.8, range: 320, kind: 'shadow', count: 2 },
+    // 原来的一张表保留为第一阶段：旧自检 / 旧文档读 skills 仍能拿到东西。
+    skills: WUMIAN_S1,
+    // 血量 >67% 用剑、34%~67% 换枪、<34% 换双刃。阈值写在 game.js 的
+    // wumianPhase()，这里只存「每段用哪件兵器、哪几招」。
+    phases: [
+      { weapon: 'sword', label: '剑', name: '第一式 · 持剑', skills: WUMIAN_S1 },
+      { weapon: 'spear', label: '枪', name: '第二式 · 换枪', skills: WUMIAN_S2 },
+      { weapon: 'dual', label: '双刃', name: '第三式 · 双刃', skills: WUMIAN_S3 },
     ],
   },
 

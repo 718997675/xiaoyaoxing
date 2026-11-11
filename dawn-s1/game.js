@@ -1022,6 +1022,12 @@ for (const k in DART) dgTex[k] = tex(DART[k]);
 // 洞里恒暗，不随昼夜。这是地宫唯一"作弊"的地方，也是它成立的原因：
 // 可视半径 96px，玩家永远只能看见一间屋，于是"每次重排"这件事被藏住了。
 const DG_DARK = { a: 0.84, r: 7, g: 8, b: 15 };
+// 洞里的火是会烧完的：玩家手上一支、每间屋一盏，各自计油。
+// 火把灭了不是全黑 —— 留 26px 的「贴身可见」，否则玩家连墙都摸不到。
+const TORCH_FUEL = 100;                       // 秒
+const BRAZIER_FUEL = () => 110 + Math.random() * 70;
+const BRAZIER_OUT = 0x555a66;                 // 灭掉的火盆压暗
+let dgGustT = 40;                             // 下一阵穿堂风
 
 let dgData = null, dgFloor = 1;
 let dgObjs = [], dgMobs = [], dgCleared = false;
@@ -1040,6 +1046,7 @@ function dgEntry() {
 function dgAdd(kind, x, y, extra) {
   const c = DART[kind];
   const o = Object.assign({ kind, x, y, w: c.width, h: c.height }, extra || {});
+  if (kind === 'brazier') { o.lit = true; o.fuel = BRAZIER_FUEL(); }
   o.mesh = quad(dgTex[kind], o.w, o.h);
   o.mesh.position.set(x, y - o.h / 2, 0);
   o.mesh.renderOrder = 1000 + Math.round(y);
@@ -1155,6 +1162,9 @@ function dgBuild(floor, seed) {
   dgFloor = floor;
   dgData = genFloor(seed, floor);
   dgCleared = false;
+  // 每下一层都是一支新火把、一层重新点过的火盆。
+  player.torch = { lit: true, fuel: TORCH_FUEL, outs: 0 };
+  dgGustT = 40;
   // 换层 / 重排时把上一层的地面危险区收掉 —— 否则一层留下的毒雾会飘到下一层，
   // 玩家刚落地就掉血，还找不到来源。飞剑环绕同理。
   clearHazards();
@@ -1269,6 +1279,7 @@ const player = {
   x: SPAWN.x, y: SPAWN.y, hp: 100, qi: 60, maxHpBase: 100, xp: 0, level: 1, gold: 0, iron: 0,
   atkBase: 8, dir: 'down', moving: false,
   atkCd: 0, atkT: 0, atkBuf: 0, atkStep: 0, lastAtkT: -9, swing: null, lunge: 0,
+  torch: { lit: true, fuel: TORCH_FUEL, outs: 0 },
   dashT: 0, dashCd: 0, flash: 0, iframe: 0, shield: 0, hurtFlash: 0,
   poison: 0, poisonT: 0, poisonImmuneT: 0, rootT: 0,
   bossKills: {},
@@ -1554,9 +1565,19 @@ function collectLights() {
   // 洞里：只有火把和火盆。营地的篝火、村里的窗灯、铺子的招幌全在洞外，
   // 但把它们排掉不只是省几次 drawImage —— 它保证洞里没有"远处的光"可看。
   if (dgIn(player.x, player.y)) {
-    lightSources[0].r = 112; lightSources[0].warm = 1;
+    const t = player.torch;
+    const lit = !t || t.lit;
+    // 快烧完时先自己暗下去，给玩家一个「该找火盆了」的信号。
+    const dim = lit ? 0.72 + 0.28 * Math.min(1, (t ? t.fuel : TORCH_FUEL) / 25) : 0;
+    lightSources[0].r = lit ? 112 * dim : 26;
+    lightSources[0].k = lit ? 1 : 0.55;
+    lightSources[0].warm = 1;
     for (const o of dgObjs) {
-      if (o.kind === 'brazier') lightSources.push({ x: o.x, y: o.y - 12, r: 70, k: 0.86, warm: 1 });
+      if (o.kind === 'brazier') {
+        if (o.lit === false) continue;
+        const f = Math.max(0.42, Math.min(1, (o.fuel || 0) / 25));
+        lightSources.push({ x: o.x, y: o.y - 12, r: 70 * f, k: 0.86 * f, warm: 1 });
+      }
       else if (o.kind === 'rift') lightSources.push({ x: o.x, y: o.y - 8, r: 46, k: 0.55, warm: 0 });
     }
     return;
@@ -1574,13 +1595,84 @@ function collectLights() {
   }
 }
 
+// ---- 洞里的火：会烧完、会被吹灭、能借火重燃 ----
+// 第三幕正文写「火把灭了三次。第一次是被风。第二次是被翅膀。第三次，你干脆不点了。」
+// 以前 DG_DARK 只是个常数，这句话纯属叙述；现在风、翅膀、油量都是机制。
+function douseBrazier(o, why) {
+  if (!o || o.kind !== 'brazier' || o.lit === false) return false;
+  o.lit = false; o.fuel = 0;
+  o.mesh.material.color.set(BRAZIER_OUT);
+  burst(o.x, o.y - 12, C.ink3, 8, 36);
+  if (Math.hypot(player.x - o.x, player.y - o.y) < 180) msg(why + ' · 一盏火盆灭了', C.paper1);
+  return true;
+}
+function douseBraziersNear(x, y, r, why) {
+  let best = null, bd = r;
+  for (const o of dgObjs) {
+    if (o.kind !== 'brazier' || o.lit === false) continue;
+    const d = Math.hypot(o.x - x, o.y - y);
+    if (d < bd) { bd = d; best = o; }
+  }
+  return best ? douseBrazier(best, why) : false;
+}
+function nearBrazier() {
+  let best = null, bd = 36;
+  for (const o of dgObjs) {
+    if (o.kind !== 'brazier') continue;
+    const d = Math.hypot(player.x - o.x, player.y - o.y);
+    if (d < bd) { bd = d; best = o; }
+  }
+  return best;
+}
+function dgRelight(o) {
+  const wasOut = o && o.lit === false;
+  if (wasOut) {
+    o.lit = true; o.fuel = BRAZIER_FUEL();
+    o.mesh.material.color.set(0xffffff);
+    burst(o.x, o.y - 12, C.gold3, 12, 60);
+  }
+  // 火盆是「火的补给点」：走近按 E，火把重新点满，不用新增火折子这类道具。
+  player.torch.lit = true; player.torch.fuel = TORCH_FUEL;
+  AUDIO.play('pickup');
+  msg(wasOut ? '火盆重新点上了 · 火把也亮了' : '借了个火 · 火把又满了', C.jade3);
+  return true;
+}
+function updateDgFire(dt) {
+  if (!dgIn(player.x, player.y)) return;
+  const t = player.torch;
+  if (t && t.lit) {
+    t.fuel -= dt;
+    if (t.fuel <= 0) {
+      t.lit = false; t.fuel = 0; t.outs = (t.outs || 0) + 1;
+      burst(player.x, player.y - 12, C.paper2, 8, 40);
+      msg(t.outs >= 3 ? '第三回了。这回你没急着点。' : '风一灌，火把灭了', C.red3);
+    }
+  }
+  // 第一次灭是被风：每隔三四十秒吹掉一盏；身边没有就吹远处任意一盏。
+  dgGustT -= dt;
+  if (dgGustT <= 0) {
+    dgGustT = 38 + Math.random() * 30;
+    if (!douseBraziersNear(player.x, player.y, 220, '一阵穿堂风')) {
+      const lit = dgObjs.filter(o => o.kind === 'brazier' && o.lit !== false);
+      if (lit.length) douseBrazier(lit[(Math.random() * lit.length) | 0], '不知哪儿来的风');
+    }
+  }
+  for (const o of dgObjs) {
+    if (o.kind !== 'brazier' || o.lit === false) continue;
+    o.fuel -= dt;
+    if (o.fuel <= 0) douseBrazier(o, '油烧干了');
+  }
+}
+
 // 时辰光罩。a=0 的白天直接在函数开头返回，零开销。
 function drawDayNight(camX, camY) {
   // 洞里不看天时。白天进洞、夜里进洞，看到的是同一片黑 ——
   // 否则玩家会拿"外面的光"当路标，地宫的空间感立刻散掉。
   const inDg = dgIn(player.x, player.y);
   const L = inDg ? DG_DARK : clock.light;
-  const totalA = inDg ? DG_DARK.a : Math.min(0.74, L.a);
+  const totalA = inDg
+    ? Math.min(0.94, DG_DARK.a + (player.torch && !player.torch.lit ? 0.08 : 0))
+    : Math.min(0.74, L.a);
   if (totalA < 0.006) return;
 
   lctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -2358,6 +2450,9 @@ function killEnemy(e) {
       o.poisonSpread = true;
     }
   }
+  // 第二次灭是被翅膀：火鸦扑棱过去，近旁的火盆就完了。
+  if ((e.type === 'crow' || e.type === 'huoya') && dgIn(player.x, player.y))
+    douseBraziersNear(e.x, e.y, 96, '翅膀扇过去');
   // 任务计数放在最前面：后面有通关判定会改 state，改完之后再计数容易被漏掉
   questOnKill(e);
   dmgNum(e.x, e.y - e.h - 6, '+' + m.xp + '历练', C.paper3);
@@ -4330,6 +4425,8 @@ function shopOpen(id) {
 function shopClose() { shopEl.classList.add('hidden'); shopId = null; }
 function renderShop() {
   if (!shopId || shopEl.classList.contains('hidden')) return;
+  // 交付对话没说完时别把货架刷回来，否则「继续」按钮会被商品冲掉。
+  if (turnInSeq && turnInHost === 'shop') { drawTurnIn(); return; }
   const s = SHOPS[shopId];
   const open = shopOpenNow(shopId);
   document.getElementById('shopTitle').textContent = s.title;
@@ -4343,7 +4440,8 @@ function renderShop() {
   // 能复命的排在能接的前面 —— 先把这一趟收掉，再接新的，顺序反了会让人以为自己没做完。
   for (const q of questTurnInAt(shopId)) {
     rows.push('<div class="goods qrow"><div class="gn">复命 · ' + q.title +
-      '<b>可交付</b></div><div class="gd">' + (q.outro || '') + '</div>' +
+      '<b>可交付</b></div><div class="gd">' +
+      (q.turnIn && q.turnIn.length ? q.turnIn[0].text : (q.outro || '')) + '</div>' +
       '<button data-quest="' + q.id + '" data-act="turnin">复命</button></div>');
   }
   for (const q of questOffered(shopId)) {
@@ -4393,7 +4491,11 @@ function renderShop() {
       b.onclick = () => {
         const id = b.dataset.quest;
         if (b.dataset.act === 'take') questAccept(id);
-        else questTurnIn(id);
+        else {
+          const done = questTurnIn(id);
+          // 店主走店铺面板，没有对话面板，所以同一段对话在货架区里演。
+          if (done && done.turnIn && done.turnIn.length) { beginTurnIn(done, 'shop'); return; }
+        }
         renderShop();
       };
     });
@@ -4489,6 +4591,9 @@ function interact() {
   // 洞里没有柜台也没有村民，先认箱子与地脉裂口
   const dgo = nearDg();
   if (dgo) { dgUse(dgo); return; }
+  // 箱子 / 裂口优先，其次才是火盆：站在裂口边上按 E 不该被借火抢走。
+  const bz = nearBrazier();
+  if (bz) { dgRelight(bz); return; }
   // 先认人，再认铺子。人比柜台重要 —— 站在门口的那个人才是"这地方有人"的信号。
   // 两边都在范围内时比距离，谁近听谁的（说书人和货郎的摊子只隔五十来像素）。
   const v = nearVillager();
@@ -5059,6 +5164,9 @@ function talkTo(v) {
 }
 function renderTalk(line) {
   say(line);
+  renderTalkOptions();
+}
+function renderTalkOptions() {
   talkOptsEl.innerHTML = '';
   const add = (label, fn) => {
     const b = document.createElement('button');
@@ -5066,6 +5174,7 @@ function renderTalk(line) {
     b.onclick = fn;
     talkOptsEl.appendChild(b);
   };
+  if (!talkNpc) return;
   if (!talkAsked) add('打听', () => {
     talkAsked = true;
     renderTalk((talkLayer && talkLayer.ask) || talkNpc.ask);
@@ -5074,7 +5183,10 @@ function renderTalk(line) {
   for (const q of questTurnInAt(talkNpc.id)) {
     add('复命 · ' + q.title, () => {
       const done = questTurnIn(q.id);
-      renderTalk((done && done.outro) || '……');
+      if (!done) return;
+      // 有交付对话就一行一行演；没写的老任务仍按原来一句 outro 收。
+      if (done.turnIn && done.turnIn.length) beginTurnIn(done, 'talk');
+      else renderTalk(done.outro || '……');
     });
   }
   for (const q of questOffered(talkNpc.id)) {
@@ -5089,7 +5201,68 @@ function renderTalk(line) {
   });
   // 关窗只留底部那一个按钮 —— 选项行里再放一个「作别」，同屏就有两个一样的东西。
 }
+
+// ============ 交付对话 ============
+// 以前点「复命」只弹一句 outro，人像个自动售货机。现在每条任务带一段
+// turnIn（一行一句、带说话人），点「继续」往下走，最后一句仍是 outro。
+// 对话期间不给「打听 / 接下」，免得玩家点着点着把自己点出对话。
+// 村里走对话面板，店主走店铺面板 —— 两条入口共用同一段序列状态。
+let turnInSeq = null, turnInI = 0, turnInHost = 'talk', turnInName = '';
+function turnInLines(q) {
+  const lines = (q.turnIn || []).slice();
+  if (q.outro) lines.push({ who: null, text: q.outro });
+  return lines.length ? lines : [{ who: null, text: '……' }];
+}
+function dlgEsc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function beginTurnIn(q, host) {
+  turnInSeq = turnInLines(q);
+  turnInI = 0;
+  turnInHost = host || 'talk';
+  turnInName = document.getElementById(turnInHost === 'shop' ? 'shopTitle' : 'talkName').textContent;
+  drawTurnIn();
+}
+function drawTurnIn() {
+  if (!turnInSeq) return;
+  const it = turnInSeq[turnInI];
+  const last = turnInI + 1 >= turnInSeq.length;
+  const label = last ? '说完了' : '继续';
+  if (turnInHost === 'shop') {
+    const body = document.getElementById('shopBody');
+    body.innerHTML = '<div class="say">' + dlgEsc(it.text) + '</div>' +
+      '<div class="goods qrow"><button data-turnin="1">' + label + '</button></div>';
+    const b = body.querySelector('[data-turnin]');
+    if (b) b.onclick = advanceTurnIn;
+    document.getElementById('shopTitle').textContent = it.who || turnInName;
+    return;
+  }
+  say(it.text);
+  document.getElementById('talkName').textContent = it.who || turnInName;
+  talkOptsEl.innerHTML = '';
+  const b = document.createElement('button');
+  b.textContent = label;
+  b.onclick = advanceTurnIn;
+  talkOptsEl.appendChild(b);
+}
+function advanceTurnIn() {
+  if (!turnInSeq) return;
+  if (turnInI + 1 < turnInSeq.length) { turnInI++; drawTurnIn(); return; }
+  endTurnIn();
+}
+function endTurnIn() {
+  const host = turnInHost;
+  turnInSeq = null; turnInI = 0;
+  // 店铺标题由 renderShop 自己写回去，这里不用手补。
+  if (host === 'shop') { renderShop(); return; }
+  document.getElementById('talkName').textContent = turnInName;
+  renderTalkOptions();
+}
 function talkClose() {
+  if (turnInSeq && turnInHost === 'talk') {
+    document.getElementById('talkName').textContent = turnInName;
+    turnInSeq = null; turnInI = 0;
+  }
   if (talkTimer) { clearInterval(talkTimer); talkTimer = null; }
   talkEl.classList.add('hidden');
   talkNpc = null;
@@ -6006,14 +6179,16 @@ function updateHazards(dt) {
 function execSkill(e, sk) {
   const dx = player.x - e.x, dy = player.y - e.y, d = Math.hypot(dx, dy) || 1;
   const base = e.dmg * (sk.dmg || 1);
+  // 没挂 art / weapon 的旧首领招式，走原来的白+红，行为一字不变。
+  const cols = bossArtColors(sk, [C.paper1, C.red2]);
   switch (sk.fx) {
     case 'slam': {
       shakeX += 6; shakeY += 6;
-      burst(e.x, e.y - 8, C.paper1, 20, 130);
-      burst(e.x, e.y - 8, C.red2, 12, 100);
+      burst(e.x, e.y - 8, cols[0], 20, 130);
+      burst(e.x, e.y - 8, cols[1] || C.red2, 12, 100);
       slashGhosts.push({
         x: e.x, y: e.y - 8, a0: 0, a1: Math.PI * 2,
-        R: (sk.r || 70) * 0.9, colors: [C.paper1, C.red2], t: 0.3, max: 0.3,
+        R: (sk.r || 70) * 0.9, colors: cols, t: 0.3, max: 0.3,
       });
       if (Math.hypot(player.x - e.x, player.y - e.y) < (sk.r || 70)) hurtPlayer(base);
       break;
@@ -6064,6 +6239,7 @@ function execSkill(e, sk) {
       for (let i = 0; i < n; i++) {
         const a = a0 + (i - (n - 1) / 2) * spread;
         const mesh = quad(FIRE_TEX, 7, 7);
+        if (sk.art || sk.weapon) mesh.material.color.set(cols[0]);
         projectiles.push({
           x: e.x, y: e.y - 6, vx: Math.cos(a) * (sk.speed || 150), vy: Math.sin(a) * (sk.speed || 150),
           t: 2.2, mesh, dmg: base,
@@ -6074,9 +6250,53 @@ function execSkill(e, sk) {
   }
 }
 
+// 无面剑客：血量三段，每段换一件兵器。
+// 设计文档要的是「每阶段换一种兵器」，不是新写一套 AI —— runBossSkills 只认
+// 「当前这张招式表」，换段就是把表换掉并重置各自的冷却。
+// 刻意不直接调 execArt()：那是玩家侧逻辑，读 player.x/y、player.qi、
+// player.loadout，打到的是 enemies。让首领调它等于用玩家的属性打玩家自己。
+// 复用的是 arts.js 的「招式身份」：sk.art 指回玩家招式并取色彩签名来染色，
+// 终章那句「招式和你一模一样」因此有数据依据，不只是台词。
+function wumianPhase(e) {
+  const r = e.hp / (e.maxHp || 1);
+  if (r <= 0.34) return 2;
+  if (r <= 0.67) return 1;
+  return 0;
+}
+function bossSkillsOf(e) {
+  const m = MONSTERS[e.type];
+  if (!m) return null;
+  const ph = m.phases;
+  if (!ph) return m.skills || null;
+  const i = wumianPhase(e);
+  if (e.wmPhase !== i) {
+    const first = e.wmPhase === undefined;
+    e.wmPhase = i;
+    e.skillCds = null;      // 表换了，旧冷却的下标就作废
+    e.skill = null;         // 抬手抬到一半也作废，别把上一阶段的招放出来
+    e.skillGap = 0.8;      // 换兵器那一瞬给玩家半口气
+    if (!first) {
+      const p = ph[i];
+      const W = WEAPONS[p.weapon];
+      msg(m.name + ' · ' + p.name + '　换「' + p.label + '」', C.red3);
+      AUDIO.play('boss');
+      burst(e.x, e.y - 10, W && W.trail ? W.trail[0] : C.red2, 22, 130);
+    }
+  }
+  return ph[e.wmPhase].skills;
+}
+// 色彩签名：优先招式自带色，其次兵器家族色，最后退回调用方给的旧色。
+function bossArtColors(sk, fallback) {
+  const W = sk.weapon && WEAPONS[sk.weapon];
+  const trail = W && W.trail ? W.trail : fallback;
+  const a = sk.art ? artById(sk.art) : null;
+  return (a ? artColor(a, trail) : trail) || fallback;
+}
+
 function runBossSkills(e, dt, d) {
   const m = MONSTERS[e.type];
-  if (!m.skills) return false;
+  const skills = bossSkillsOf(e);
+  if (!skills) return false;
   if (e.skill) {
     // 抬手：站在原地震一下，给玩家反应时间。手抬完了才真正放。
     e.skillT -= dt;
@@ -6087,22 +6307,22 @@ function runBossSkills(e, dt, d) {
   // 以前只有一个全局 skillCd，而挑选逻辑是"遍历到第一个条件成立的"——
   // 结果青鳞蟒永远只放排在最前面的缠身，毒雾与横扫一次都见不到。
   // 分开计时 + 在可放的里面随机挑，招式表才真的是一张表。
-  if (!e.skillCds) e.skillCds = m.skills.map(() => 1.6 + Math.random() * 1.6);
+  if (!e.skillCds) e.skillCds = skills.map(() => 1.6 + Math.random() * 1.6);
   for (let i = 0; i < e.skillCds.length; i++) if (e.skillCds[i] > 0) e.skillCds[i] -= dt;
   if (e.skillGap > 0) { e.skillGap -= dt; return false; }
 
   const hpR = e.hp / e.maxHp;
   const ready = [];
-  for (let i = 0; i < m.skills.length; i++) {
-    const sk = m.skills[i];
-    if (e.skillCds[i] > 0) continue;
+  for (let i = 0; i < skills.length; i++) {
+    const sk = skills[i];
+    if ((e.skillCds[i] || 0) > 0) continue;
     if (sk.range && d > sk.range) continue;
     if (sk.hpBelow && hpR > sk.hpBelow) continue;
     ready.push(i);
   }
   if (!ready.length) return false;
   const i = ready[(Math.random() * ready.length) | 0];
-  const sk = m.skills[i];
+  const sk = skills[i];
   e.skill = sk; e.skillT = sk.windup;
   e.skillCds[i] = sk.cd * (0.85 + Math.random() * 0.3);
   e.skillGap = 0.7 + Math.random() * 0.5;
@@ -6220,6 +6440,8 @@ function update(dt) {
     if (iv && !wasInDg) banner('青云古洞', '第 ' + dgFloor + ' 层 · 火把之外都是黑的');
     wasInDg = iv;
   }
+  // 火在顿帧时也照烧 —— 打起来不该把「火要灭了」这件事暂停掉。
+  updateDgFire(dt);
   // 任务：reach / dg / item / have 四种目标每帧现算，kill 与 talk 走事件
   questTick(dt);
   // 剧情：同样每帧扫全表。节点只有十几个，全表扫比维护事件订阅简单得多，
@@ -7954,6 +8176,10 @@ window.__game = {
   get dgWipe() { return dgWipe; },
   nearDg,
   get dgDipT() { return dgDipT; },
+  get torch() { return player.torch; },
+  get dgGustT() { return dgGustT; }, set dgGustT(v) { dgGustT = v; },
+  TORCH_FUEL, BRAZIER_FUEL,
+  nearBrazier, dgRelight, douseBrazier, douseBraziersNear, updateDgFire,
   get npcs() { return npcObjs; },
   get villagers() { return VILLAGERS; },
   get vilObjs() { return vilObjs; },
@@ -7994,9 +8220,16 @@ window.__game = {
   get solid() { return solid; }, REGION,
   get objects() { return objects; },
   get hazards() { return hazards; }, addHazard, clearHazards, UNIQUES, makeUnique,
-  killEnemy, execSkill, runBossSkills,
+  killEnemy, execSkill, runBossSkills, bossSkillsOf, wumianPhase, bossArtColors,
   QUESTS, QUEST_IDS, QUEST_ITEMS, WANDERERS, ALL_TALKERS, NPCS,
   questAccept, questTurnIn, questReady, questOffered, questTurnInAt, questOnKill, questOnTalk,
+  turnInLines, beginTurnIn, advanceTurnIn, endTurnIn,
+  get turnInState() {
+    return turnInSeq ? {
+      i: turnInI, n: turnInSeq.length, host: turnInHost,
+      who: turnInSeq[turnInI].who, text: turnInSeq[turnInI].text,
+    } : null;
+  },
   refreshSeal, tripleState, relicName, renderQuests, toggleQuests,
   get sealOn() { return sealOn; },
   get talkers() { return ALL_TALKERS; },

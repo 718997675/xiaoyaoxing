@@ -30,12 +30,12 @@ npx serve .        # 或 python -m http.server
 
 ```bash
 cd dawn-s1
-node tools/run.js devtest        # 全量断言，当前基线 137 pass / 0 fail
+node tools/run.js devtest        # 全量断言，当前基线 148 pass / 0 fail
 node tools/run.js eval tools/weapons.js   # 八兵器 / 触屏专项，当前 32 pass / 0 fail
 node tools/run.js eval tools/map.js       # 大地图连通性与地貌，当前 12 pass / 0 fail
 node tools/run.js eval tools/camps.js     # 营地生态（巡逻/吹哨/食物链/作息），当前 17 pass / 0 fail
-node tools/run.js eval tools/bosses.js    # 首领（招式表/巢穴/危险区/首杀专属），当前 23 pass / 0 fail
-node tools/run.js eval tools/quests.js    # 任务（12 条全通/三物门禁/存档），当前 30 pass / 0 fail
+node tools/run.js eval tools/bosses.js    # 首领（招式表/三阶段换兵器/巢穴/危险区/首杀专属），当前 34 pass / 0 fail
+node tools/run.js eval tools/quests.js    # 任务（12 条全通/交付对话逐句播放/三物门禁/存档），当前 38 pass / 0 fail
 node tools/run.js eval tools/arts.js      # 招式（64 招/十四种原语/专精/装配拖拽/签名查重/平衡/存档），当前 131 pass / 0 fail
 node tools/run.js eval tools/mantras.js   # 心法（22 条/互斥/12 个机制/200 组 DPS 分布），当前 75 pass / 0 fail
 STORY=1 QS=x=1 node tools/run.js eval tools/story.js   # 剧情（28 节点/七种触发/终章选择/旧事页/存档），当前 96 pass / 0 fail
@@ -61,6 +61,10 @@ node build.js
 PAGE="逍遥行.html" QS=x=1 node tools/run.js eval tools/arts.js
 PAGE="逍遥行.html" QS=x=1 node tools/run.js eval tools/mantras.js   # 应该和 module 版一样全绿
 ```
+
+> **`PAGE=逍遥行.html node tools/run.js devtest` 一定会超时，别当成回归失败**：
+> `devtest.js` 只在 `?dev=1` 时由 `index.html` 动态 `import()`，它不在 `build.js`
+> 的 `ORDER` 里，单文件版根本没打进去。单文件版用 `eval tools/*.js` 验。
 
 **发布后必须验线上**（`URL=` 直接打远程地址，会等 `__game` 就绪、查心法数 / 道人 /
 画布是否真的画出了像素 / 控制台有没有报错）：
@@ -128,6 +132,9 @@ for(let i=0;i<25;i++)g.tick(0.016)" \
 | **P11 招式收口（其余七件）：56 招补齐四条签名 · 19 形 / 20 式 / 17 音 · 八兵器连拍 · 贯甲刺 → `cleave` · 跃棍 → `shockwave` · 欠账 7 → 0（arts.js 131 条）** | ✅ 2026-11-11 |
 | **招式工作台**：单文件 HTML 编辑 64 招 · 30fps 时间轴 · PNG 序列帧 · 覆盖表白名单合并 · 试玩 / 导入 / 永久三通道 | ✅ 2026-11-11 |
 | **单一分发地址**：`https://718997675.github.io/xiaoyaoxing/`（2026-11-11 起，workbuddy 旧分享链接弃用） | ✅ |
+| **P12 前置 ①**：12 条任务补逐句交付对话（72 句 / 1739 字，村民 / 店铺双入口） | ✅ 2026-11-11 |
+| **P12 前置 ②**：无面剑客三阶段换兵器（剑 / 枪 / 双刃，招式取 `arts.js` 色彩签名） | ✅ 2026-11-11 |
+| **P12 前置 ③**：洞内火把会灭（油量 / 穿堂风 / 火鸦扇灭 / E 借火 / 灭后视距收窄） | ✅ 2026-11-11 |
 
 ### 招式工作台（2026-11-11）
 
@@ -171,13 +178,44 @@ for(let i=0;i<25;i++)g.tick(0.016)" \
   查 `api.github.com/repos/718997675/xiaoyaoxing/actions/runs` 看到 `queued → in_progress →
   completed/success` 后再取才是新版。别在排队期间下"发布失败"的结论。
 
+### P12 前置三项（2026-11-11）
+
+按 §7 原清单收口三件小事。按用户要求，**招式工作台与「四轨道」保持现状不动**；
+`art-motion-preview.html` 只是本地效果预估草稿，未提交 / 未打包 / 未发布。
+
+1. **交付对话**：`quests.js` 12 条任务（3 主线 + 9 支线）每条新增 `turnIn: [{who, text}]`，
+   共 72 句 / 1739 字；`outro` 不删，作为对话序列末句收束。`game.js` 新增
+   `turnInLines()` / `beginTurnIn()` / `drawTurnIn()` / `advanceTurnIn()` / `endTurnIn()`，
+   村民对话面板与店铺面板两处都能逐句播放；中途关窗清状态并恢复 NPC 名字；
+   没写 `turnIn` 的老任务仍按原来一句 `outro` 收，向后兼容。
+2. **无面剑客三阶段**：`monsters.js` 的 `wumian.skills` 拆成 `phases`（剑 / 枪 / 双刃
+   三张招式表）；`wumianPhase()` 按 `hp/maxHp` 得 0/1/2，`bossSkillsOf()` 换表并作废
+   旧冷却，`runBossSkills()` 改读当前表。每个 `sk.art` 指回 `arts.js` 的玩家招式，
+   `bossArtColors()` 用 `artColor()` 给 `slam` / `fan` 染色 —— 终章「招式和你一模一样」
+   从此有数据依据。旧 `skills === phases[0].skills`，兼容旧文档与旧自检。
+   **没让首领调 `execArt()`**：那是玩家侧逻辑，会用玩家属性打玩家自己。
+3. **洞内火把会灭**：`player.torch` 与每个火盆各有 `lit` / `fuel`；穿堂风（`dgGustT`）、
+   油烧干、火鸦扑棱都会灭火；靠近火盆按 E 借火重燃；`collectLights()` 只收亮着的
+   火盆，火把灭后可视半径从 112px 收窄到 26px 且整片洞更黑。第三幕「火把灭了三次」
+   三次各有来源，第三次熄灭换一句台词。
+
+**验收**：模块版 11 套 **644 PASS / 0 FAIL**；`devtest` 137→**148**（+11 洞火）、
+`quests` 30→**38**（+8 交付对话）、`bosses` 23→**34**（+11 三阶段），其余 8 套条数不变，
+既有 9 套 553→**583**。`逍遥行.html` / `dist/index.html` 两条单文件路径各跑
+`quests` / `bosses` / `arts` / `art-overrides` 全绿，本地 `online` 探针 `ok=true`；
+`expr` 确认 `torch` / `dgRelight` / `turnInLines` / `bossSkillsOf` / `phases=3` 都进了
+bundle。重新打包后 `dist/index.html` md5 `472546a0…`（2,018,389 字节），
+工作台页 md5 未变（`b8b61794…`）。
+
+**发布**：见本节末尾的发布验证补充（提交 / Pages 部署 / 线上 md5 与线上自检）。
+
 ### 未完成（按顺序）
 
 | 批次 | 内容 | 文档 |
 |---|---|---|
 | **P12** | 第二章：地图南扩（南疆 / 江岸）+ 三幕新剧情 + 兵器第 9/10 类 | `CHAPTER-1-EXPANSION.md` 第 7 节 |
 | — | 支线继续加厚（9 → 15），把每区从 3 条做到 5 条 | `SKILLS-STORY-PLAN.md` §4.2 |
-| — | 文本量还差一截：设计目标是 3~5 万字，现在 **6108 字**（含旧物与三层对话） | — |
+| — | 文本量还差一截：设计目标 3~5 万字，剧情自检实测 **6259 字**（旧记 6108 已过时）；另新增任务交付对话 1739 字 / 72 句，不计入该统计口径 | — |
 
 ---
 
@@ -268,6 +306,10 @@ dawn-s1/
 - `devtest.js` 里的村庄坐标走 `vp(x, y)` 偏移函数，**别写死**。地图一动就全废。
 - 加墙体判定后，"飞弹能命中敌人"这类测试会 flaky（隔树打不到）。
   修法是**逐个换目标重试**，不是放宽断言。
+- **`PAGE=逍遥行.html node tools/run.js devtest` 会超时，不是回归失败。**
+  `devtest.js` 是 `index.html` 在 `?dev=1` 时动态 `import('./devtest.js')` 加载的，
+  它不在 `build.js` 的 `ORDER` 里 —— 单文件版没有这个模块，自然等不到 `#devout`。
+  单文件版要用 `PAGE=... QS=x=1 node tools/run.js eval tools/xxx.js`。
 - **`URL=` 打远程时也要补 `story=0`**（`tools/run.js` 已自动补）。线上裸地址会播序章，
   播放期间世界暂停，`URL=... eval tools/arts.js` 会出现 25 条伤害 / 持续类断言成片假红，
   而本地永远全绿 —— 因为本地 URL 一直自带这个参数。曾误判成"线上代码坏了"。
@@ -583,17 +625,13 @@ dawn-s1/
 （有波前 + 落点中心 1.5 倍）。`mul` / `cd` / `cost` 一个没动，平衡仍是法杖 2.41x ≤ 2.8。
 逐招画面与四个坑见 `ARTS-DESIGN.md` §7 / §8。
 
-**下一步（P12）**：`CHAPTER-1-EXPANSION.md` 第 7 节的第二章。
-在那之前有几件更小、更值的事：
+**下一步（P12）**：`CHAPTER-1-EXPANSION.md` 第 7 节的第二章 —— 地图南扩、
+三幕新剧情、兵器第 9/10 类。三件前置项已在 2026-11-11 全部收口（见 §3
+「P12 前置三项」）：支线交付对话、无面剑客三阶段换兵器、洞内火把会灭。
 
-1. **文本量**。设计目标 3~5 万字，现在 6108 字。主线节点再加厚收益已经很低，
-   真正的缺口在**支线**（每条支线目前只有 brief + outro 两句）。给 9 条支线各写
-   一段"交任务时的对话"，比再加十个节点有用。
-2. **无面剑客的三阶段**。现在它是 `monsters.js` 里一套招式表（拔刀斩 / 剑气 / 镜像），
-   设计文档要的是"每阶段换一种兵器"。`arts.js` 的 `execArt()` 已经能按兵器取招，
-   接上去比新写一套 AI 便宜。
-3. **洞内光照**。`DG_DARK` 现在是常数，火把不会灭 —— 第三幕的正文写了
-   "火把灭了三次"，机制上还没有这件事。
+> 用户 2026-11-11 定：招式工作台的「四轨道」（判定帧 / 人物动作帧 / 运动轨 / 瞬移）
+> 暂缓，工作台保持现状；`art-motion-preview.html` 只是本地效果预估草稿，
+> 未提交 / 未打包 / 未发布。要做时先看那份草稿与成本量化，别直接动 `artoverrides.js`。
 
 **动手前先读**：
 - `ARTS-DESIGN.md`（招式重做总纲：四条硬规矩 / 锤八招 / 七件兵器逐招画面 §7 / P11 验收与坑 §8）

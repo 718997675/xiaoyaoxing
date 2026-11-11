@@ -53410,6 +53410,37 @@ const P = {
   c: '#6B3B32', u: '#8A6FC4', U: '#4A3A6B',
 };
 
+// 无面剑客：三阶段，每阶段换一件兵器。
+// 不新写一套 AI —— runBossSkills 只认「当前这张招式表」，换段就是把表换掉。
+// 每条招式用 art 指回 arts.js 里的玩家招式：终章写「招式和你一模一样」，
+// 这里让它真的引用同一张表，而不是抄一遍名字。
+const WUMIAN_S1 = [
+  { name: '拔刀斩', fx: 'slam', cd: 6, windup: 1.0, range: 120, r: 104, dmg: 2.2,
+    weapon: 'sword', art: 'sword_1' },
+  { name: '剑气', fx: 'fan', cd: 3.6, windup: 0.35, range: 260, count: 3, spread: 0.34, speed: 210, dmg: 0.9,
+    weapon: 'sword', art: 'sword_4' },
+  { name: '镜像', fx: 'summon', cd: 11, windup: 0.8, range: 320, kind: 'shadow', count: 2,
+    art: 'sword_8' },
+];
+const WUMIAN_S2 = [
+  { name: '贯甲刺', fx: 'fan', cd: 3.0, windup: 0.5, range: 300, count: 1, spread: 0, speed: 300, dmg: 1.25,
+    weapon: 'spear', art: 'spear_3' },
+  { name: '横扫千军', fx: 'slam', cd: 5.2, windup: 0.72, range: 150, r: 132, dmg: 1.6,
+    weapon: 'spear', art: 'spear_5' },
+  { name: '落石阵', fx: 'rain', cd: 7.2, windup: 0.7, range: 300, count: 4, spreadR: 92,
+    r: 34, delay: 0.8, dmg: 1.0, color: C.gold2, art: 'spear_6' },
+];
+const WUMIAN_S3 = [
+  { name: '双刀合击', fx: 'slam', cd: 4.2, windup: 0.58, range: 140, r: 116, dmg: 1.8,
+    weapon: 'dual', art: 'dual_3' },
+  { name: '漫天飞刃', fx: 'fan', cd: 3.0, windup: 0.36, range: 280, count: 5, spread: 0.62, speed: 240, dmg: 0.72,
+    weapon: 'dual', art: 'dual_5' },
+  { name: '影分身', fx: 'summon', cd: 9, windup: 0.7, range: 320, kind: 'shadow', count: 2,
+    art: 'dual_8' },
+  { name: '地裂', fx: 'zone', cd: 6.5, windup: 0.75, range: 260, count: 3,
+    r: 36, delay: 0.7, life: 2.2, dmg: 1.1, color: C.pur3, art: 'dual_4' },
+];
+
 const MONSTERS = {
   zhiren: {
     name: '山贼', behavior: 'melee', tier: 0,
@@ -53891,10 +53922,14 @@ const MONSTERS = {
       '..pp...pp..ppp..',
       '..pp...pp...pp..',
     ],
-    skills: [
-      { name: '拔刀斩', fx: 'slam', cd: 6, windup: 1.0, range: 120, r: 104, dmg: 2.2 },
-      { name: '剑气', fx: 'fan', cd: 3.6, windup: 0.35, range: 260, count: 3, spread: 0.34, speed: 210, dmg: 0.9 },
-      { name: '镜像', fx: 'summon', cd: 11, windup: 0.8, range: 320, kind: 'shadow', count: 2 },
+    // 原来的一张表保留为第一阶段：旧自检 / 旧文档读 skills 仍能拿到东西。
+    skills: WUMIAN_S1,
+    // 血量 >67% 用剑、34%~67% 换枪、<34% 换双刃。阈值写在 game.js 的
+    // wumianPhase()，这里只存「每段用哪件兵器、哪几招」。
+    phases: [
+      { weapon: 'sword', label: '剑', name: '第一式 · 持剑', skills: WUMIAN_S1 },
+      { weapon: 'spear', label: '枪', name: '第二式 · 换枪', skills: WUMIAN_S2 },
+      { weapon: 'dual', label: '双刃', name: '第三式 · 双刃', skills: WUMIAN_S3 },
     ],
   },
 
@@ -56036,6 +56071,14 @@ const QUESTS = {
       { text: '斩了那条青鳞蟒', kind: 'kill', types: ['qingshe'], count: 1 },
     ],
     reward: { relic: 'bamboo_heart', gold: 400, fame: 5, xp: 120 },
+    turnIn: [
+      { who: '你', text: '潭底那条青鳞蟒剖开了。腹里没有骨头，只有一节竹子，风一过会响。' },
+      { who: '吴老六', text: '他把竹节搁在膝上，没去碰，也没往耳边凑。' },
+      { who: '吴老六', text: '「我不听。听了就得信他还在里头。」' },
+      { who: '你', text: '潭边还插着一把刀，刀柄缠着麻绳。' },
+      { who: '吴老六', text: '「……拿过来。」声音比刚才低了半截，「拿过来我看看。」' },
+      { who: null, text: '你把刀递过去。麻绳上有一道很深的牙印，像是咬了很久才松口。' },
+    ],
     outro: '吴老六接过刀，看了很久那道牙印，没说话。',
   },
   q_main_cave: {
@@ -56048,6 +56091,14 @@ const QUESTS = {
       { text: '凿开石母', kind: 'kill', types: ['shimu'], count: 1 },
     ],
     reward: { relic: 'stone_marrow', gold: 500, fame: 5, xp: 160 },
+    turnIn: [
+      { who: '你', text: '矿道最深处那块石母凿开了，里头是一滴凉水似的东西，握着却烫手。' },
+      { who: '碑奴', text: '他伸手要接，又缩回去，在裤腿上擦了两下手。' },
+      { who: '碑奴', text: '「三十年前塌的时候，下去十一个。上来三个。」' },
+      { who: '碑奴', text: '「上来的三个，都说底下有人接着往下凿。」' },
+      { who: '你', text: '「接着凿的是谁？」' },
+      { who: '碑奴', text: '「没人问。问了就得再下去一趟。」他把石髓拢进袖子，袖口立刻鼓了一小块。' },
+    ],
     outro: '碑奴用指甲刮了刮石髓，说：“还是热的。它在等人。”',
   },
   q_main_grave: {
@@ -56060,6 +56111,14 @@ const QUESTS = {
       { text: '问过守墓人', kind: 'kill', types: ['yinhun'], count: 1, lord: '守墓人' },
     ],
     reward: { relic: 'yin_soil', gold: 600, fame: 8, xp: 200 },
+    turnIn: [
+      { who: '玄阳子', text: '「土拿到了？别摊开给我看。」他背着手，眼睛看着碑。' },
+      { who: '你', text: '「夜里长的，湿的。守墓人说，碑别碰。」' },
+      { who: '玄阳子', text: '「他每回都这句。」道士笑了一下，「三十年前我头一回来，他也是这么说的。」' },
+      { who: '玄阳子', text: '「北坡不葬人。葬的是那些还没死透、又不能放回去的。」' },
+      { who: '你', text: '「那你为什么每年都来？」' },
+      { who: '玄阳子', text: '「数数。」他用拂尘指了指碑脚，「少一块，我就少记一年。」' },
+    ],
     outro: '“土你拿去。”守墓人背过身，“碑，别碰。”',
   },
 
@@ -56071,6 +56130,14 @@ const QUESTS = {
     brief: '石大的腿是山魈啃的，可他说最近咬人的是狗。',
     steps: [{ text: '打八只恶犬', kind: 'kill', types: ['fox'], count: 8 }],
     reward: { gold: 180, fame: 2, xp: 60 },
+    turnIn: [
+      { who: '你', text: '八只都清了。腿上带牙印的那种，不像是山魈。' },
+      { who: '石大', text: '「我说过是狗。」他把柴刀往地上一顿，「他们非要说是山魈，说是山魈我这条腿就值二两药钱。」' },
+      { who: '你', text: '「狗是谁家的？」' },
+      { who: '石大', text: '「没家。」他顿了顿，「以前有。」' },
+      { who: null, text: '他弯腰去捡地上那截绳，捡了两回才捡起来。手一直在抖，不是怕。' },
+      { who: '石大', text: '「你别跟人讲我谢你。讲了他们又该来问腿了。」' },
+    ],
     outro: '“狗比人实在。”他把柴刀往肩上一扛，“至少它咬你之前会叫。”',
   },
   q_side_bandit: {
@@ -56080,6 +56147,14 @@ const QUESTS = {
     brief: '柳三娘的账本上，黑风寨欠了三年房钱。',
     steps: [{ text: '清六名山贼', kind: 'kill', types: ['zhiren'], count: 6 }],
     reward: { gold: 250, fame: 3, xp: 80 },
+    turnIn: [
+      { who: '柳三娘', text: '「清了？」她没抬头，算盘珠子还在响。' },
+      { who: '你', text: '「六个。账本上欠的是三年零两个月。」' },
+      { who: '柳三娘', text: '「是三年零两个月零九天。」算盘停了，「头一年他们带过娘子来，住的是东间，要了两壶热的。」' },
+      { who: '你', text: '「账还要不要？」' },
+      { who: '柳三娘', text: '「要。」她把那一页撕下来，捏在手里看了一会儿，「记着就得有人还。人没了，账也不能跟着没。」' },
+      { who: null, text: '纸角在灶口卷了一下，就黑了。她这才抬眼看你，眼里没什么。' },
+    ],
     outro: '“死了就死了。”她把账页撕下来，扔进灶膛，“账清了。”',
   },
   q_side_herb: {
@@ -56089,6 +56164,14 @@ const QUESTS = {
     brief: '药童小满要五枚蛇胆，说镇惊用。',
     steps: [{ text: '取五枚蛇胆', kind: 'kill', types: ['snake'], count: 5 }],
     reward: { gold: 120, fame: 1, xp: 50, potion: 2 },
+    turnIn: [
+      { who: '小满', text: '「五枚？」他把药罐抱得更紧了些，「师父说三枚就够。」' },
+      { who: '你', text: '「多两枚，留着。」' },
+      { who: '小满', text: '「留着会苦。」他掰着指头算，「苦一次镇一天，五枚能镇五天。可第五天要是还惊，就没了。」' },
+      { who: '你', text: '「那第六天呢？」' },
+      { who: '小满', text: '「第六天师父就该换方子了。」他很认真地把罐子放到柜上，「换方子我就不怕了。换方子说明他还想办法。」' },
+      { who: null, text: '罐底在木头上磕了一声，很轻。他没敢再挪。' },
+    ],
     outro: '“师父说蛇胆苦。”他把药罐抱在怀里，“苦才镇得住。”',
   },
   q_side_forge: {
@@ -56098,6 +56181,14 @@ const QUESTS = {
     brief: '张五的炉子要十五块精铁才烧得起来。',
     steps: [{ text: '交十五块精铁', kind: 'have', field: 'iron', count: 15, spend: true }],
     reward: { gear: { r: 2, kind: 'weapon' }, gold: 100, xp: 90 },
+    turnIn: [
+      { who: '你', text: '十五块精铁，按你说的码在炉边了。' },
+      { who: '张五', text: '他拿钳子拨了拨，数也没数，先把最上头那块翻了个面。' },
+      { who: '张五', text: '「这批铁是北边来的吧。」' },
+      { who: '你', text: '「乱葬岗捡的。」' },
+      { who: '张五', text: '「怪不得。」他把钳子搁下，「北边的铁硬，可不吃火。得先饿炉子一宿，明早才打得动。」' },
+      { who: '张五', text: '「东西在门后头，自己拿。别谢我，谢这批铁扛得住。」' },
+    ],
     outro: '“铁留下，东西拿走。”他连头都没抬。',
   },
   q_side_wine: {
@@ -56107,6 +56198,14 @@ const QUESTS = {
     brief: '阿七说，守墓人每月十五会来打酒，这个月没来。',
     steps: [{ text: '把酒送到守墓人小屋', kind: 'reach', at: { x: 1952, y: 512, r: 90 } }],
     reward: { gold: 200, fame: 2, xp: 70 },
+    turnIn: [
+      { who: '阿七', text: '「送到了？」她把酒坛的封泥又按了一遍，「门口有人应没有？」' },
+      { who: '你', text: '「没有。屋里有灯，没开门。」' },
+      { who: '阿七', text: '「那就是他。」她松了手，「他每回都这样。人站在门里头，等你走了才拿。」' },
+      { who: '你', text: '「这个月他没来打酒。」' },
+      { who: '阿七', text: '「我知道。」她把坛子挪到柜台最里头，「所以我才托你送。我去了，他就得开门。」' },
+      { who: null, text: '柜台后头还有一只空坛，封泥是新的，摆得端端正正。' },
+    ],
     outro: '酒坛放在门口。第二天再去看，坛子空了，坛口压着一枚铜钱。',
   },
   q_side_well: {
@@ -56116,6 +56215,14 @@ const QUESTS = {
     brief: '王二说井通地底。你不信，但他说得像个真事。',
     steps: [{ text: '下到古洞第一层', kind: 'dg', floor: 1 }],
     reward: { relic: 'well_stone', gold: 300, fame: 3, xp: 100 },
+    turnIn: [
+      { who: '王二', text: '「下去了？」他鼻子动了动，「身上带土腥。」' },
+      { who: '你', text: '「第一层。井底有块石头，一面有凿痕。」' },
+      { who: '王二', text: '「从哪面凿的？」他忽然坐直了。' },
+      { who: '你', text: '「从里往外。」' },
+      { who: '王二', text: '他愣了很久，才把碗里剩的酒晃了晃，没喝。' },
+      { who: '王二', text: '「我说井通地底，他们笑了十年。」他小声说，「原来笑错方向了。」' },
+    ],
     outro: '石头上真有凿痕，从里往外凿的。',
   },
   q_side_tale: {
@@ -56125,6 +56232,14 @@ const QUESTS = {
     brief: '柳先生讲了三十年的故事，缺一个真结局。',
     steps: [{ text: '斩了无面剑客', kind: 'kill', types: ['wumian'], count: 1 }],
     reward: { gold: 800, fame: 10, xp: 400, gear: { r: 3, kind: 'weapon' } },
+    turnIn: [
+      { who: '柳先生', text: '「了了？」醒木搁在桌上，他没拍。' },
+      { who: '你', text: '「第三层。没有脸。」' },
+      { who: '柳先生', text: '「三十年，我给这故事编过七个结尾。」他一根一根数手指，「状元及第、卸甲归田、死在雪里……都挺好的，就是没人信。」' },
+      { who: '你', text: '「这个就有人信？」' },
+      { who: '柳先生', text: '「这个最没人信。」他把醒木拿起来，又放下，「可它是真的。真东西不用人信，它自己搁在那儿。」' },
+      { who: null, text: '桌角压着一沓纸，头一页写了半行，墨还没干透。' },
+    ],
     outro: '“成了。”他把醒木一拍，“从明日起，讲你。”',
   },
 
@@ -56143,6 +56258,14 @@ const QUESTS = {
       { text: '走到石窟矿口', kind: 'reach', at: { x: 192, y: 320, r: 90 } },
     ],
     reward: { gold: 300, fame: 4, xp: 120 },
+    turnIn: [
+      { who: '陈九', text: '「桨呢？」他先往你身后看了一眼。' },
+      { who: '你', text: '「找着了。断了一截，火鸦拿去垫巢了。」' },
+      { who: '陈九', text: '他接过去，用掌心从断口那头一路摸到桨叶，摸得很慢。' },
+      { who: '陈九', text: '「我兄弟划的是右手。这截断的，正好是右手够不着的地方。」' },
+      { who: '你', text: '「还能修。」' },
+      { who: '陈九', text: '「不修。」他把桨插到船头，插得笔直，「这样船就走不快了。走不快，就还来得及回头。」' },
+    ],
     outro: '桨找回来了，断了一截。陈九把它插在船头，说这样船就走不快了。',
   },
   // 第二条接在第三幕的人身上：老矿工要一盏能烧到他们出去那天的灯。
@@ -56157,6 +56280,14 @@ const QUESTS = {
       { text: '清五只符傀', kind: 'kill', types: ['fukui'], count: 5 },
     ],
     reward: { gold: 320, fame: 3, xp: 130, potion: 2 },
+    turnIn: [
+      { who: '老矿工', text: '「十二块？」他没接，先数了数你手上的口子。' },
+      { who: '你', text: '「符傀也清了。矿口那五只。」' },
+      { who: '老矿工', text: '「那五只不是守矿的。」他把铁块一块块码进灯盏的模子里，「是等灯的。灯一灭，它们就往有人的地方走。」' },
+      { who: '你', text: '「你等了多久？」' },
+      { who: '老矿工', text: '「三年。」他敲了一下模子，声音很脆，「壁根上刻着日子。刻到第三百多道，我就不刻了 —— 怕刻满了还没出去。」' },
+      { who: null, text: '灯盏挂上营口的时候，风从矿道里出来，火苗歪了一下，没灭。' },
+    ],
     outro: '灯盏打好了。他把它挂在营口，说这盏灯能烧三年 —— 正好烧到他出去那天。',
   },
 };
@@ -59347,6 +59478,12 @@ for (const k in DART) dgTex[k] = tex(DART[k]);
 // 洞里恒暗，不随昼夜。这是地宫唯一"作弊"的地方，也是它成立的原因：
 // 可视半径 96px，玩家永远只能看见一间屋，于是"每次重排"这件事被藏住了。
 const DG_DARK = { a: 0.84, r: 7, g: 8, b: 15 };
+// 洞里的火是会烧完的：玩家手上一支、每间屋一盏，各自计油。
+// 火把灭了不是全黑 —— 留 26px 的「贴身可见」，否则玩家连墙都摸不到。
+const TORCH_FUEL = 100;                       // 秒
+const BRAZIER_FUEL = () => 110 + Math.random() * 70;
+const BRAZIER_OUT = 0x555a66;                 // 灭掉的火盆压暗
+let dgGustT = 40;                             // 下一阵穿堂风
 
 let dgData = null, dgFloor = 1;
 let dgObjs = [], dgMobs = [], dgCleared = false;
@@ -59365,6 +59502,7 @@ function dgEntry() {
 function dgAdd(kind, x, y, extra) {
   const c = DART[kind];
   const o = Object.assign({ kind, x, y, w: c.width, h: c.height }, extra || {});
+  if (kind === 'brazier') { o.lit = true; o.fuel = BRAZIER_FUEL(); }
   o.mesh = quad(dgTex[kind], o.w, o.h);
   o.mesh.position.set(x, y - o.h / 2, 0);
   o.mesh.renderOrder = 1000 + Math.round(y);
@@ -59480,6 +59618,9 @@ function dgBuild(floor, seed) {
   dgFloor = floor;
   dgData = genFloor(seed, floor);
   dgCleared = false;
+  // 每下一层都是一支新火把、一层重新点过的火盆。
+  player.torch = { lit: true, fuel: TORCH_FUEL, outs: 0 };
+  dgGustT = 40;
   // 换层 / 重排时把上一层的地面危险区收掉 —— 否则一层留下的毒雾会飘到下一层，
   // 玩家刚落地就掉血，还找不到来源。飞剑环绕同理。
   clearHazards();
@@ -59594,6 +59735,7 @@ const player = {
   x: SPAWN.x, y: SPAWN.y, hp: 100, qi: 60, maxHpBase: 100, xp: 0, level: 1, gold: 0, iron: 0,
   atkBase: 8, dir: 'down', moving: false,
   atkCd: 0, atkT: 0, atkBuf: 0, atkStep: 0, lastAtkT: -9, swing: null, lunge: 0,
+  torch: { lit: true, fuel: TORCH_FUEL, outs: 0 },
   dashT: 0, dashCd: 0, flash: 0, iframe: 0, shield: 0, hurtFlash: 0,
   poison: 0, poisonT: 0, poisonImmuneT: 0, rootT: 0,
   bossKills: {},
@@ -59879,9 +60021,19 @@ function collectLights() {
   // 洞里：只有火把和火盆。营地的篝火、村里的窗灯、铺子的招幌全在洞外，
   // 但把它们排掉不只是省几次 drawImage —— 它保证洞里没有"远处的光"可看。
   if (dgIn(player.x, player.y)) {
-    lightSources[0].r = 112; lightSources[0].warm = 1;
+    const t = player.torch;
+    const lit = !t || t.lit;
+    // 快烧完时先自己暗下去，给玩家一个「该找火盆了」的信号。
+    const dim = lit ? 0.72 + 0.28 * Math.min(1, (t ? t.fuel : TORCH_FUEL) / 25) : 0;
+    lightSources[0].r = lit ? 112 * dim : 26;
+    lightSources[0].k = lit ? 1 : 0.55;
+    lightSources[0].warm = 1;
     for (const o of dgObjs) {
-      if (o.kind === 'brazier') lightSources.push({ x: o.x, y: o.y - 12, r: 70, k: 0.86, warm: 1 });
+      if (o.kind === 'brazier') {
+        if (o.lit === false) continue;
+        const f = Math.max(0.42, Math.min(1, (o.fuel || 0) / 25));
+        lightSources.push({ x: o.x, y: o.y - 12, r: 70 * f, k: 0.86 * f, warm: 1 });
+      }
       else if (o.kind === 'rift') lightSources.push({ x: o.x, y: o.y - 8, r: 46, k: 0.55, warm: 0 });
     }
     return;
@@ -59899,13 +60051,84 @@ function collectLights() {
   }
 }
 
+// ---- 洞里的火：会烧完、会被吹灭、能借火重燃 ----
+// 第三幕正文写「火把灭了三次。第一次是被风。第二次是被翅膀。第三次，你干脆不点了。」
+// 以前 DG_DARK 只是个常数，这句话纯属叙述；现在风、翅膀、油量都是机制。
+function douseBrazier(o, why) {
+  if (!o || o.kind !== 'brazier' || o.lit === false) return false;
+  o.lit = false; o.fuel = 0;
+  o.mesh.material.color.set(BRAZIER_OUT);
+  burst(o.x, o.y - 12, C.ink3, 8, 36);
+  if (Math.hypot(player.x - o.x, player.y - o.y) < 180) msg(why + ' · 一盏火盆灭了', C.paper1);
+  return true;
+}
+function douseBraziersNear(x, y, r, why) {
+  let best = null, bd = r;
+  for (const o of dgObjs) {
+    if (o.kind !== 'brazier' || o.lit === false) continue;
+    const d = Math.hypot(o.x - x, o.y - y);
+    if (d < bd) { bd = d; best = o; }
+  }
+  return best ? douseBrazier(best, why) : false;
+}
+function nearBrazier() {
+  let best = null, bd = 36;
+  for (const o of dgObjs) {
+    if (o.kind !== 'brazier') continue;
+    const d = Math.hypot(player.x - o.x, player.y - o.y);
+    if (d < bd) { bd = d; best = o; }
+  }
+  return best;
+}
+function dgRelight(o) {
+  const wasOut = o && o.lit === false;
+  if (wasOut) {
+    o.lit = true; o.fuel = BRAZIER_FUEL();
+    o.mesh.material.color.set(0xffffff);
+    burst(o.x, o.y - 12, C.gold3, 12, 60);
+  }
+  // 火盆是「火的补给点」：走近按 E，火把重新点满，不用新增火折子这类道具。
+  player.torch.lit = true; player.torch.fuel = TORCH_FUEL;
+  AUDIO.play('pickup');
+  msg(wasOut ? '火盆重新点上了 · 火把也亮了' : '借了个火 · 火把又满了', C.jade3);
+  return true;
+}
+function updateDgFire(dt) {
+  if (!dgIn(player.x, player.y)) return;
+  const t = player.torch;
+  if (t && t.lit) {
+    t.fuel -= dt;
+    if (t.fuel <= 0) {
+      t.lit = false; t.fuel = 0; t.outs = (t.outs || 0) + 1;
+      burst(player.x, player.y - 12, C.paper2, 8, 40);
+      msg(t.outs >= 3 ? '第三回了。这回你没急着点。' : '风一灌，火把灭了', C.red3);
+    }
+  }
+  // 第一次灭是被风：每隔三四十秒吹掉一盏；身边没有就吹远处任意一盏。
+  dgGustT -= dt;
+  if (dgGustT <= 0) {
+    dgGustT = 38 + Math.random() * 30;
+    if (!douseBraziersNear(player.x, player.y, 220, '一阵穿堂风')) {
+      const lit = dgObjs.filter(o => o.kind === 'brazier' && o.lit !== false);
+      if (lit.length) douseBrazier(lit[(Math.random() * lit.length) | 0], '不知哪儿来的风');
+    }
+  }
+  for (const o of dgObjs) {
+    if (o.kind !== 'brazier' || o.lit === false) continue;
+    o.fuel -= dt;
+    if (o.fuel <= 0) douseBrazier(o, '油烧干了');
+  }
+}
+
 // 时辰光罩。a=0 的白天直接在函数开头返回，零开销。
 function drawDayNight(camX, camY) {
   // 洞里不看天时。白天进洞、夜里进洞，看到的是同一片黑 ——
   // 否则玩家会拿"外面的光"当路标，地宫的空间感立刻散掉。
   const inDg = dgIn(player.x, player.y);
   const L = inDg ? DG_DARK : clock.light;
-  const totalA = inDg ? DG_DARK.a : Math.min(0.74, L.a);
+  const totalA = inDg
+    ? Math.min(0.94, DG_DARK.a + (player.torch && !player.torch.lit ? 0.08 : 0))
+    : Math.min(0.74, L.a);
   if (totalA < 0.006) return;
 
   lctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -60683,6 +60906,9 @@ function killEnemy(e) {
       o.poisonSpread = true;
     }
   }
+  // 第二次灭是被翅膀：火鸦扑棱过去，近旁的火盆就完了。
+  if ((e.type === 'crow' || e.type === 'huoya') && dgIn(player.x, player.y))
+    douseBraziersNear(e.x, e.y, 96, '翅膀扇过去');
   // 任务计数放在最前面：后面有通关判定会改 state，改完之后再计数容易被漏掉
   questOnKill(e);
   dmgNum(e.x, e.y - e.h - 6, '+' + m.xp + '历练', C.paper3);
@@ -62655,6 +62881,8 @@ function shopOpen(id) {
 function shopClose() { shopEl.classList.add('hidden'); shopId = null; }
 function renderShop() {
   if (!shopId || shopEl.classList.contains('hidden')) return;
+  // 交付对话没说完时别把货架刷回来，否则「继续」按钮会被商品冲掉。
+  if (turnInSeq && turnInHost === 'shop') { drawTurnIn(); return; }
   const s = SHOPS[shopId];
   const open = shopOpenNow(shopId);
   document.getElementById('shopTitle').textContent = s.title;
@@ -62668,7 +62896,8 @@ function renderShop() {
   // 能复命的排在能接的前面 —— 先把这一趟收掉，再接新的，顺序反了会让人以为自己没做完。
   for (const q of questTurnInAt(shopId)) {
     rows.push('<div class="goods qrow"><div class="gn">复命 · ' + q.title +
-      '<b>可交付</b></div><div class="gd">' + (q.outro || '') + '</div>' +
+      '<b>可交付</b></div><div class="gd">' +
+      (q.turnIn && q.turnIn.length ? q.turnIn[0].text : (q.outro || '')) + '</div>' +
       '<button data-quest="' + q.id + '" data-act="turnin">复命</button></div>');
   }
   for (const q of questOffered(shopId)) {
@@ -62718,7 +62947,11 @@ function renderShop() {
       b.onclick = () => {
         const id = b.dataset.quest;
         if (b.dataset.act === 'take') questAccept(id);
-        else questTurnIn(id);
+        else {
+          const done = questTurnIn(id);
+          // 店主走店铺面板，没有对话面板，所以同一段对话在货架区里演。
+          if (done && done.turnIn && done.turnIn.length) { beginTurnIn(done, 'shop'); return; }
+        }
         renderShop();
       };
     });
@@ -62814,6 +63047,9 @@ function interact() {
   // 洞里没有柜台也没有村民，先认箱子与地脉裂口
   const dgo = nearDg();
   if (dgo) { dgUse(dgo); return; }
+  // 箱子 / 裂口优先，其次才是火盆：站在裂口边上按 E 不该被借火抢走。
+  const bz = nearBrazier();
+  if (bz) { dgRelight(bz); return; }
   // 先认人，再认铺子。人比柜台重要 —— 站在门口的那个人才是"这地方有人"的信号。
   // 两边都在范围内时比距离，谁近听谁的（说书人和货郎的摊子只隔五十来像素）。
   const v = nearVillager();
@@ -63384,6 +63620,9 @@ function talkTo(v) {
 }
 function renderTalk(line) {
   say(line);
+  renderTalkOptions();
+}
+function renderTalkOptions() {
   talkOptsEl.innerHTML = '';
   const add = (label, fn) => {
     const b = document.createElement('button');
@@ -63391,6 +63630,7 @@ function renderTalk(line) {
     b.onclick = fn;
     talkOptsEl.appendChild(b);
   };
+  if (!talkNpc) return;
   if (!talkAsked) add('打听', () => {
     talkAsked = true;
     renderTalk((talkLayer && talkLayer.ask) || talkNpc.ask);
@@ -63399,7 +63639,10 @@ function renderTalk(line) {
   for (const q of questTurnInAt(talkNpc.id)) {
     add('复命 · ' + q.title, () => {
       const done = questTurnIn(q.id);
-      renderTalk((done && done.outro) || '……');
+      if (!done) return;
+      // 有交付对话就一行一行演；没写的老任务仍按原来一句 outro 收。
+      if (done.turnIn && done.turnIn.length) beginTurnIn(done, 'talk');
+      else renderTalk(done.outro || '……');
     });
   }
   for (const q of questOffered(talkNpc.id)) {
@@ -63414,7 +63657,68 @@ function renderTalk(line) {
   });
   // 关窗只留底部那一个按钮 —— 选项行里再放一个「作别」，同屏就有两个一样的东西。
 }
+
+// ============ 交付对话 ============
+// 以前点「复命」只弹一句 outro，人像个自动售货机。现在每条任务带一段
+// turnIn（一行一句、带说话人），点「继续」往下走，最后一句仍是 outro。
+// 对话期间不给「打听 / 接下」，免得玩家点着点着把自己点出对话。
+// 村里走对话面板，店主走店铺面板 —— 两条入口共用同一段序列状态。
+let turnInSeq = null, turnInI = 0, turnInHost = 'talk', turnInName = '';
+function turnInLines(q) {
+  const lines = (q.turnIn || []).slice();
+  if (q.outro) lines.push({ who: null, text: q.outro });
+  return lines.length ? lines : [{ who: null, text: '……' }];
+}
+function dlgEsc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function beginTurnIn(q, host) {
+  turnInSeq = turnInLines(q);
+  turnInI = 0;
+  turnInHost = host || 'talk';
+  turnInName = document.getElementById(turnInHost === 'shop' ? 'shopTitle' : 'talkName').textContent;
+  drawTurnIn();
+}
+function drawTurnIn() {
+  if (!turnInSeq) return;
+  const it = turnInSeq[turnInI];
+  const last = turnInI + 1 >= turnInSeq.length;
+  const label = last ? '说完了' : '继续';
+  if (turnInHost === 'shop') {
+    const body = document.getElementById('shopBody');
+    body.innerHTML = '<div class="say">' + dlgEsc(it.text) + '</div>' +
+      '<div class="goods qrow"><button data-turnin="1">' + label + '</button></div>';
+    const b = body.querySelector('[data-turnin]');
+    if (b) b.onclick = advanceTurnIn;
+    document.getElementById('shopTitle').textContent = it.who || turnInName;
+    return;
+  }
+  say(it.text);
+  document.getElementById('talkName').textContent = it.who || turnInName;
+  talkOptsEl.innerHTML = '';
+  const b = document.createElement('button');
+  b.textContent = label;
+  b.onclick = advanceTurnIn;
+  talkOptsEl.appendChild(b);
+}
+function advanceTurnIn() {
+  if (!turnInSeq) return;
+  if (turnInI + 1 < turnInSeq.length) { turnInI++; drawTurnIn(); return; }
+  endTurnIn();
+}
+function endTurnIn() {
+  const host = turnInHost;
+  turnInSeq = null; turnInI = 0;
+  // 店铺标题由 renderShop 自己写回去，这里不用手补。
+  if (host === 'shop') { renderShop(); return; }
+  document.getElementById('talkName').textContent = turnInName;
+  renderTalkOptions();
+}
 function talkClose() {
+  if (turnInSeq && turnInHost === 'talk') {
+    document.getElementById('talkName').textContent = turnInName;
+    turnInSeq = null; turnInI = 0;
+  }
   if (talkTimer) { clearInterval(talkTimer); talkTimer = null; }
   talkEl.classList.add('hidden');
   talkNpc = null;
@@ -64331,14 +64635,16 @@ function updateHazards(dt) {
 function execSkill(e, sk) {
   const dx = player.x - e.x, dy = player.y - e.y, d = Math.hypot(dx, dy) || 1;
   const base = e.dmg * (sk.dmg || 1);
+  // 没挂 art / weapon 的旧首领招式，走原来的白+红，行为一字不变。
+  const cols = bossArtColors(sk, [C.paper1, C.red2]);
   switch (sk.fx) {
     case 'slam': {
       shakeX += 6; shakeY += 6;
-      burst(e.x, e.y - 8, C.paper1, 20, 130);
-      burst(e.x, e.y - 8, C.red2, 12, 100);
+      burst(e.x, e.y - 8, cols[0], 20, 130);
+      burst(e.x, e.y - 8, cols[1] || C.red2, 12, 100);
       slashGhosts.push({
         x: e.x, y: e.y - 8, a0: 0, a1: Math.PI * 2,
-        R: (sk.r || 70) * 0.9, colors: [C.paper1, C.red2], t: 0.3, max: 0.3,
+        R: (sk.r || 70) * 0.9, colors: cols, t: 0.3, max: 0.3,
       });
       if (Math.hypot(player.x - e.x, player.y - e.y) < (sk.r || 70)) hurtPlayer(base);
       break;
@@ -64389,6 +64695,7 @@ function execSkill(e, sk) {
       for (let i = 0; i < n; i++) {
         const a = a0 + (i - (n - 1) / 2) * spread;
         const mesh = quad(FIRE_TEX, 7, 7);
+        if (sk.art || sk.weapon) mesh.material.color.set(cols[0]);
         projectiles.push({
           x: e.x, y: e.y - 6, vx: Math.cos(a) * (sk.speed || 150), vy: Math.sin(a) * (sk.speed || 150),
           t: 2.2, mesh, dmg: base,
@@ -64399,9 +64706,53 @@ function execSkill(e, sk) {
   }
 }
 
+// 无面剑客：血量三段，每段换一件兵器。
+// 设计文档要的是「每阶段换一种兵器」，不是新写一套 AI —— runBossSkills 只认
+// 「当前这张招式表」，换段就是把表换掉并重置各自的冷却。
+// 刻意不直接调 execArt()：那是玩家侧逻辑，读 player.x/y、player.qi、
+// player.loadout，打到的是 enemies。让首领调它等于用玩家的属性打玩家自己。
+// 复用的是 arts.js 的「招式身份」：sk.art 指回玩家招式并取色彩签名来染色，
+// 终章那句「招式和你一模一样」因此有数据依据，不只是台词。
+function wumianPhase(e) {
+  const r = e.hp / (e.maxHp || 1);
+  if (r <= 0.34) return 2;
+  if (r <= 0.67) return 1;
+  return 0;
+}
+function bossSkillsOf(e) {
+  const m = MONSTERS[e.type];
+  if (!m) return null;
+  const ph = m.phases;
+  if (!ph) return m.skills || null;
+  const i = wumianPhase(e);
+  if (e.wmPhase !== i) {
+    const first = e.wmPhase === undefined;
+    e.wmPhase = i;
+    e.skillCds = null;      // 表换了，旧冷却的下标就作废
+    e.skill = null;         // 抬手抬到一半也作废，别把上一阶段的招放出来
+    e.skillGap = 0.8;      // 换兵器那一瞬给玩家半口气
+    if (!first) {
+      const p = ph[i];
+      const W = WEAPONS[p.weapon];
+      msg(m.name + ' · ' + p.name + '　换「' + p.label + '」', C.red3);
+      AUDIO.play('boss');
+      burst(e.x, e.y - 10, W && W.trail ? W.trail[0] : C.red2, 22, 130);
+    }
+  }
+  return ph[e.wmPhase].skills;
+}
+// 色彩签名：优先招式自带色，其次兵器家族色，最后退回调用方给的旧色。
+function bossArtColors(sk, fallback) {
+  const W = sk.weapon && WEAPONS[sk.weapon];
+  const trail = W && W.trail ? W.trail : fallback;
+  const a = sk.art ? artById(sk.art) : null;
+  return (a ? artColor(a, trail) : trail) || fallback;
+}
+
 function runBossSkills(e, dt, d) {
   const m = MONSTERS[e.type];
-  if (!m.skills) return false;
+  const skills = bossSkillsOf(e);
+  if (!skills) return false;
   if (e.skill) {
     // 抬手：站在原地震一下，给玩家反应时间。手抬完了才真正放。
     e.skillT -= dt;
@@ -64412,22 +64763,22 @@ function runBossSkills(e, dt, d) {
   // 以前只有一个全局 skillCd，而挑选逻辑是"遍历到第一个条件成立的"——
   // 结果青鳞蟒永远只放排在最前面的缠身，毒雾与横扫一次都见不到。
   // 分开计时 + 在可放的里面随机挑，招式表才真的是一张表。
-  if (!e.skillCds) e.skillCds = m.skills.map(() => 1.6 + Math.random() * 1.6);
+  if (!e.skillCds) e.skillCds = skills.map(() => 1.6 + Math.random() * 1.6);
   for (let i = 0; i < e.skillCds.length; i++) if (e.skillCds[i] > 0) e.skillCds[i] -= dt;
   if (e.skillGap > 0) { e.skillGap -= dt; return false; }
 
   const hpR = e.hp / e.maxHp;
   const ready = [];
-  for (let i = 0; i < m.skills.length; i++) {
-    const sk = m.skills[i];
-    if (e.skillCds[i] > 0) continue;
+  for (let i = 0; i < skills.length; i++) {
+    const sk = skills[i];
+    if ((e.skillCds[i] || 0) > 0) continue;
     if (sk.range && d > sk.range) continue;
     if (sk.hpBelow && hpR > sk.hpBelow) continue;
     ready.push(i);
   }
   if (!ready.length) return false;
   const i = ready[(Math.random() * ready.length) | 0];
-  const sk = m.skills[i];
+  const sk = skills[i];
   e.skill = sk; e.skillT = sk.windup;
   e.skillCds[i] = sk.cd * (0.85 + Math.random() * 0.3);
   e.skillGap = 0.7 + Math.random() * 0.5;
@@ -64545,6 +64896,8 @@ function update(dt) {
     if (iv && !wasInDg) banner('青云古洞', '第 ' + dgFloor + ' 层 · 火把之外都是黑的');
     wasInDg = iv;
   }
+  // 火在顿帧时也照烧 —— 打起来不该把「火要灭了」这件事暂停掉。
+  updateDgFire(dt);
   // 任务：reach / dg / item / have 四种目标每帧现算，kill 与 talk 走事件
   questTick(dt);
   // 剧情：同样每帧扫全表。节点只有十几个，全表扫比维护事件订阅简单得多，
@@ -66279,6 +66632,10 @@ window.__game = {
   get dgWipe() { return dgWipe; },
   nearDg,
   get dgDipT() { return dgDipT; },
+  get torch() { return player.torch; },
+  get dgGustT() { return dgGustT; }, set dgGustT(v) { dgGustT = v; },
+  TORCH_FUEL, BRAZIER_FUEL,
+  nearBrazier, dgRelight, douseBrazier, douseBraziersNear, updateDgFire,
   get npcs() { return npcObjs; },
   get villagers() { return VILLAGERS; },
   get vilObjs() { return vilObjs; },
@@ -66319,9 +66676,16 @@ window.__game = {
   get solid() { return solid; }, REGION,
   get objects() { return objects; },
   get hazards() { return hazards; }, addHazard, clearHazards, UNIQUES, makeUnique,
-  killEnemy, execSkill, runBossSkills,
+  killEnemy, execSkill, runBossSkills, bossSkillsOf, wumianPhase, bossArtColors,
   QUESTS, QUEST_IDS, QUEST_ITEMS, WANDERERS, ALL_TALKERS, NPCS,
   questAccept, questTurnIn, questReady, questOffered, questTurnInAt, questOnKill, questOnTalk,
+  turnInLines, beginTurnIn, advanceTurnIn, endTurnIn,
+  get turnInState() {
+    return turnInSeq ? {
+      i: turnInI, n: turnInSeq.length, host: turnInHost,
+      who: turnInSeq[turnInI].who, text: turnInSeq[turnInI].text,
+    } : null;
+  },
   refreshSeal, tripleState, relicName, renderQuests, toggleQuests,
   get sealOn() { return sealOn; },
   get talkers() { return ALL_TALKERS; },

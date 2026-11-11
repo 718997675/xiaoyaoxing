@@ -1045,6 +1045,35 @@ P11 把 64 招做成了纯数据之后，改招式还得手改 `arts.js`。工�
   `dist/index.html` 三套代码路径各自全绿；既有 9 套回归仍是 553 PASS / 0 FAIL。
   协议与用法见 `ART-WORKBENCH.md`。
 
+### 4.12 P12 前置三项实施记录（2026-11-11 完成）
+
+第二章开工前先把 §7 清单里三件「更小更值」的欠账收掉。三件都不动表现层基础设施，
+所以能一次发版；工作台的「四轨道」按用户要求暂缓。
+
+- **① 交付对话**：`quests.js` 12 条任务（3 主线 + 9 支线）各加 `turnIn: [{who, text}]`，
+  共 **72 句 / 1739 字**；`outro` 不删，作为对话序列末句。`game.js` 用 `turnInLines()`
+  合成序列，`turnInSeq / turnInI / turnInHost` 在**村民对话面板**与**店铺面板**两处逐句
+  播放；`talkClose()` 中途关窗清状态并恢复 NPC 名字，`dlgEsc()` 做最小 HTML 转义。
+  没写 `turnIn` 的老任务仍按原一句 `outro` 收。`tools/quests.js` 30 → **38 条**。
+- **② 无面剑客三阶段**：`monsters.js` 的 `wumian.phases` 是剑 / 枪 / 双刃三张招式表，
+  `skills === phases[0].skills` 保留兼容。`wumianPhase()` 按 `hp/maxHp` 换段，
+  `bossSkillsOf()` 换表并作废旧 `skillCds`，`runBossSkills()` 只读当前表；换段会报
+  兵器名并炸一粒家族色粒子。每个 `sk.art` 指回 `arts.js` 的玩家招式，`bossArtColors()`
+  取 `artColor()` 给 `slam` / `fan` 染色。**没复用 `execArt()`**：它读 `player.x/y` /
+  `qi` / `loadout`、打的是 `enemies`，让首领调它等于用玩家属性打玩家自己；这里只复用
+  「招式身份」与色彩签名。`tools/bosses.js` 23 → **34 条**。
+- **③ 洞内火把会灭**：`player.torch = {lit, fuel, outs}`，每个 `brazier` 带 `lit` / `fuel`；
+  `dgGustT` 穿堂风、油烧干、火鸦 / 火鸦王死亡扇灭近旁火盆，`nearBrazier()` +
+  `dgRelight()` 让玩家按 E 借火重燃；`collectLights()` 只收亮着的火盆，火把灭后贴身
+  仍留 26px 光源但整片洞的暗罩上限抬到 0.94。第三次熄灭换成「第三回了。这回你没急着
+  点。」，对上第三幕「第一次是被风。第二次是被翅膀。第三次，你干脆不点了。」
+  `devtest.js` 新增 T27b，137 → **148 条**。
+
+**验收**：模块版 11 套 644 PASS / 0 FAIL（既有 9 套 553 → 583）；`逍遥行.html` /
+`dist/index.html` 两条单文件路径的 `quests` / `bosses` / `arts` / `art-overrides` 全绿，
+`online` 探针 `ok=true`；重新打包后 `dist/index.html` md5 `472546a0…` / 2,018,389 字节，
+工作台页 md5 未变。详见 `HANDOFF.md` §3。
+
 ---
 ## 五、施工批次（接在 CHAPTER-1-EXPANSION 的 P1~P4 之后）
 

@@ -20,6 +20,28 @@
     }
     T('12 条任务定义齐全', g.QUEST_IDS.length === 12 && bad.length === 0,
       g.QUEST_IDS.length + ' 条' + (bad.length ? '，问题：' + bad.join('/') : ''));
+    // P12 前置项 ①：每条任务都要有一段「交任务时的对话」，不是一句 outro 了事。
+    const dlgBad = [];
+    const seen = new Map();
+    for (const id of g.QUEST_IDS) {
+      const lines = Q[id].turnIn;
+      if (!Array.isArray(lines) || lines.length < 4) { dlgBad.push(id + ':对话不足4句'); continue; }
+      const speakers = new Set();
+      for (const l of lines) {
+        // 允许「还能修。」这种六字留白，只挡真正的空句。
+        if (!l || typeof l.text !== 'string' || l.text.length < 5) dlgBad.push(id + ':空句/太短');
+        if (l.who) speakers.add(l.who);
+        if (seen.has(l.text)) dlgBad.push(id + ':与 ' + seen.get(l.text) + ' 撞词');
+        else seen.set(l.text, id);
+      }
+      if (speakers.size < 2) dlgBad.push(id + ':只有一个说话人');
+    }
+    T('12 条任务都有多说话人的交付对话', dlgBad.length === 0,
+      g.QUEST_IDS.length + ' 段 / ' + seen.size + ' 句' + (dlgBad.length ? '，问题：' + dlgBad.slice(0, 4).join('/') : ''));
+    T('交付对话末句仍接得上 outro', g.QUEST_IDS.every(id => {
+      const seq = g.turnInLines(Q[id]);
+      return seq[seq.length - 1].text === Q[id].outro;
+    }), 'outro 不丢');
     const mains = g.QUEST_IDS.filter(id => Q[id].kind === 'main');
     T('主线 3 条 / 支线 9 条', mains.length === 3 && g.QUEST_IDS.length - mains.length === 9,
       '主线 ' + mains.length + ' / 支线 ' + (g.QUEST_IDS.length - mains.length));
@@ -191,6 +213,38 @@
     T('信物能存档读档', (g.player.relics.bamboo_heart || 0) === 1, '竹心=' + (g.player.relics.bamboo_heart || 0));
     T('已完成的任务也留着', g.player.quests.q_side_bandit && g.player.quests.q_side_bandit.st === 'done',
       (g.player.quests.q_side_bandit || {}).st);
+  }
+
+  // ---------- 9.5 交付对话真的能逐句走完 ----------
+  {
+    const q = Q.q_side_dog;
+    g.beginTurnIn(q, 'shop');
+    const s0 = g.turnInState;
+    T('点复命进入交付对话第一句', !!s0 && s0.i === 0 && s0.host === 'shop' &&
+      s0.text === q.turnIn[0].text, s0 ? s0.who + '：' + s0.text.slice(0, 12) : '没进去');
+    let n = 0;
+    while (g.turnInState && n++ < 30) g.advanceTurnIn();
+    T('交付对话能一句句走到收束', n === q.turnIn.length + 1 && g.turnInState === null,
+      n + ' 句（含 outro）');
+    T('对话结束后名字与货架复位', document.getElementById('shopTitle').textContent.length > 0,
+      document.getElementById('shopTitle').textContent);
+
+    g.startGame(false); step(2);
+    g.questAccept('q_side_dog');
+    g.player.quests.q_side_dog.step = q.steps.length;   // 直接置为可复命
+    const v = g.talkers.find(x => x.id === 'qiao');
+    g.talkTo(v);
+    const btn = Array.from(document.querySelectorAll('#talkOpts button'))
+      .find(b => b.textContent.indexOf('复命') === 0);
+    T('村民面板有复命按钮', !!btn, btn ? btn.textContent : '没有');
+    if (btn) {
+      btn.click();
+      const s = g.turnInState;
+      T('村民复命会进逐句对话', !!s && s.host === 'talk' && s.text === q.turnIn[0].text,
+        s ? s.text.slice(0, 12) : '没进对话');
+      T('复命确实给了奖励', g.player.quests.q_side_dog.st === 'done', g.player.quests.q_side_dog.st);
+    }
+    g.talkClose();
   }
 
   // ---------- 10. 十条任务全部可完成 ----------
