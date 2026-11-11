@@ -421,8 +421,15 @@ story 113 / quests 43 / bosses 38 / map 23 / camps 17 / art-overrides 29 / art-w
 单文件版两条路径各 **549 PASS / 0 FAIL**（9 套 eval + `online` 探针 `ok=true`）；
 线上体检 `ok=true`（四个字段各 80/80）。
 
-**还没做**：文档章节（`README.md` / `CHAPTER-1-EXPANSION.md` §9.9 / `ARTS-DESIGN.md` 第十一章 /
-`ART-WORKBENCH.md`）、本地记忆、线上发布与线上复验。
+**发布验证**（2026-11-11）：提交 `322d583`（13 文件）→ `tools/push-api.js` 推送 →
+Pages `43004256114` `completed/success`；带 `?cb=` 绕 CDN 比对，线上入口页 md5
+`c4cb4beb…` / **2,117,353 字节**、工作台页 `0d7695a3…` / **77,812 字节**，逐字节一致。
+线上 `online` 探针 `ok=true`；线上零重复体检 `ok=true`（四个字段各 80/80，
+画法原子 16 / 动作原子 16 / 音色原型 16 全部用满）；线上九套自检全 `ok=true`。
+唯一在线地址 https://718997675.github.io/xiaoyaoxing/ 。
+
+**还没做**：文档章节 —— `README.md` 条目、`CHAPTER-1-EXPANSION.md` §9.9、
+`ARTS-DESIGN.md` 第十一章、`ART-WORKBENCH.md` 的 P12-E 说明。
 
 ### 未完成（按顺序）
 
@@ -431,7 +438,7 @@ story 113 / quests 43 / bosses 38 / map 23 / camps 17 / art-overrides 29 / art-w
 | ~~P12-B~~ | ✅ 2026-11-11 已完成，见 §3 | `CHAPTER-1-EXPANSION.md` §9.6 |
 | ~~P12-C~~ | ✅ 2026-11-11 已完成，见 §3 | `CHAPTER-1-EXPANSION.md` §9.7 |
 | ~~P12-D~~ | ✅ 2026-11-11 已完成（全表零重复），见 §3 | `CHAPTER-1-EXPANSION.md` §9.8 |
-| P12-E | 🟡 代码已落地并全绿（字面零重复），**文档与线上发布待补**，见 §3 | `HANDOFF.md` §3 P12-E |
+| P12-E | 🟡 代码已落地、已发布、全绿（字面零重复），**只剩文档章节**，见 §3 | `HANDOFF.md` §3 P12-E |
 | — | 支线 9→15 与文本量加厚已随 **P12-B** 一并交付（10316 字） | `SKILLS-STORY-PLAN.md` §4.2 |
 | — | 文本量距设计目标 3~5 万字仍有差距：剧情自检实测 **10316 字**（P12-B 后）；任务交付对话另计，不含在该口径内 | — |
 
