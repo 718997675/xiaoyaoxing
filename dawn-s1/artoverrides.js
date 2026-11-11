@@ -15,7 +15,7 @@ export const OVERRIDE_KEY = 'xy_art_overrides_v1';
 export const OVERRIDE_SAFE = [
   'name', 'desc', 'cd', 'cost', 'mul', 'reach', 'arc', 'radius', 'len', 'width',
   'kb', 'pierceDef', 'status', 'fx',
-  'color', 'shape', 'pose', 'snd', 'hitSnd',
+  'color', 'shape', 'shv', 'pose', 'snd', 'hitSnd',
   'fxDelay', 'fxLife', 'timeline',
   'frames', 'frameScale', 'frameRotate',
 ];

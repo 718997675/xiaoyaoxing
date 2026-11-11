@@ -82,6 +82,7 @@ for (const line of lines) {
         reach: num('reach', 44), arc: num('arc', 1.6),
         pose,
         shape: shapeVal,
+        shv: num('shv', 1),
         color: col,
         snd: get(/\bsnd:\s*['"](\w+)['"]/) || 'slash',
         hitSnd: get(/\bhitSnd:\s*['"](\w+)['"]/) || 'hit',
@@ -106,12 +107,27 @@ for (const a of Object.values(arts)) {
   if (!/^#[0-9a-fA-F]{6}$/.test(a.color[0]) || !/^#[0-9a-fA-F]{6}$/.test(a.color[1] || ''))
     stray.push(a.id + '.color=' + a.color.join('/'));
   if (!(a.mul > 0) || !(a.cd > 0) || !(a.reach > 0)) stray.push(a.id + ' 数值异常');
+  if (!Number.isInteger(a.shv) || a.shv < 1 || a.shv > 12) stray.push(a.id + '.shv=' + a.shv);
 }
 for (const f of FAM_IDS) {
   const n = Object.values(arts).filter(a => a.fam === f).length;
   if (n !== 8) stray.push('兵器 ' + f + ' 只解析到 ' + n + ' 招');
 }
 if (stray.length) throw new Error('基线解析结果不在登记池里（多半是匹配到了嵌套字段）：\n  ' + stray.join('\n  '));
+
+// P12-D 全表零重复：生成工作台基线时就把四条表现实例卡死，改了 arts.js
+// 忘了重跑生成器 / 或者新招抄了旧招的签名，这里立刻炸，不用等自检。
+const ALL = Object.values(arts);
+const sigs = {
+  '形状实例 shape@shv': a => a.shape + '@' + a.shv,
+  '动作全参数': a => [a.pose.mode, a.pose.a0, a.pose.a1, a.pose.dur, a.pose.ease].join('|'),
+  '色彩对': a => a.color.join('|'),
+  '声音对': a => a.snd + '/' + a.hitSnd,
+};
+for (const [label, fn] of Object.entries(sigs)) {
+  const n = new Set(ALL.map(fn)).size;
+  if (n !== 80) throw new Error('全表零重复失败：' + label + ' 只有 ' + n + ' / 80 个不同值');
+}
 
 const data = {
   version: 1,
@@ -134,4 +150,5 @@ const json = JSON.stringify(data);
 const out = html.replace(re, () => '<script id="wbBase" type="application/json">' + json + '</script>');
 fs.writeFileSync(p, CRLF ? out.replace(/\n/g, '\r\n') : out, 'utf8');
 console.log('工作台基线数据已内联：80 招 / ' + shapes.length + ' 形 / ' + poses.length + ' 式 / '
-  + snds.length + ' 音 / ' + Object.keys(colors).length + ' 色，' + (json.length / 1024).toFixed(1) + ' KB');
+  + snds.length + ' 音 / ' + Object.keys(colors).length + ' 色，' + (json.length / 1024).toFixed(1) + ' KB'
+  + '；四条表现实例全表 80/80 唯一');

@@ -36,10 +36,11 @@ node tools/run.js eval tools/map.js       # 大地图连通性与地貌，当前
 node tools/run.js eval tools/camps.js     # 营地生态（巡逻/吹哨/食物链/作息），当前 17 pass / 0 fail
 node tools/run.js eval tools/bosses.js    # 首领（招式表/三阶段换兵器/巢穴/危险区/首杀专属），当前 38 pass / 0 fail
 node tools/run.js eval tools/quests.js    # 任务（18 条全通/交付对话逐句播放/三物门禁/存档），当前 43 pass / 0 fail
-node tools/run.js eval tools/arts.js      # 招式（80 招/十四种原语/专精/装配拖拽/签名查重/平衡/存档），当前 144 pass / 0 fail
+node tools/run.js eval tools/arts.js      # 招式（80 招/十四种原语/专精/装配拖拽/签名查重/全表零重复/平衡/存档），当前 158 pass / 0 fail
 node tools/run.js eval tools/mantras.js   # 心法（22 条/互斥/12 个机制/200 组 DPS 分布），当前 75 pass / 0 fail
 STORY=1 QS=x=1 node tools/run.js eval tools/story.js   # 剧情（49 节点/七种触发/两次终章选择/旧事页/存档），当前 113 pass / 0 fail
-PAGE=art-workbench.html node tools/run.js eval tools/art-workbench.js   # 工作台页，当前 36 pass / 0 fail
+PAGE=art-workbench.html node tools/run.js eval tools/art-workbench.js   # 工作台页，当前 39 pass / 0 fail
+node tools/run.js eval tools/art-unique.js  # 全表 80 招零重复体检报告（ok=true 才算过），当前 ok=true
 node tools/run.js eval tools/art-overrides.js                            # 游戏侧覆盖层，当前 29 pass / 0 fail
 node tools/run.js shot out.png 1440 900   # 截图
 ```
@@ -331,12 +332,51 @@ Pages 工作流 `42986374016` `completed/success` 后带 `?cb=` 绕 CDN 比对�
 唯一在线地址 https://718997675.github.io/xiaoyaoxing/ 。
 详见 `CHAPTER-1-EXPANSION.md` §9.7.9（含「SHA 只是历史记录」的注记）。
 
+### P12-D · 全表零重复（80 招 × 四条表现实例，2026-11-11）
+
+用户 2026-11-11 验完 P12-C 后提的一条硬要求：**「所有武器招数不允许有任何重复的点」**。
+查下来 P12-C 的验收口径只保证「同一把兵器内 8 招不重复」，全表 80 招之间照样撞脸 ——
+链_1 抄了剑_1、链_7 抄了棍_7、扇_2 抄了双刃_2，连起手音都一样。四签名撞车 3 组、
+三签名撞车 4 组、动作全参数撞车 5 组。
+
+定案口径（用户选「复合变体 · 全表唯一」）：**19 形 / 20 式 / 17 音是共享的渲染与
+合成原型，重复的是原型而不是招式长相**。每招在这四个维度上各拿一个全表唯一的实例：
+
+| 维度 | 签名 | 做法 |
+|---|---|---|
+| 形状 | `shape@shv` | 新增 `shv` 字段（1~9），`artSwingFx` 末尾按级差真实缩放半径 / 长度 / 线宽 / 扫角 |
+| 动作 | `pose` 全参数 | `mode/a0/a1/dur/ease` 五项全算；撞车的把 `a1` 微调 0.02（角度影响 < 1.2°） |
+| 色彩 | `color` 主副色对 | 保住每组第一次出现，其余 65 招从 20 色锁定板重排成互不相同的一对 |
+| 声音 | `snd/hitSnd` 对 | 保住每组第一次出现，其余 53 招改命中音（必要时改起手音），80 组互不相同 |
+
+- **数据层**：`arts.js` 80 招全部重写（65 招换色 / 53 招换音 / 5 招微调动作 / 80 招加 `shv`）。
+  `artShapeSig` / `artMotionSig` / `artColorSig` / `artSoundSig` 四个推导函数是**运行时与自检共用的同一把尺子**。
+- **运行时**：`game.js` 的 `artSwingFx` 末尾加一段统一后处理（19 个形状分支一个都没改）。
+- **工作台**：属性面板多一个「几何变体 shv」输入框；预览画布与游戏同一把尺子；
+  `shv` 进覆盖层白名单，可随覆盖表导出 / 导回。
+- **生成器**：`tools/gen-artworkbench.js` 内联基线时**直接卡死四条签名 80/80 唯一**，
+  改了 `arts.js` 忘了重跑生成器会当场炸。
+- **诊断**：`tools/art-unique.js` 是可复跑的体检报告（`node tools/run.js eval tools/art-unique.js`），
+  把每个维度多少个不同值、还剩哪些共享原型、跨兵器有没有撞车一次列全。
+- **断言**：`tools/arts.js` §1.4 新增 14 条全表级断言；`art-workbench` 加 3 条；
+  `arts` 144→158、`art-workbench` 36→39，其余 9 套条数不变。
+
+**实测（本地）**：四条表现签名各 **80/80 唯一**；`基础形+动作+色彩`、
+`基础形+动作+色彩+起手音`、完整五签名、招式名 / 描述、机制全字段全部 **80/80 唯一**；
+跨兵器整招撞车 **0**；30 段普攻 **30/30 唯一**；61 招 `shv>1`。
+
+**仍共享的（刻意保留，不是撞车）**：19 种刀光基础形、18 种动作原型、13 个起手音 /
+13 个命中音原型、14 种原语、6 个功能位、8 级专精阶梯、`cd/cost` 阶梯。
+这些是模板与原型 —— 每把兵器都要 2 输出 / 2 清场 / 1 位移 / 1 控制 / 1 增益 / 1 特色，
+`prof` 必须是 `1/2/3/4/5/6/8/10`，否则专精解锁与存档会崩。
+
 ### 未完成（按顺序）
 
 | 批次 | 内容 | 文档 |
 |---|---|---|
 | ~~P12-B~~ | ✅ 2026-11-11 已完成，见 §3 | `CHAPTER-1-EXPANSION.md` §9.6 |
 | ~~P12-C~~ | ✅ 2026-11-11 已完成，见 §3 | `CHAPTER-1-EXPANSION.md` §9.7 |
+| ~~P12-D~~ | ✅ 2026-11-11 已完成（全表零重复），见 §3 | `CHAPTER-1-EXPANSION.md` §9.8 |
 | — | 支线 9→15 与文本量加厚已随 **P12-B** 一并交付（10316 字） | `SKILLS-STORY-PLAN.md` §4.2 |
 | — | 文本量距设计目标 3~5 万字仍有差距：剧情自检实测 **10316 字**（P12-B 后）；任务交付对话另计，不含在该口径内 | — |
 

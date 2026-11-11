@@ -33,6 +33,28 @@
       if (!(a.mul > 0) || !(a.cd > 0) || !(a.reach > 0)) bad.push(id + '.数值');
     }
     T('80 招字段全部落在登记池里（含 zone.shape 污染回归）', bad.length === 0, bad.slice(0, 6).join(' ') || 'OK');
+
+    // P12-D：工作台内联基线也必须是「全表零重复」的那一份。生成器已经卡过一次，
+    // 这里再验页面里实际读到的 wbBase —— 防止有人手改 HTML 绕过生成器。
+    const ALL = Object.keys(B.arts).map(id => B.arts[id]);
+    const sig = {
+      '形状实例 shape@shv': a => a.shape + '@' + a.shv,
+      '动作全参数': a => [a.pose.mode, a.pose.a0, a.pose.a1, a.pose.dur, a.pose.ease].join('|'),
+      '色彩对': a => a.color.join('|'),
+      '声音对': a => a.snd + '/' + a.hitSnd,
+    };
+    const dupBad = [];
+    for (const k of Object.keys(sig)) {
+      const n = new Set(ALL.map(sig[k])).size;
+      if (n !== 80) dupBad.push(k + '=' + n + '/80');
+    }
+    T('工作台基线四条表现实例全表 80/80 唯一', dupBad.length === 0,
+      dupBad.join(' ') || 'OK · shape@shv / pose / color / snd 对');
+    T('80 招都有合法几何变体 shv（1~12）',
+      ALL.every(a => Number.isInteger(a.shv) && a.shv >= 1 && a.shv <= 12),
+      ALL.filter(a => !Number.isInteger(a.shv)).map(a => a.id).join(',') || 'OK');
+    T('几何变体真的用起来了（不止一招 shv>1）',
+      ALL.filter(a => a.shv > 1).length >= 60, ALL.filter(a => a.shv > 1).length + ' 招');
     for (const f of B.fams) {
       T('兵器 ' + (B.famLabel[f] || f) + ' 恰好 8 招',
         Object.keys(B.arts).filter(id => B.arts[id].fam === f).length === 8);
@@ -84,13 +106,15 @@
     // 编辑一招：形状 / 倍率 / 时间轴
     w.select('sword_1');
     w.setField('shape', 'ring');
+    w.setField('shv', 3);
     w.setField('mul', 9.9);
     w.setTl('total', 30); w.setTl('fxStart', 6); w.setTl('fxLen', 9);
     p = JSON.parse(w.packText());
     T('只导出改过的那一招', Object.keys(p.arts).length === 1 && !!p.arts.sword_1,
       Object.keys(p.arts).join(','));
     const row = p.arts.sword_1 || {};
-    T('差异字段写进覆盖表', row.shape === 'ring' && row.mul === 9.9, row.shape + '/' + row.mul);
+    T('差异字段写进覆盖表', row.shape === 'ring' && row.shv === 3 && row.mul === 9.9,
+      row.shape + '@' + row.shv + '/' + row.mul);
     T('没改的字段不写进覆盖表', row.cd === undefined && row.cost === undefined && row.reach === undefined);
     T('结构字段绝不进覆盖表', ['id', 'fam', 'slot', 'prof'].every(k => !(k in row)));
     T('30fps 帧数换成秒', Math.abs(row.fxDelay - 0.2) < 1e-9 && Math.abs(row.fxLife - 0.3) < 1e-9,
@@ -111,7 +135,7 @@
     T('导回草稿后恢复了那一招', Object.keys(w.draft).length === 1 && !!w.draft.sword_1);
     const p2 = JSON.parse(w.packText()).arts.sword_1;
     T('导回再导出，关键字段不丢',
-      p2.shape === row.shape && p2.mul === row.mul && p2.timeline.total === 30 &&
+      p2.shape === row.shape && p2.shv === row.shv && p2.mul === row.mul && p2.timeline.total === 30 &&
       Math.abs(p2.fxDelay - 0.2) < 1e-9 && Math.abs(p2.fxLife - 0.3) < 1e-9);
     w.importPack(JSON.stringify({ version: 1, arts: { not_an_art: { shape: 'ring' } } }));
     T('不认识的招式 id 被忽略', !w.draft.not_an_art);

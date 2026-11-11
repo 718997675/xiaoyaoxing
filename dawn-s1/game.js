@@ -25,6 +25,7 @@ import {
   ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_SLOT_LABEL, ART_FX, PROF_MAX, PROF_WEIGHT,
   artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower,
   artShape, artPose, artColor, ART_SHAPES, ART_POSES, ART_SNDS,
+  artShapeSig, artMotionSig, artColorSig, artSoundSig,
 } from './arts.js';
 import {
   MAIN, SUB, MANTRAS, MAIN_IDS, SUB_IDS, MANTRA_IDS, MANTRA_MAX_LV, SUB_SLOTS,
@@ -3296,6 +3297,28 @@ function artSwingFx(a, base, reach, arc, ox, oy) {
 
   } else {
     push({ a0: base - arc / 2, a1: base + arc / 2, R: reach * 0.85, t: 0.26, max: 0.26 });
+  }
+
+  // P12-D：19 种基础刀光是共享的渲染分支，不是「招式长相」。每招的 shv
+  // 在这里真实生效 —— 半径 / 长度 / 线宽 / 扫角按级差拉开，于是 shape@shv
+  // 不同的两招在屏幕上确实不一样，而不只是数据表里多一列数字。
+  // 放在分支之后统一后处理，19 个分支一个都不用改（有些分支是直接 push 的）。
+  const sv = a.shv || 1;
+  if (sv > 1) {
+    const kr = 1 + (sv - 1) * 0.055;
+    const kw = 1 + (sv - 1) * 0.040;
+    for (let i = from; i < slashGhosts.length; i++) {
+      const gh = slashGhosts[i];
+      if (gh.R) gh.R *= kr;
+      if (gh.dot) gh.dot *= kr;
+      if (gh.len) gh.len *= kr;
+      if (gh.line) { gh.line.len *= kr; gh.line.w *= kw; }
+      if (gh.a0 !== undefined && gh.a1 !== undefined) {
+        const mid = (gh.a0 + gh.a1) / 2;
+        gh.a0 = mid + (gh.a0 - mid) * kr;
+        gh.a1 = mid + (gh.a1 - mid) * kr;
+      }
+    }
   }
 
   // 工作台覆盖层：帧数时间轴换算成刀光延迟 / 寿命；自定义 PNG 序列帧
@@ -8466,6 +8489,7 @@ window.__game = {
   ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_FX, ART_SLOT_LABEL, PROF_MAX,
   artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower,
   artShape, artPose, artColor, ART_SHAPES, ART_POSES, ART_SNDS, swingAng,
+  artShapeSig, artMotionSig, artColorSig, artSoundSig,
   castArt, execArt, updateArts, clearArts, autoLoadout, addProf, applyStatus, afterArtHit,
   renderArts, showArtPage, artMaxOf, artCdOf,
   get artCds() { return artCds; },

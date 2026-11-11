@@ -19,7 +19,7 @@
 
     const a = g.ARTS.sword_1;
     const snap = {};
-    ['name', 'desc', 'cd', 'cost', 'mul', 'reach', 'arc', 'shape', 'pose', 'color', 'snd', 'hitSnd',
+    ['name', 'desc', 'cd', 'cost', 'mul', 'reach', 'arc', 'shape', 'shv', 'pose', 'color', 'snd', 'hitSnd',
       'id', 'fam', 'slot', 'prof'].forEach(k => { snap[k] = a[k]; });
 
     T('导入非法 JSON 会报错而不是静默吞掉', (() => {
@@ -35,7 +35,7 @@
       version: 1, arts: {
         sword_1: {
           id: 'hacked', fam: 'hacked', slot: 'hacked', prof: 999,
-          name: '试招·破锋', mul: 9.9, cd: 7, shape: 'ring',
+          name: '试招·破锋', mul: 9.9, cd: 7, shape: 'ring', shv: 4,
           color: ['#FFFFFF', '#000000'], snd: 'bell', hitSnd: 'crit',
           fxDelay: 0.2, fxLife: 0.3,
           timeline: { fps: 30, total: 30, fxStart: 6, fxLen: 9 },
@@ -48,7 +48,7 @@
     T('dump 是合法 JSON', (() => { try { return !!JSON.parse(ov.dump()).arts.sword_1; } catch (e) { return false; } })());
     T('apply 返回覆盖招数', ov.apply(g.ARTS) === 1);
     T('表现层 / 数值层字段已生效',
-      a.name === '试招·破锋' && a.mul === 9.9 && a.cd === 7 && a.shape === 'ring' &&
+      a.name === '试招·破锋' && a.mul === 9.9 && a.cd === 7 && a.shape === 'ring' && a.shv === 4 &&
       a.color[0] === '#FFFFFF' && a.snd === 'bell');
     T('结构字段没被覆盖',
       a.id === 'sword_1' && a.fam === 'sword' && a.slot === 'dmg' && a.prof === snap.prof,
@@ -148,7 +148,8 @@
     for (const k of Object.keys(snap)) a[k] = snap[k];
     ['frames', 'frameScale', 'frameRotate', 'timeline', 'fxDelay', 'fxLife'].forEach(k => { delete a[k]; });
     g.clearArts();
-    T('清掉试玩覆盖后回到基线', ov.count() === 0 && a.name === snap.name && a.mul === snap.mul && a.shape === snap.shape);
+    T('清掉试玩覆盖后回到基线', ov.count() === 0 && a.name === snap.name && a.mul === snap.mul
+      && a.shape === snap.shape && a.shv === snap.shv);
   } catch (err) {
     R.checks.push('FAIL | 脚本异常 | ' + err.message + ' @ ' + String(err.stack || '').split('\n')[1]);
     try { if (ov) ov.clear(); } catch (e) { }

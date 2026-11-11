@@ -1,5 +1,6 @@
 // tools/arts.js · 招式与专精自检（P6 验收）
-// 十兵器 × 八招 = 80 招，装配槽 6 个。（P12-C 追加链 / 扇两类，见 §1.3）
+// 十兵器 × 八招 = 80 招，装配槽 6 个。（P12-C 追加链 / 扇两类，见 §1.3；
+// P12-D 把「签名不重复」从同兵器内放大到全表 80 招，见 §1.4）
 // 覆盖：数据完整性 / 专精曲线 / 解锁门槛 / 装配换兵器 / 80 招都能放且真的有效果 /
 //       四种新原语（位移·增益·地面区域·拉拽）专项 / 冷却与真气 / 状态系统 /
 //       平衡校验 / 存读档 / 面板与 HUD
@@ -256,6 +257,80 @@
       T(W.name + ' 全开 / 满配都不超普攻 2.8 倍', all <= 2.8 && best6 <= 2.8,
         all.toFixed(2) + 'x / ' + best6.toFixed(2) + 'x');
     }
+  }
+
+  // ---------- 1.4 P12-D 全表零重复：80 招 × 四条表现实例，逐项 80/80 ----------
+  // 旧 §1.1 只查「同一把兵器内 8 招」，于是链/扇照抄剑/棍的四签名也全绿。
+  // 用户 2026-11-11 定案：尺子放大到全表 —— 任意两招在形状实例 / 动作全参数 /
+  // 色彩对 / 声音对上都不许撞。19 种基础画法仍共享（那是渲染分支），但每招
+  // 独占一个 shv，artSwingFx 会据此真实缩放刀光几何。
+  {
+    const A = g.ART_IDS.map(id => g.ARTS[id]);
+    const trail = a => g.WEAPONS[a.fam].trail;
+    const uniq = (label, fn) => {
+      const m = new Map();
+      for (const a of A) {
+        const k = String(fn(a));
+        if (!m.has(k)) m.set(k, []);
+        m.get(k).push(a.id);
+      }
+      const dups = [...m.entries()].filter(([, v]) => v.length > 1);
+      T('全表零重复 · ' + label + ' 80/80 唯一', m.size === 80,
+        m.size + '/80' + (dups.length
+          ? ' 撞车 ' + dups.slice(0, 3).map(([k, v]) => k + '→' + v.join(',')).join(' ') : ''));
+    };
+    uniq('形状实例 shape@shv', a => g.artShapeSig(a));
+    uniq('动作全参数', a => g.artMotionSig(a));
+    uniq('色彩对', a => g.artColorSig(a, trail(a)));
+    uniq('声音对', a => g.artSoundSig(a));
+    uniq('完整五签名', a => [g.artShapeSig(a), g.artMotionSig(a),
+      g.artColorSig(a, trail(a)), a.snd, a.hitSnd].join('|'));
+    uniq('基础形+动作+色彩（不加 shv 也不许撞）',
+      a => [g.artShape(a), g.artPose(a), g.artColorSig(a, trail(a))].join('|'));
+    uniq('基础形+动作+色彩+起手音',
+      a => [g.artShape(a), g.artPose(a), g.artColorSig(a, trail(a)), a.snd].join('|'));
+    uniq('招式名', a => a.name);
+    uniq('招式描述', a => a.desc);
+    uniq('机制全字段', a => Object.keys(a)
+      .filter(k => ['id', 'fam', 'name', 'desc', 'pose', 'shape', 'shv', 'color', 'snd', 'hitSnd', 'slot', 'prof'].indexOf(k) < 0)
+      .sort().map(k => k + '=' + JSON.stringify(a[k])).join(';'));
+
+    T('80 招都有合法 shv，且变体真的铺开用了',
+      A.every(a => Number.isInteger(a.shv) && a.shv >= 1 && a.shv <= 12)
+      && A.filter(a => a.shv > 1).length >= 60,
+      A.filter(a => a.shv > 1).length + ' 招 shv>1');
+    // shv 必须是「真的画出来」，不是数据表里多一列摆设：同一招改 shv 前后，
+    // 刀光 ghost 的几何摘要必须变。
+    {
+      const a = g.ARTS.sword_1, bak = a.shv;
+      const geom = () => {
+        arena(14);
+        g.equipFam('sword');
+        g.clearArts();
+        g.slashGhosts.length = 0;
+        g.player.qi = 999;
+        g.setLoadout(['sword_1']);
+        g.castArt(0);
+        return g.slashGhosts.map(x => [x.len || 0, x.R || 0, x.dot || 0,
+          x.line ? x.line.len : 0, x.line ? x.line.w : 0].join('/')).join(',');
+      };
+      try {
+        a.shv = 1; const m1 = geom();
+        a.shv = 6; const m2 = geom();
+        T('shv 变体在刀光几何上真实生效', !!m1 && m1 !== m2, m1 + ' → ' + m2);
+      } finally { a.shv = bak; }
+    }
+    const OLD = A.filter(a => ['chain', 'fan'].indexOf(a.fam) < 0);
+    const NEW = A.filter(a => ['chain', 'fan'].indexOf(a.fam) >= 0);
+    const five = a => [g.artShapeSig(a), g.artMotionSig(a),
+      g.artColorSig(a, trail(a)), a.snd, a.hitSnd].join('|');
+    const oldSet = new Set(OLD.map(five));
+    T('链 / 扇 16 招不与老八族撞五签名', NEW.every(a => !oldSet.has(five(a))), NEW.length + ' 招');
+    const sw = [];
+    for (const f of FAMS) for (const s of g.WEAPONS[f].swings)
+      sw.push([s.mode, s.a0, s.a1, s.dur, s.mul, s.kb, s.lunge, s.hitArc, s.reach].join('|'));
+    T('全表零重复 · 10 兵器 30 段普攻 30/30 唯一', new Set(sw).size === 30,
+      new Set(sw).size + '/30');
   }
 
   // ---------- 2. 专精曲线 ----------
