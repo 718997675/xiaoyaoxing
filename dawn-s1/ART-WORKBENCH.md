@@ -188,7 +188,7 @@ node build.js                    # 把新工作台和覆盖数据打进 dist/
 ```bash
 cd dawn-s1
 
-# 工作台页（31 条）：基线数据 / 时间轴 / 预览像素 / 导出 / 草稿闭环
+# 工作台页（32 条）：基线数据 / 时间轴 / 预览像素 / 导出 / 草稿闭环
 PAGE=art-workbench.html node tools/run.js eval tools/art-workbench.js
 PAGE=dist/art-workbench.html node tools/run.js eval tools/art-workbench.js
 

@@ -127,8 +127,14 @@ async function waitFor(fn, timeout, label) {
     // 都靠 tick() 手动步进世界 —— 不关掉的话失败现象会非常难查。
     // 要验剧情就把 STORY=1 传进来（tools/story.js 就是这么跑的）。
     const storyOff = process.env.STORY ? '' : '&story=0';
-    const url = REMOTE || ('http://127.0.0.1:' + PORT + '/' + encodeURIComponent(page) +
+    let url = REMOTE || ('http://127.0.0.1:' + PORT + '/' + encodeURIComponent(page) +
       '?' + (process.env.QS || 'dev=1') + storyOff);
+    // URL= 打远程时同样要补 story=0。踩过一次：线上裸地址会播序章，播放期间世界暂停，
+    // `URL=... eval tools/arts.js` 成片假失败（25 条伤害/持续类断言全红），
+    // 但本地永远全绿 —— 因为本地 URL 一直自动带这个参数，很容易误判成线上代码坏了。
+    if (REMOTE && storyOff && !/[?&]story=/.test(REMOTE)) {
+      url += (REMOTE.indexOf('?') >= 0 ? '&' : '?') + 'story=0';
+    }
     await api.send('Page.navigate', { url });
     await sleep(500);
     // 工作台页没有 __game，用 __wbReady 当就绪标记，这样同一套 runner 也能验它

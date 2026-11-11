@@ -39,7 +39,7 @@ node tools/run.js eval tools/quests.js    # 任务（12 条全通/三物门禁/�
 node tools/run.js eval tools/arts.js      # 招式（64 招/十四种原语/专精/装配拖拽/签名查重/平衡/存档），当前 131 pass / 0 fail
 node tools/run.js eval tools/mantras.js   # 心法（22 条/互斥/12 个机制/200 组 DPS 分布），当前 75 pass / 0 fail
 STORY=1 QS=x=1 node tools/run.js eval tools/story.js   # 剧情（28 节点/七种触发/终章选择/旧事页/存档），当前 96 pass / 0 fail
-PAGE=art-workbench.html node tools/run.js eval tools/art-workbench.js   # 工作台页，当前 31 pass / 0 fail
+PAGE=art-workbench.html node tools/run.js eval tools/art-workbench.js   # 工作台页，当前 32 pass / 0 fail
 node tools/run.js eval tools/art-overrides.js                            # 游戏侧覆盖层，当前 29 pass / 0 fail
 node tools/run.js shot out.png 1440 900   # 截图
 ```
@@ -159,6 +159,18 @@ for(let i=0;i<25;i++)g.tick(0.016)" \
   （`ART_SNDS` / `hitSnd` 都是 0 次），带 `?cb=<时间戳>` 再取才拿到新包。
   判断「线上是不是这一版」不能只看探针通过，要比对 **md5 或跑一遍带 P11 断言的自检**。
 
+### 招式工作台发布验证（2026-11-11）
+
+- commit `51504e9`（18 个文件）。GitHub Actions `Deploy to GitHub Pages` 跑完后，
+  线上 `dist/index.html` 与本地 **md5 一致**（`d5a2109e…`，1,997,856 字节），
+  线上 `art-workbench.html` 与本地一致（`b8b61794…`，53,843 字节）。
+- `URL=... node tools/run.js online`：`ok=true`，`#ov` 1326×746 真有像素、控制台无错。
+- 线上直接跑四套自检全绿：`tools/arts.js` 131 条、`tools/art-overrides.js` 29 条、
+  `tools/art-workbench.js` 32 条、`tools/story.js` 96 条（`STORY=1`）。
+- **坑：push 完 Pages 是排队的**。第一次 curl 拿到旧版（1,987,692 字节）且工作台页 404；
+  查 `api.github.com/repos/718997675/xiaoyaoxing/actions/runs` 看到 `queued → in_progress →
+  completed/success` 后再取才是新版。别在排队期间下"发布失败"的结论。
+
 ### 未完成（按顺序）
 
 | 批次 | 内容 | 文档 |
@@ -256,6 +268,9 @@ dawn-s1/
 - `devtest.js` 里的村庄坐标走 `vp(x, y)` 偏移函数，**别写死**。地图一动就全废。
 - 加墙体判定后，"飞弹能命中敌人"这类测试会 flaky（隔树打不到）。
   修法是**逐个换目标重试**，不是放宽断言。
+- **`URL=` 打远程时也要补 `story=0`**（`tools/run.js` 已自动补）。线上裸地址会播序章，
+  播放期间世界暂停，`URL=... eval tools/arts.js` 会出现 25 条伤害 / 持续类断言成片假红，
+  而本地永远全绿 —— 因为本地 URL 一直自带这个参数。曾误判成"线上代码坏了"。
 
 ### 网络（发布时）
 
