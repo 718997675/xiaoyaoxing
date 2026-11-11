@@ -284,6 +284,18 @@ bundle。重新打包后 `dist/index.html` md5 `472546a0…`（2,018,389 字节�
 两条单文件路径各 9 套 eval 全绿、`online` 探针通过，工作台两个页面各 32 条全绿。
 重新打包 `dist/index.html` md5 `dbdd2cb6…` / 2,075,845 字节，工作台页 md5 未变。
 
+**发布验证**（2026-11-11）：提交 `3f1de3f`（15 文件），本次原生 `git push` 通畅
+（`github.com:443` 未被干扰，备用 `tools/push-api.js` 无需启用），远端 / 本地 SHA 同为
+`3f1de3f6bba2b74413bd124c2f3743debceb1247`。Pages 工作流 `42977463853`
+`in_progress → completed/success` 后带 `?cb=` 绕 CDN 比对：线上入口页 md5
+`dbdd2cb6…` / 2,075,845 字节、工作台页 `b8b61794…` / 53,843 字节，均与本地逐字节一致。
+线上 `online` 探针 `ok=true`（画布 1326×746 有像素 / 控制台无错）；
+线上八套自检 `map` 23 / `camps` 17 / `quests` 43 / `story` 113 / `bosses` 38 /
+`arts` 131 / `art-overrides` 29 / `art-workbench` 32 全部 `ok=true`。
+`expr` 探针确认线上确是这一版：`MAPH=144`、`CH1_H=104`、49 节点 / 18 任务 /
+35 线索 / 16 营地 / 7 巢穴（含 `gumu` / `jianggui` / `shoulian`）/ 4 种新区风物。
+唯一在线地址仍是 https://718997675.github.io/xiaoyaoxing/ 。
+
 ### 未完成（按顺序）
 
 | 批次 | 内容 | 文档 |
