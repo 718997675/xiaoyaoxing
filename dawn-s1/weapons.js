@@ -1,4 +1,4 @@
-// weapons.js · 八种兵器的造型、招式与刀光表现
+// weapons.js · 十种兵器的造型、招式与刀光表现
 // 走位规则：角度 0 = 角色朝向，+π/2 = 屏幕向下（y 轴向下）
 // 每种兵器有自己的「招式表」：挥砍弧度、速度、判定形状、刀光颜色、收招位移。
 // mode: swing 弧斩 / thrust 直刺 / ring 抡圆 / cast 远程（proj 描述弹体，不做近战判定）。
@@ -98,6 +98,38 @@ const ROWS = {
     '..wPw..',
     'w..w..w',
   ],
+  // 链：钩尖接一串金 / 暗交替的链环（P12-C，呼应第二章「水底的铁链」）
+  chain: [
+    '..www..',
+    '..w.w..',
+    '..gGg..',
+    '..g.g..',
+    '..hhh..',
+    '..h.h..',
+    '..gGg..',
+    '..g.g..',
+    '..hhh..',
+    '..h.h..',
+    '..gGg..',
+    '..g.g..',
+    '..gGg..',
+    '...h...',
+  ],
+  // 扇：上宽下窄的扇面，扇骨收到底部一点（P12-C）
+  fan: [
+    'wwwwwwwww',
+    '.wWwWwWw.',
+    '.gGgGgGg.',
+    '.wWwWwWw.',
+    '..gGgGg..',
+    '..wWwWw..',
+    '...gGg...',
+    '...wWw...',
+    '....h....',
+    '....h....',
+    '...gGg...',
+    '....h....',
+  ],
 };
 
 // 每种兵器的定位：攻击倍率 / 攻击间隔 / 基础攻击距离 / 判定弧度 / 掉落权重
@@ -189,6 +221,26 @@ export const WEAPONS = {
         proj: { kind: 'dart', count: 3, spread: 0.46, speed: 290, size: 6, life: 0.55, dmgMul: 0.62, pierce: 1 } },
       { mode: 'cast', dur: 0.24, mul: 0.68, kb: 6, lunge: 0, hitArc: 0,
         proj: { kind: 'dart', count: 5, spread: 0.92, speed: 305, size: 6, life: 0.60, dmgMul: 0.52, pierce: 1 } },
+    ],
+  },
+  // ---------- P12-C 追加的两类：链（软长 / 缠拽）、扇（风符 / 控场） ----------
+  // 都不设 ranged：弹体通道只认 orb / dart，这一批不加原语，只扩数据。
+  chain: {
+    id: 'chain', name: '链', kindLabel: '铁链', atkMul: 1.06, spdMul: 0.98, reach: 42, dropW: 9,
+    trail: [C.paper3, C.ink3], fx: 'crescent', desc: '甩链两式横扫，末段抡圆',
+    swings: [
+      { mode: 'swing', a0: -1.5, a1: 1.5, dur: 0.24, mul: 1.05, kb: 7, lunge: 2, hitArc: 2.6, reach: 42 },
+      { mode: 'swing', a0: 1.5, a1: -1.5, dur: 0.24, mul: 1.15, kb: 8, lunge: 2, hitArc: 2.6, reach: 42 },
+      { mode: 'ring', dur: 0.34, mul: 1.55, kb: 11, lunge: 0, hitArc: 6.28, reach: 38 },
+    ],
+  },
+  fan: {
+    id: 'fan', name: '扇', kindLabel: '折扇', atkMul: 0.92, spdMul: 0.86, reach: 30, dropW: 9,
+    trail: [C.jade3, C.paper2], fx: 'crescent', desc: '扇骨点打两式，末段展扇扇风',
+    swings: [
+      { mode: 'swing', a0: -1.1, a1: 1.0, dur: 0.18, mul: 0.80, kb: 4, lunge: 2, hitArc: 2.0, reach: 28 },
+      { mode: 'swing', a0: 1.0, a1: -1.1, dur: 0.18, mul: 0.86, kb: 5, lunge: 2, hitArc: 2.0, reach: 28 },
+      { mode: 'swing', a0: -1.7, a1: 1.7, dur: 0.26, mul: 1.20, kb: 8, lunge: 1, hitArc: 3.2, reach: 32 },
     ],
   },
 };

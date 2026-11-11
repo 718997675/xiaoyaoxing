@@ -1,4 +1,4 @@
-// tools/weapons.js · 八类兵器 / 稀有造型 / 触屏几何 / 摇杆归零 专项自检
+// tools/weapons.js · 十类兵器 / 稀有造型 / 触屏几何 / 摇杆归零 专项自检
 //
 // 用法（配合 CDP evaluate，或 ?dev=1 页面里手动跑）：
 //   const r = await (async()=>{ /* 本文件内容 */ })();
@@ -17,7 +17,7 @@
 
   // ---------- 1. 兵器数据 ----------
   const W = g.WEAPONS, IDS = g.WEAPON_IDS;
-  T('八类兵器齐备', IDS.length === 8 && IDS.includes('mage') && IDS.includes('dart'), IDS.join('/'));
+  T('十类兵器齐备', IDS.length === 10 && ['mage', 'dart', 'chain', 'fan'].every(f => IDS.includes(f)), IDS.join('/'));
   T('法杖与暗器是远程', W.mage.ranged === true && W.dart.ranged === true);
   T('每类兵器都是三段', IDS.every(f => W[f].swings.length === 3));
 
@@ -60,9 +60,29 @@
   T('掉落物带稳定造型种子', typeof it.skin === 'number' && it.skin >= 0 && it.skin < 3, it.skin + ' / ' + it.fam);
   const famHits = new Set();
   for (let i = 0; i < 600; i++) famHits.add(g.randomFam(Math.random));
-  T('八类兵器都进掉落池', famHits.size === 8, [...famHits].join('/'));
-  T('新兵器名称池齐备', g.makeGear('weapon', 4, 8, Math.random, 'dart').name.length > 0
+  T('十类兵器都进掉落池（链 / 扇也在内）',
+    famHits.size === 10 && famHits.has('chain') && famHits.has('fan'), [...famHits].join('/'));
+  T('老八类名称池齐备', g.makeGear('weapon', 4, 8, Math.random, 'dart').name.length > 0
     && g.makeGear('weapon', 4, 8, Math.random, 'mage').name.length > 0);
+
+  // ---------- 2.1 P12-C：链 / 扇两类新兵器 ----------
+  T('链 / 扇追加在 WEAPON_IDS 表尾', IDS.slice(-2).join(',') === 'chain,fan', IDS.slice(-2).join(','));
+  T('链 / 扇都不做远程（不新增弹体 kind）', !W.chain.ranged && !W.fan.ranged);
+  T('链 / 扇三段只用既有 swing / ring', ['chain', 'fan'].every(f =>
+    W[f].swings.length === 3 && W[f].swings.every(s => s.mode === 'swing' || s.mode === 'ring')),
+    ['chain', 'fan'].map(f => W[f].swings.map(s => s.mode).join('→')).join(' | '));
+  T('链末段抡圆、扇末段展扇', W.chain.swings[2].mode === 'ring' && W.fan.swings[2].mode === 'swing');
+  T('链 / 扇掉落权重都是 9', W.chain.dropW === 9 && W.fan.dropW === 9,
+    W.chain.dropW + '/' + W.fan.dropW);
+  const chainCv = g.weaponCanvas('chain', null, 0, 0), fanCv = g.weaponCanvas('fan', null, 0, 0);
+  T('链 / 扇点阵画得出造型且彼此不同',
+    chainCv.width > 0 && chainCv.height > 0 && fanCv.width > 0 && fanCv.height > 0
+    && (chainCv.width !== fanCv.width || chainCv.height !== fanCv.height || px(chainCv) !== px(fanCv)),
+    chainCv.width + '×' + chainCv.height + ' / ' + fanCv.width + '×' + fanCv.height);
+  const nm = f => g.makeGear('weapon', 4, 8, Math.random, f).name;
+  T('链 / 扇各自有独立名称池（不落回剑名）',
+    ['chain', 'fan'].every(f => nm(f).length > 0 && nm(f) !== nm('sword')),
+    ['chain', 'fan'].map(f => f + ':' + nm(f)).join(' · '));
 
   // ---------- 3. 远程普攻真能发出弹体 ----------
   if (g.state !== 'play') document.getElementById('btnNew').click();

@@ -17,7 +17,7 @@ export function setupScene(mode) {
   g.learnNode('fengrui'); g.learnNode('fengrui'); g.learnNode('jianxin');
   g.learnNode('yuqi'); g.learnNode('tianlei'); g.learnNode('tiegu');
 
-  const fams = ['sword', 'blade', 'spear', 'staff', 'dual', 'hammer', 'mage', 'dart'];
+  const fams = g.WEAPON_IDS.slice();   // P12-C：改用动态表，别再写死八类
   const wep = g.giveGear(4, 'weapon', 3, 'blade');
   const arm = g.giveGear(3, 'armor');
   const neck = g.giveGear(3, 'necklace');
@@ -136,10 +136,10 @@ export function runDevTests() {
   T('冷却中按键进入输入缓冲', buffered, 'atkBuf=' + g.player.atkBuf.toFixed(2));
   T('输入缓冲补发命中', e2.hp < hpA, Math.round(hpA) + ' -> ' + Math.round(e2.hp));
 
-  // --- T5 八种兵器各有招式表与判定差异 ---
-  const fams = ['sword', 'blade', 'spear', 'staff', 'dual', 'hammer', 'mage', 'dart'];
+  // --- T5 十种兵器各有招式表与判定差异 ---
+  const fams = g.WEAPON_IDS.slice();   // P12-C：改用动态表，别再写死八类
   const arcs = fams.map(f => g.WEAPONS[f].swings[0].hitArc);
-  T('八种兵器数据齐备', fams.every(f => !!g.WEAPONS[f]), fams.join('/'));
+  T('十种兵器数据齐备', fams.length === 10 && fams.every(f => !!g.WEAPONS[f]), fams.join('/'));
   T('不同兵器判定弧度不同', new Set(arcs).size >= 4, arcs.join(','));
   T('枪的攻距最长', g.WEAPONS.spear.reach > g.WEAPONS.dual.reach, g.WEAPONS.spear.reach + ' vs ' + g.WEAPONS.dual.reach);
 

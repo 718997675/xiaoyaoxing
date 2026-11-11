@@ -31,15 +31,15 @@ npx serve .        # 或 python -m http.server
 ```bash
 cd dawn-s1
 node tools/run.js devtest        # 全量断言，当前基线 148 pass / 0 fail
-node tools/run.js eval tools/weapons.js   # 八兵器 / 触屏专项，当前 32 pass / 0 fail
+node tools/run.js eval tools/weapons.js   # 十兵器 / 触屏专项，当前 39 pass / 0 fail
 node tools/run.js eval tools/map.js       # 大地图连通性与地貌，当前 23 pass / 0 fail
 node tools/run.js eval tools/camps.js     # 营地生态（巡逻/吹哨/食物链/作息），当前 17 pass / 0 fail
 node tools/run.js eval tools/bosses.js    # 首领（招式表/三阶段换兵器/巢穴/危险区/首杀专属），当前 38 pass / 0 fail
 node tools/run.js eval tools/quests.js    # 任务（18 条全通/交付对话逐句播放/三物门禁/存档），当前 43 pass / 0 fail
-node tools/run.js eval tools/arts.js      # 招式（64 招/十四种原语/专精/装配拖拽/签名查重/平衡/存档），当前 131 pass / 0 fail
+node tools/run.js eval tools/arts.js      # 招式（80 招/十四种原语/专精/装配拖拽/签名查重/平衡/存档），当前 144 pass / 0 fail
 node tools/run.js eval tools/mantras.js   # 心法（22 条/互斥/12 个机制/200 组 DPS 分布），当前 75 pass / 0 fail
 STORY=1 QS=x=1 node tools/run.js eval tools/story.js   # 剧情（49 节点/七种触发/两次终章选择/旧事页/存档），当前 113 pass / 0 fail
-PAGE=art-workbench.html node tools/run.js eval tools/art-workbench.js   # 工作台页，当前 32 pass / 0 fail
+PAGE=art-workbench.html node tools/run.js eval tools/art-workbench.js   # 工作台页，当前 36 pass / 0 fail
 node tools/run.js eval tools/art-overrides.js                            # 游戏侧覆盖层，当前 29 pass / 0 fail
 node tools/run.js shot out.png 1440 900   # 截图
 ```
@@ -297,12 +297,37 @@ Pages 工作流 `42977463853`
 35 线索 / 16 营地 / 7 巢穴（含 `gumu` / `jianggui` / `shoulian`）/ 4 种新区风物。
 唯一在线地址仍是 https://718997675.github.io/xiaoyaoxing/ 。
 
+
+### P12-C · 兵器第 9/10 类 / 80 招 / 平衡复校（2026-11-11）
+
+施工图见 `CHAPTER-1-EXPANSION.md` **§9.7**。两把新兵器定案：**链**（软长 / 缠拽，
+接第二章「水底的铁链 / 守链人」暗线）与**扇**（风符 / 控场，补不靠弹体的中远距空位）。
+都不设 `ranged`，不新增原语 / 形状 / 动作 / 声音，四个池保持 14 / 19 / 20 / 17。
+
+- **只追加**：`weapons.js` +2 段点阵与参数、`arts.js` 表尾 +16 招、
+  `items.js` +2 组名称池。前 64 招、前 8 类兵器顺序、`SAVE_KEY`、`build.js ORDER`
+  一字未改；存档存的是字符串 id，顺序即兼容性。
+- **运行时 3 行**：`boomerang` / `orbit` 两条通道的贴图原本写死 `'hammer'` / `'sword'`，
+  甩链会飞出一把锤 —— 改成按 `a.fam` 取贴图，老八类行为不变。详见 §9.7.9。
+- **工作台基线重生成**：`node tools/gen-artworkbench.js` 输出
+  `80 招 / 19 形 / 20 式 / 17 音 / 20 色`；工作台页 md5 这次**会变**
+  （`b8b61794…` → `d4933b66…`），别再拿旧值当不变基线。
+- **断言**：`devtest` 两处写死 `fams` 改 `g.WEAPON_IDS`；`arts` 131→144、
+  `weapons` 32→39、`art-workbench` 32→36，其余 7 套条数不变。
+  `tools/arts.js` §1.3 是两族 16 招专项（四池 / 四签名 / 门槛 / 功能位 / 连拍 / DPS / 顺序兼容）。
+
+**验收**：模块版 11 套 **705 PASS / 0 FAIL**；单文件版两条路径各 9 套 eval 全绿 +
+`online` 探针通过，工作台两个页面各 36 条全绿。链全开 `1.96x` / 满配 `1.76x`、
+扇 `1.79x` / `1.56x`，均 ≤ 2.8x；连拍 12.2° / 14.1°，均 ≥ 7°。
+
+**发布验证**：待回填。
+
 ### 未完成（按顺序）
 
 | 批次 | 内容 | 文档 |
 |---|---|---|
 | ~~P12-B~~ | ✅ 2026-11-11 已完成，见 §3 | `CHAPTER-1-EXPANSION.md` §9.6 |
-| **P12-C** | 兵器第 9/10 类（16 招）+ 逐招四签名 + 平衡复校；「8 类 / 64 招」硬编码回归面最大 | `CHAPTER-1-EXPANSION.md` §9 |
+| ~~P12-C~~ | ✅ 2026-11-11 已完成，见 §3 | `CHAPTER-1-EXPANSION.md` §9.7 |
 | — | 支线 9→15 与文本量加厚已随 **P12-B** 一并交付（10316 字） | `SKILLS-STORY-PLAN.md` §4.2 |
 | — | 文本量距设计目标 3~5 万字仍有差距：剧情自检实测 **10316 字**（P12-B 后）；任务交付对话另计，不含在该口径内 | — |
 
@@ -717,7 +742,8 @@ dawn-s1/
 **下一步（P12）**：第二章施工图见 `CHAPTER-1-EXPANSION.md` **§9**（旧版指向的
 第 7 节其实是第一章三区定案，已修正）。三件前置项与 **P12-A 地图南扩**都已在
 2026-11-11 收口，见 §3；**P12-B**（三幕新剧情 / 支线 9→15 / 新区首领）亦在同日
-收口。剩下 **P12-C**（兵器第 9/10 类 / 平衡复校），按 §9 的分批顺序独立发版。
+收口；**P12-C**（兵器第 9/10 类 / 80 招 / 平衡复校）亦在同日收口，见 §3。
+P12 三批至此全部完成，第二章施工图 §9 无剩余待办。
 
 > 用户 2026-11-11 定：招式工作台的「四轨道」（判定帧 / 人物动作帧 / 运动轨 / 瞬移）
 > 暂缓，工作台保持现状；`art-motion-preview.html` 只是本地效果预估草稿，

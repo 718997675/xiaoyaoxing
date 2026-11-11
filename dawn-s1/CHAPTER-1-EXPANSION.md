@@ -436,7 +436,7 @@ T('名字', 条件, '实测值');
 |---|---|---|---|---|
 | **P12-A** | 地图南扩（南疆 / 江岸）+ 江水渡桥 + 4 营地 + 2 野外 NPC + 存档兼容 | `game.js`、`tools/map.js`、`tools/camps.js`、`devtest.js` | `game.js` 约 +130 行；自检 12→19 条 | ✅ 2026-11-11 |
 | **P12-B** | 三幕新剧情 + 支线 9→15 + 新区首领与章尾 Boss + 新区专属风物贴图 | `story.js`、`quests.js`、`monsters.js`、`village.js`、三套自检 | `story.js` +511 行 / 文本量 6259→10316 字；四套自检共 +30 条 | ✅ 2026-11-11 |
-| **P12-C** | 兵器第 9/10 类（16 招）+ 逐招四签名 + 平衡复校 | `weapons.js`、`arts.js`、`ARTS-DESIGN.md`、装配页 / 工作台基线 / 6 套自检 | `arts.js` 约 +130 行；「8 类 / 64 招」硬编码散在 6 个自检里，**回归面最大** | 待开工 |
+| **P12-C** | 兵器第 9/10 类（16 招）+ 逐招四签名 + 平衡复校 | `weapons.js`、`arts.js`、`ARTS-DESIGN.md`、装配页 / 工作台基线 / 6 套自检 | `arts.js` 约 +130 行；「8 类 / 64 招」硬编码散在 6 个自检里，**回归面最大** | ✅ 2026-11-11（见 §9.7） |
 
 > 分三批的理由：P12-C 会动到所有「8 兵器 / 64 招」的硬编码断言与 DPS 平衡，
 > 和地图 / 剧情混在一次发版，出问题很难定位。P12-A 完全不动兵器与剧情，回归面最小。
@@ -581,3 +581,259 @@ tile 13 江水 / tile 9 桥面。实测第一章前 102 行指纹仍 `1093084102
 `ok=true`，线上八套自检（map 23 / camps 17 / quests 43 / story 113 / bosses 38 /
 arts 131 / art-overrides 29 / art-workbench 32）全 `ok=true`；`expr` 探针确认
 49 节点 / 18 任务 / 7 巢穴 / 4 种新区风物。详见 `HANDOFF.md` §3。
+
+---
+
+### 9.7 P12-C 落地施工图（2026-11-11 开工）
+
+**开工时文档里只有一行标题**：§9.1 表格写「兵器第 9/10 类（16 招）+ 逐招四签名 +
+平衡复校」，`HANDOFF.md` / `SKILLS-STORY-PLAN.md` 也只是复述这半句 —— 两把兵器叫什么、
+什么性格、点阵怎么画、普攻三段如何排、16 招叫什么、四签名怎么分、DPS 留多少余量，
+**全部没有定案**。本节把这些一次性定到字段级，实现阶段照抄即可。
+
+#### 9.7.1 定案：链（第 9 类）与扇（第 10 类）
+
+| fam | name / kindLabel | 性格 | 选它的理由 |
+|---|---|---|---|
+| `chain` | 链 / 铁链 | **软、长、缠**。中距离甩击，拉拽 / 回旋 / 环身 | 接第二章暗线：陈九说「铁链是往上拴的」，水底铁链、`jianggui` 沉牌链、`shoulian` 守链人，玩家最终自己拿起一条链 —— 剧情与掉落闭环 |
+| `fan` | 扇 / 折扇 | **风、符、控场**。短兵器，气浪 / 落符 / 风场 | 补一个「不靠弹体也能打中远距」的空位：现有两类远程（法杖 / 暗器）都是 `cast` 弹体，扇用 `shockwave` / `bolt` / `zone` 表达气劲，玩法与点阵都跟前 9 类不撞 |
+
+**两把都不做 `ranged`**。原因不是玩法，是工程：`game.js` 的弹体通道只认 `orb` / `dart`
+两种 `kind`，新增第三类要改 `projectiles` 的绘制与撞墙逻辑，而 P12-C 的目标里没有
+「加原语」这一项。做近中距三段，`WEAPONS[*].swings` 一律用既有 `swing` / `ring`，
+`fx: 'crescent'`，运行时**一行不用改**。
+
+#### 9.7.2 兼容口径：只追加，不改动
+
+1. **既有 64 招、8 类兵器的任何一个字节都不改**。`WEAPONS` / `ARTS` 都是对象字面量，
+   新条目一律**追加在表尾**，保证 `WEAPON_IDS` / `ART_IDS` 的前 8 / 前 64 项顺序不变。
+   存档里存的是 `fam` 字符串与招式 `id` 字符串，不是下标 ⇒ `SAVE_KEY` 不升版本。
+2. **四个池一个都不加**：`ART_FX` 14 / `ART_SHAPES` 19 / `ART_POSES` 20 /
+   `ART_SNDS` 17 保持原样。16 招全部从现有池里取值 —— 工作台自检里那几条
+   「19 形 / 20 式 / 17 音 / 14 原语」只有 `fams 8 → 10` 需要改。
+   `arto...verrides.js` 的 `OVERRIDE_SAFE` 白名单已覆盖全部表现字段，不用动。
+3. **本批完全不碰 `game.js` 的地图与剧情**：第一章前 102 行指纹仍是 `1093084102`，
+   P12-A / P12-B 的 49 节点、18 任务、7 巢穴、4 种新区风物全部原样。
+   `game.js` 里唯一与 fam 有关的硬编码是 `drawWeaponHeld()` 的 `fam === 'dual'` 副手分支，
+   新兵器不走它；其余全是 `WEAPONS[fam]` / `WEAPON_IDS` 动态读表。
+4. **`build.js` 的 `ORDER` 不变**：不新增模块，两个文件都是原地扩数据。
+5. **掉落权重**：新增 `dropW: 9` × 2，总权重 100 → 118，老八类各自被稀释约 15%，
+   不改变相对顺序。`randomFam()` 本来就是 `WEAPON_IDS.reduce(...)` 动态算的，不用改。
+
+#### 9.7.3 两把兵器的落地参数
+
+`weapons.js` 的 `ROWS` 追加两段**等宽**点阵（`variantRows()` 按 `src[0].length` 补边，
+每行不等长会让仙品 / 传世剪影错位）：
+
+```
+chain（7 宽 × 14 行）：钩尖 → 金 / 暗交替的链环 → 末端握柄
+  '..www..' '..w.w..' '..gGg..' '..g.g..' '..hhh..' '..h.h..'
+  '..gGg..' '..g.g..' '..hhh..' '..h.h..' '..gGg..' '..g.g..' '..gGg..' '...h...'
+fan（9 宽 × 12 行）：上宽下窄的扇面 → 收拢的扇骨 → 扇钉
+  'wwwwwwwww' '.wWwWwWw.' '.gGgGgGg.' '.wWwWwWw.' '..gGgGg..' '..wWwWw..'
+  '...gGg...' '...wWw...' '....h....' '....h....' '...gGg...' '....h....'
+```
+
+| 字段 | `chain` | `fan` |
+|---|---|---|
+| `atkMul / spdMul / reach / dropW` | `1.06 / 0.98 / 42 / 9` | `0.92 / 0.86 / 30 / 9` |
+| `trail / fx` | `[C.paper3, C.ink3] / 'crescent'` | `[C.jade3, C.paper2] / 'crescent'` |
+| `swings[0]` | swing `-1.5→1.5` · hitArc 2.6 · reach 42 · mul 1.05 | swing `-1.1→1.0` · hitArc 2.0 · reach 28 · mul 0.80 |
+| `swings[1]` | swing `1.5→-1.5` · hitArc 2.6 · reach 42 · mul 1.15 | swing `1.0→-1.1` · hitArc 2.0 · reach 28 · mul 0.86 |
+| `swings[2]` | ring · hitArc 6.28 · reach 38 · mul 1.55 | swing `-1.7→1.7` · hitArc 3.2 · reach 32 · mul 1.20 |
+| 普攻 `avgMul` | `(1.05+1.15+1.55)/3 = 1.250` | `(0.80+0.86+1.20)/3 = 0.953` |
+| `normalDps = avgMul / max(0.13, 0.30·spdMul)` | `1.250 / 0.294 = **4.252**` | `0.953 / 0.258 = **3.695**` |
+
+`tools/weapons.js` 的两条全局断言仍然成立：所有 `swings[*].reach ≤ 50`（最大 42），
+所有 `hitArc ≤ 6.3`（最大 6.28）；`swings[0].hitArc` 新增 2.6 / 2.0 两个不同值，
+「不同兵器判定弧度不同」只会更宽松。
+
+`items.js` 的 `BASES.weapon` 追加两组五档名称池（避开 P12-B 已占用的
+「沉牌链 / 守链环」与法宝槽已有的「山河扇」）：
+
+```
+chain: [['麻绳链','铁索'], ['铁索','九节链'], ['乌龙链','盘龙索'],
+        ['缚龙链','锁云索'], ['沉江链','天罡锁']]
+fan:   [['纸扇','竹扇'], ['折扇','绢扇'], ['清风扇','玉骨扇'],
+        ['流云扇','阴阳扇'], ['五明扇','太虚羽扇']]
+```
+
+#### 9.7.4 十六招清单
+
+功能位与解锁门槛沿用同一套模板：`dmg×2 / aoe×2 / move×1 / ctrl×1 / buff×1 / special×1`，
+`prof` 恰好是 `1/2/3/4/5/6/8/10` 各一次；`cost = cd × 1.2`。
+`buff` 必带 `buff` 表、`zone` 必带 `zone` 表、`dash` 必带 `dash` 表。
+
+**链 · `chain_1..8`**
+
+| id | 名称 | 位/级 | cd/cost | fx | 关键数值 | shape | pose | color | snd / hitSnd |
+|---|---|---|---|---|---|---|---|---|---|
+| `chain_1` | 锁喉 | dmg/1 | 4 / 4.8 | `melee` | reach 46 · arc 1.0 · mul 6.2 · `pierceDef 0.3` · kb 8 | `thrust` | `lunge` | paper3/paper2 | qi / forge |
+| `chain_2` | 缠身 | dmg/2 | 3 / 3.6 | `melee` | reach 42 · arc 1.4 · mul 2.0 · `hits 3 ramp 0.10` · kb 5 | `trail` | `flick` | jade3/jade2 | slash / hit |
+| `chain_3` | 扫链 | aoe/3 | 6 / 7.2 | `melee` | reach 50 · arc 6.28 · mul 7.0 · kb 10 | `ring` | `spin` | gold3/gold2 | wu / quake |
+| `chain_4` | 回旋索 | aoe/5 | 5 / 6 | `boomerang` | dist 190 · flight 0.66 · bulge 18 · mul 7.6 · kb 12 | `boomerang` | `throw` | red2/red1 | boomerang / crit |
+| `chain_5` | 曳影 | move/6 | 8 / 9.6 | `dash` | mul 3.8 · r 26 · `target/56/iframe .25/nextDmg .4` | `chargeLine` | `charge` | pur3/pur2 | dash / boomerang |
+| `chain_6` | 缚龙 | ctrl/8 | 14 / 16.8 | `pull` | mul 5.2 · radius 88 · stun 1.2 | `hook` | `reverse` | jade2/jade1 | bell / shield |
+| `chain_7` | 链势 | buff/10 | 20 / 24 | `buff` | `power 10` · dur 8 · reachPct 30 · atkSpd 12 | `sigil` | `plant` | gold2/gold1 | levelup / bell |
+| `chain_8` | 万链归墟 | special/4 | 30 / 36 | `orbit` | count 10 · dur 5 · mul 1.7 · radius 36 | `spiral` | `overheadBig` | white/gold3 | boss / thunder2 |
+
+**扇 · `fan_1..8`**
+
+| id | 名称 | 位/级 | cd/cost | fx | 关键数值 | shape | pose | color | snd / hitSnd |
+|---|---|---|---|---|---|---|---|---|---|
+| `fan_1` | 点穴 | dmg/1 | 3 / 3.6 | `melee` | reach 32 · arc 0.9 · mul 5.6 · `critAdd 40` · kb 5 | `point` | `flick` | paper3/paper2 | qi / hit |
+| `fan_2` | 折影 | dmg/2 | 5 / 6 | `melee` | reach 34 · arc 1.6 · mul 2.6 · `hits 2 critLast` · kb 5 | `cross` | `sideSwing` | jade3/jade2 | slash / crit |
+| `fan_3` | 扇风 | aoe/3 | 9 / 10.8 | `shockwave` | r 72 · speed 250 · dur .5 · mul 7.4 · `centerBonus 1.3 / centerR 22` | `shockwave` | `sweepLow` | white/jade2 | windup / quake |
+| `fan_4` | 落符 | aoe/5 | 10 / 12 | `bolt` | count 6 · mul 1.2 · r 24 · range 160 | `rain` | `overhead` | pur3/pur2 | thunder / thunder2 |
+| `fan_5` | 随风 | move/6 | 8 / 9.6 | `dash` | mul 3.2 · r 24 · `side/62/iframe .4` | `trail` | `leap` | gold3/gold2 | dash / boomerang |
+| `fan_6` | 引风 | ctrl/8 | 12 / 14.4 | `zone` | mul 0.9 · `dur 4 / tick .5 / r 60 / circle` · slow 1.5 | `sigil` | `guard` | jade2/jade1 | forge / bell |
+| `fan_7` | 凝神 | buff/10 | 20 / 24 | `buff` | `power 9` · dur 8 · pierce 1 · atkPct 15 | `fan` | `channel` | gold2/gold1 | levelup / shield |
+| `fan_8` | 风雷引 | special/4 | 30 / 36 | `cleave` | len 110 · width 40 · mul 14 · `centerBonus 1.4 / centerR 30` | `cleave` | `overheadBig` | red3/red2 | boss / forge |
+
+两族的 `fx` 都落在既有 14 原语内，`tools/arts.js` 的「覆盖 14 种效果原语」
+仍由全表统计得出，不会变成 15。全局冷却跨度 min 1.8（暗器）/ max 32（锤）也没被动，
+「≥ 10 倍」继续成立。
+
+#### 9.7.5 四签名与连拍角度
+
+`tools/arts.js` §1.1 会**逐字段**查重：同一兵器内 `shape` / `pose.mode` /
+`color.join('|')` / `snd` / `hitSnd` 各自 8 招 8 样，且 `(shape,pose,color)` 组合与
+`(snd,hitSnd)` 声音对也不能撞。上表已按此排好：
+
+| 族 | 8 形 | 8 式 | 8 起手音 | 8 命中音 |
+|---|---|---|---|---|
+| 链 | thrust · trail · ring · boomerang · chargeLine · hook · sigil · spiral | lunge · flick · spin · throw · charge · reverse · plant · overheadBig | qi · slash · wu · boomerang · dash · bell · levelup · boss | forge · hit · quake · crit · boomerang · shield · bell · thunder2 |
+| 扇 | point · cross · shockwave · rain · trail · sigil · fan · cleave | flick · sideSwing · sweepLow · overhead · leap · guard · channel · overheadBig | qi · slash · windup · thunder · dash · forge · levelup · boss | hit · crit · quake · thunder2 · boomerang · bell · shield · forge |
+
+连拍断言取的是**施法后固定 0.15 息**的 `swingAng(sw, 0, p).ang`（`p = 0.15/dur`），
+不是进度百分比；`a0/a1` 用下面这组「视觉优先」参数 —— 早先按目标角度反算出来的
+`a0 = -3.82` 会让武器从身后绕出来，虽然数字过关但看着不对，故弃用。
+
+```
+链： #1 lunge -2.45→-0.95/.28/out   #2 flick -1.95→-0.65/.20/out
+     #3 spin  -2.80→-0.80/.36/both  #4 throw -1.20→ 0.90/.22/out
+     #5 charge  0.10→ 0.10/.26/out  #6 reverse -1.45→-0.35/.30/in
+     #7 plant   1.15→ 1.80/.34/in   #8 overheadBig -2.70→1.20/.62/in
+扇： #1 flick -2.45→-1.15/.20/out   #2 sideSwing -1.95→0.25/.28/in
+     #3 sweepLow -2.20→-0.80/.30/in #4 overhead -0.71→0.59/.42/in
+     #5 leap  -0.90→ 0.00/.24/out   #6 guard 0.29→0.99/.32/in
+     #7 channel 0.84→1.44/.40/in    #8 overheadBig -2.73→1.17/.62/in
+```
+
+按 `game.js` 的 `swingAng()` 同一公式复算（`in` 用 `q^2.4`、`out` 用
+`1-(1-q)^2.2`、`both` 用二次 ease，`spin` 额外 `+e·π`、`reverse` 额外 `+0.55π`、
+`charge` 只看 `a0`）：
+
+- 链八角度排序 `-2.57 / -1.23 / -1.01 / -0.71 / 0.10 / 0.49 / 0.73 / 1.24`，
+  **最近一对 0.213 rad = 12.2°**（`chain_1 ↔ chain_3`）
+- 扇八角度排序 `-2.60 / -1.93 / -1.46 / -1.21 / -0.60 / -0.10 / 0.40 / 0.90`，
+  **最近一对 0.247 rad = 14.1°**（`fan_1 ↔ fan_2`）
+
+门槛 0.12 rad（7°），两族都留了近一倍余量；P11 收口时最紧的兵器是 8.5°，
+新兵器不会成为新的最紧项。
+
+#### 9.7.6 平衡复校（`artPower()` 唯一口径）
+
+`dpsOf(a) = artPower(a) / a.cd`，`artPower` 把多段 / 多发 / 持续 / 环身中心 / DoT 都折进去。
+两族的 `power` 招按等效倍率入账，`centerBonus` 一律 ×1.2，`ramp` 按
+`1 + ramp·(hits-1)/2` 折算。
+
+| 族 | 8 招 Σ dps | 全开 / 普攻 | 最强 6 招 Σ | 满配 / 普攻 |
+|---|---|---|---|---|
+| 链 | `1.550+2.200+1.167+1.520+0.475+0.371+0.500+0.567 = 8.350` | **1.96x** | 7.504 | **1.76x** |
+| 扇 | `1.867+1.040+0.987+0.720+0.400+0.600+0.450+0.560 = 6.624` | **1.79x** | 5.774 | **1.56x** |
+
+上限 2.8x：两族全开与满配都留了 ≥ 0.8x 的余量；下限 0.2x 由全表最大值决定
+（现为法杖 2.41x），不受影响。`tools/arts.js` 的 `FAMS = g.WEAPON_IDS` 会自动把两族
+纳入校验，不用改断言体，只改标题里的「八招 / 八件」字样。
+
+#### 9.7.7 回归面：所有「8 类 / 64 招」硬编码
+
+| 文件 | 要改什么 |
+|---|---|
+| `weapons.js` | `ROWS` 加两段点阵；`WEAPONS` 表尾加两类（头部注释「八种兵器」改「十种」） |
+| `arts.js` | `ARTS` 表尾加 16 招；头部 P6 说明补一句 P12-C 追加，别改旧注释里的历史事实 |
+| `items.js` | `BASES.weapon` 加两组名称池；`randomFam()` **不用改** |
+| `devtest.js` | **20 行与 140 行两处**写死的 `fams = [...8...]` → 改用 `g.WEAPON_IDS`；断言标题「八种」改「十种」 |
+| `tools/weapons.js` | `IDS.length === 8 → 10`、`famHits.size === 8 → 10`；补两类专项（三段 / 名称池 / 非远程 / reach·hitArc 上限） |
+| `tools/arts.js` | `64 → 80`、所有「八兵器 / 八件」→「十」，补两类专项断言；`FAMS` 已动态，平衡段只改文案 |
+| `tools/art-workbench.js` | `基线 64 招 → 80`、`B.fams.length === 8 → 10`、三处 `64 招` 文案；已按 `B.fams` 循环，两类各 8 招会自动多两条断言 |
+| `tools/gen-artworkbench.js` | 解析数量 `64 → 80`；`FAM_IDS` 加 `chain` / `fan`；`famLabel` 加「链 / 扇」；输出文案 `64 招 → 80 招` |
+| `art-workbench.html` | `<h2>64 招基线</h2>` → 80；`<script id="wbBase">` **由生成器重写，不要手改** |
+| `tools/mantras.js` | **不用改**（`FAMS = g.WEAPON_IDS` 动态），但必须跑回归确认 200 组心法组合不受影响 |
+| `arto...verrides.js` / `art-overrides.data.js` | **不用改**（白名单与空覆盖表与招数无关），注释里的 64 可顺手改 80 |
+| `game.js` / `build.js` | **不用改**（数据驱动 / 不新增模块） |
+| `ARTS-DESIGN.md` | §2「八兵器的性格」后补两节；§7 / §8 的「64 招 / 八兵器」统计口径改为「P11 时为 64 招，P12-C 扩到 80 招」 |
+| `ART-WORKBENCH.md` | 各处「64 招基线」→ 80；工作台命令注释同步 |
+| `README.md` / `HANDOFF.md` / `SKILLS-STORY-PLAN.md` | 进度表勾 P12-C；命令注释里的条数按实测更新；历史设计段落加一句「此为 P11 收口时的 64 招口径」而不是抹掉 |
+
+**三个实现期必须守的格式坑**：
+
+1. `tools/gen-artworkbench.js` 用 `^ {4}shape:\s*['"]...['"],\s*color:\s*\[...\]` 锚定
+   **招式顶层那一行**（4 空格）。`zone: { shape: 'circle' }` 里的地面几何也叫 `shape`，
+   写新招时 `shape` / `color` 必须同处一行、缩进 4 空格，否则工作台下拉框会变空值。
+2. 招式块起始行必须是 `  <id>: {`、结束行必须恰好是 `  },`（2 空格），
+   `id` 必须匹配 `[a-z]+_\d+` —— `chain_1` / `fan_8` 都符合，别写成 `chain-1`。
+3. `buff` / `zone` / `dash` 三类的招式即使不写 `reach` 也会被 `num('reach', 44)`
+   兜底为正数，但 `mul` / `cd` 必须 > 0；`buff` 招用 `power` 而不是 `mul` 时，
+   `tools/arts.js` 的字段检查认 `(mul > 0) || (power > 0)`，两者给一个即可。
+
+#### 9.7.8 验收口径
+
+1. `node tools/gen-artworkbench.js` 重新内联基线（**改完 `arts.js` 必须先跑它，再 `node build.js`**），
+   脚本应输出 `80 招 / 19 形 / 20 式 / 17 音 / 20 色`。
+2. 模块版 11 套：`devtest` + 10 套 eval 全绿；`arts` / `weapons` / `art-workbench`
+   三套条数会因两类专项而增加，其余套数不变。
+3. 单文件版两条路径（`逍遥行.html`、`dist/index.html`，带 `QS=x=1`）各 9 套 eval +
+   `online` 探针；工作台根页与 `dist/art-workbench.html` 各跑 `art-workbench.js`。
+4. `online` 探针额外确认：`WEAPON_IDS.length === 10`、`ART_IDS.length === 80`、
+   链 / 扇各 8 招、两类都进掉落池、第一章地形指纹仍 `1093084102`。
+5. 发布：按既有流程提交 → 查 Pages workflow `completed/success` → 比对入口页 md5 →
+   线上跑八套自检；**工作台页 md5 这次会变**（基线从 64 招换成 80 招），别再拿
+   `b8b61794…` 当不变基线。
+
+#### 9.7.9 验收（2026-11-11 收口）
+
+**实现与施工图的两处偏差**（都写在这里，别让下一个人以为施工图漏了）：
+
+1. `game.js` 原计划「一行不用改」，实际改了 3 行。原因是 `chain_4` 回旋索借了
+   `boomerang` 通道、`chain_8` 万链归墟借了 `orbit` 通道，而这两处贴图把
+   `'hammer'` / `'sword'` 写死了 —— 甩链会飞出一把锤、放万链会转十把小剑。
+   改成 `weaponIcon(a.fam || 'hammer', ...)` 与 `orbTexture(a.fam)`（`_orbTex` 由
+   单个变量换成按 fam 缓存的字典）。老八类里这两条通道本来就只属于锤 / 剑，
+   取到的仍是同一张贴图，行为一字不变；`§9.7.7` 表格里「`game.js` 不用改」
+   这一格以本节为准。
+2. `tools/weapons.js` 的「老八类名称池齐备」一度改成引用后面才声明的
+   `const nm`，页面里报 `Cannot access 'nm' before initialization`（暂时性死区），
+   已改回直接调 `makeGear()`。脚本抛异常时 `eval` 只会打印 `undefined`，
+   用 try/catch 包装一层才看到真实栈 —— 这招以后还用得上。
+
+**数据**：`weapons.js` +2 类点阵与参数、`arts.js` +16 招、`items.js` +2 组五档名称池。
+前 64 招、前 8 类兵器、四个池（14 原语 / 19 形 / 20 式 / 17 音）、`SAVE_KEY`、
+`build.js ORDER`、第一章地形全部原样；`tools/map.js` 23 条照旧确认指纹
+`1093084102`。`tools/arts.js` §1.3 新增一条「前 8 类兵器顺序未变」的存档兼容断言。
+
+**基线**：`node tools/gen-artworkbench.js` 输出
+`80 招 / 19 形 / 20 式 / 17 音 / 20 色`（24.9 KB），与 §9.7.8 预判一致；
+工作台页 md5 如预判从 `b8b61794…` 变成 `d4933b66…`（58 KB），
+入口页 `dist/index.html` / `逍遥行.html` md5 `9491a22e…`（1,904 KB）。
+
+| 断言套 | 条数 | 变化 |
+|---|---|---|
+| `devtest` | 148 | 两处写死的 `fams` 改 `g.WEAPON_IDS`，现在真覆盖链 / 扇 |
+| `arts` | 131 → **144** | `64 → 80` 一条 + §1.3 两族专项 12 条 |
+| `weapons` | 32 → **39** | `8 → 10` 两条 + §2.1 七条 |
+| `art-workbench` | 32 → **36** | `64 → 80` / `fams 8 → 10` + 两条两族专项 |
+| 其余 7 套 | 不变 | `mantras 75 / story 113 / quests 43 / bosses 38 / map 23 / camps 17 / art-overrides 29` |
+
+**回归**：模块版 11 套 **705 PASS / 0 FAIL**；单文件版 `逍遥行.html` 与
+`dist/index.html` 两条路径各 9 套 eval（每路 521 PASS）全绿、`online` 探针均
+`ok=true`（画布 1326×746 有像素 / 控制台无错）；工作台根页与
+`dist/art-workbench.html` 各 36 条全绿。
+
+**平衡与签名实测**：链全开 `1.96x` / 满配 `1.76x`，扇 `1.79x` / `1.56x`，
+都低于 `2.8x`；最吃紧的仍是法杖 `2.41x`。连拍最近一对链 `12.2°`、扇 `14.1°`，
+门槛 7°，P11 的 8.5° 仍是最紧项。两族逐字段四签名、门槛 `1/2/3/4/5/6/8/10`、
+功能位模板、`cost = cd × 1.2`、`buff` / `zone` / `dash` 表都由 §1.3 自动断言。
+
+**发布验证**：待回填。

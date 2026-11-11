@@ -2,7 +2,7 @@
 // gen-artworkbench.js · 从 arts.js / pixel.js 生成工作台内嵌的基线数据
 //
 // 工作台是双击即开的单文件 HTML，不能直接 import ESM（file:// 会 CORS）。
-// 所以每次 arts.js 改了招式，跑一次这个脚本，把 64 招的精简字段重新内联进去。
+// 所以每次 arts.js 改了招式，跑一次这个脚本，把 80 招的精简字段重新内联进去。
 // 用法：node tools/gen-artworkbench.js
 const fs = require('fs');
 const path = require('path');
@@ -30,7 +30,7 @@ const poses = strArray('ART_POSES');
 const snds = strArray('ART_SNDS');
 const fx = strArray('ART_FX');
 
-// 3. 64 招：按 "  id: { ... \n  }," 切块（招式结束行的缩进恰好两个空格）
+// 3. 80 招：按 "  id: { ... \n  }," 切块（招式结束行的缩进恰好两个空格）
 const lines = artsSrc.split('\n');
 const arts = {};
 let cur = null, buf = [];
@@ -90,11 +90,12 @@ for (const line of lines) {
     }
   }
 }
-if (Object.keys(arts).length !== 64) throw new Error('只解析到 ' + Object.keys(arts).length + ' 招（应为 64）');
+if (Object.keys(arts).length !== 80) throw new Error('只解析到 ' + Object.keys(arts).length + ' 招（应为 80）');
 
 // 解析结果逐项对照 arts.js 自己的登记表。只要字段被嵌套对象污染 / 写错名字，
 // 这里立刻炸，不会等用户打开工作台看见一个空下拉框才发现。
-const FAM_IDS = ['sword', 'blade', 'spear', 'staff', 'dual', 'hammer', 'mage', 'dart'];
+// P12-C：链 / 扇追加在表尾，顺序与 WEAPON_IDS 一致
+const FAM_IDS = ['sword', 'blade', 'spear', 'staff', 'dual', 'hammer', 'mage', 'dart', 'chain', 'fan'];
 const pools = { shape: shapes, 'pose.mode': poses, snd: snds, hitSnd: snds, fx, fam: FAM_IDS };
 const stray = [];
 for (const a of Object.values(arts)) {
@@ -117,7 +118,8 @@ const data = {
   shapes, poses, snds, fx,
   palette: Object.entries(colors).map(([k, v]) => ({ name: k, hex: v })),
   fams: FAM_IDS,
-  famLabel: { sword: '剑', blade: '刀', spear: '枪', staff: '棍', mage: '法杖', dual: '双刃', hammer: '锤', dart: '暗器' },
+  famLabel: { sword: '剑', blade: '刀', spear: '枪', staff: '棍', mage: '法杖', dual: '双刃', hammer: '锤',
+    dart: '暗器', chain: '链', fan: '扇' },
   arts,
 };
 
@@ -131,5 +133,5 @@ if (!re.test(html)) throw new Error('art-workbench.html 里找不到 <script id=
 const json = JSON.stringify(data);
 const out = html.replace(re, () => '<script id="wbBase" type="application/json">' + json + '</script>');
 fs.writeFileSync(p, CRLF ? out.replace(/\n/g, '\r\n') : out, 'utf8');
-console.log('工作台基线数据已内联：64 招 / ' + shapes.length + ' 形 / ' + poses.length + ' 式 / '
+console.log('工作台基线数据已内联：80 招 / ' + shapes.length + ' 形 / ' + poses.length + ' 式 / '
   + snds.length + ' 音 / ' + Object.keys(colors).length + ' 色，' + (json.length / 1024).toFixed(1) + ' KB');

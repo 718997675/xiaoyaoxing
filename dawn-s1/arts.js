@@ -12,6 +12,9 @@ import { C } from './pixel.js';
 // P6 说明：八兵器 × 八招 = 64 招。装配槽只有 6 个，所以 8 招是"全部可学、
 // 挑 6 招上阵"，不是同时开 8 个。新增的 48 招按功能位铺满：
 //   输出 ×2 / 清场 ×2 / 位移 ×1 / 控制 ×1 / 增益 ×1 / 特色 ×1
+//
+// P12-C：表尾追加 chain / fan 两类各 8 招，共 80 招。前 64 招与前 8 类兵器
+// 一个字节未改，四个池（14 原语 / 19 形 / 20 式 / 17 音）也不扩容。
 // 解锁等级错开成 1/2/3/4/5/6/8/10 —— 前六级每级都有新东西，
 // 后面两级各再给一招（7、9 级空手是留给"专精满前的取舍"的，
 // 8 级和 10 级各压轴一招，不至于让最后两级只是数字上涨）。
@@ -723,6 +726,155 @@ export const ARTS = {
     shape: 'point', color: [C.red2, C.red1],
     snd: 'rare', hitSnd: 'wu',
     desc: '淬毒六息；中毒者倒下时毒气四散，沾上的人一起中毒。',
+  },
+
+  // ---------- 链 · 软长 / 缠拽（P12-C 追加，接第二章「守链人」暗线） ----------
+  chain_1: {
+    id: 'chain_1', fam: 'chain', slot: 'dmg', name: '锁喉', prof: 1,
+    cd: 4, cost: 4.8, fx: 'melee',
+    reach: 46, arc: 1.0, mul: 6.2, kb: 8, pierceDef: 0.3,
+    pose: { mode: 'lunge', a0: -2.45, a1: -0.95, dur: 0.28, ease: 'out' },
+    shape: 'thrust', color: [C.paper3, C.paper2],
+    snd: 'qi', hitSnd: 'forge',
+    desc: '链梢直取咽喉，无视三成防御。',
+  },
+  chain_2: {
+    id: 'chain_2', fam: 'chain', slot: 'dmg', name: '缠身', prof: 2,
+    cd: 3, cost: 3.6, fx: 'melee',
+    reach: 42, arc: 1.4, mul: 2.0, hits: 3, ramp: 0.10, kb: 5,
+    pose: { mode: 'flick', a0: -1.95, a1: -0.65, dur: 0.20, ease: 'out' },
+    shape: 'trail', color: [C.jade3, C.jade2],
+    snd: 'slash', hitSnd: 'hit',
+    desc: '三节链环依次缠上，一节比一节紧。',
+  },
+  chain_3: {
+    id: 'chain_3', fam: 'chain', slot: 'aoe', name: '扫链', prof: 3,
+    cd: 6, cost: 7.2, fx: 'melee',
+    reach: 50, arc: 6.28, mul: 7.0, kb: 10,
+    pose: { mode: 'spin', a0: -2.80, a1: -0.80, dur: 0.36, ease: 'both' },
+    shape: 'ring', color: [C.gold3, C.gold2],
+    snd: 'wu', hitSnd: 'quake',
+    desc: '抡链一匝，周身五步内无人能近。',
+  },
+  chain_4: {
+    id: 'chain_4', fam: 'chain', slot: 'aoe', name: '回旋索', prof: 5,
+    cd: 5, cost: 6, fx: 'boomerang',
+    dist: 190, flight: 0.66, bulge: 18, mul: 7.6, kb: 12,
+    pose: { mode: 'throw', a0: -1.20, a1: 0.90, dur: 0.22, ease: 'out' },
+    shape: 'boomerang', color: [C.red2, C.red1],
+    snd: 'boomerang', hitSnd: 'crit',
+    desc: '整条链脱手盘旋一圈，去回各伤一次。',
+  },
+  chain_5: {
+    id: 'chain_5', fam: 'chain', slot: 'move', name: '曳影', prof: 6,
+    cd: 8, cost: 9.6, fx: 'dash', mul: 3.8, radius: 26, kb: 6,
+    dash: { dir: 'target', dist: 56, iframe: 0.25, nextDmg: 0.4 },
+    pose: { mode: 'charge', a0: 0.10, a1: 0.10, dur: 0.26, ease: 'out' },
+    shape: 'chargeLine', color: [C.pur3, C.pur2],
+    snd: 'dash', hitSnd: 'boomerang',
+    desc: '链挂住敌手一拽，人已贴到身后，下一击更沉。',
+  },
+  chain_6: {
+    id: 'chain_6', fam: 'chain', slot: 'ctrl', name: '缚龙', prof: 8,
+    cd: 14, cost: 16.8, fx: 'pull', mul: 5.2, radius: 88, kb: 4,
+    status: { kind: 'stun', dur: 1.2 },
+    pose: { mode: 'reverse', a0: -1.45, a1: -0.35, dur: 0.30, ease: 'in' },
+    shape: 'hook', color: [C.jade2, C.jade1],
+    snd: 'bell', hitSnd: 'shield',
+    desc: '反手甩链卷回最远那人，一时动弹不得。',
+  },
+  chain_7: {
+    id: 'chain_7', fam: 'chain', slot: 'buff', name: '链势', prof: 10,
+    cd: 20, cost: 24, fx: 'buff', power: 10,
+    buff: { dur: 8, reachPct: 30, atkSpd: 12 },
+    pose: { mode: 'plant', a0: 1.15, a1: 1.80, dur: 0.34, ease: 'in' },
+    shape: 'sigil', color: [C.gold2, C.gold1],
+    snd: 'levelup', hitSnd: 'bell',
+    desc: '链垂于地八息，够得更远、出手更快。',
+  },
+  chain_8: {
+    id: 'chain_8', fam: 'chain', slot: 'special', name: '万链归墟', prof: 4,
+    cd: 30, cost: 36, fx: 'orbit',
+    count: 10, dur: 5, mul: 1.7, radius: 36,
+    pose: { mode: 'overheadBig', a0: -2.70, a1: 1.20, dur: 0.62, ease: 'in' },
+    shape: 'spiral', color: [C.white, C.gold3],
+    snd: 'boss', hitSnd: 'thunder2',
+    desc: '十节链环离身盘旋五息，各自追敌结算。',
+  },
+
+  // ---------- 扇 · 风符 / 控场（P12-C 追加，不靠弹体打中远距） ----------
+  fan_1: {
+    id: 'fan_1', fam: 'fan', slot: 'dmg', name: '点穴', prof: 1,
+    cd: 3, cost: 3.6, fx: 'melee',
+    reach: 32, arc: 0.9, mul: 5.6, kb: 5, critAdd: 40,
+    pose: { mode: 'flick', a0: -2.45, a1: -1.15, dur: 0.20, ease: 'out' },
+    shape: 'point', color: [C.paper3, C.paper2],
+    snd: 'qi', hitSnd: 'hit',
+    desc: '收扇以扇骨一点，专取要害。',
+  },
+  fan_2: {
+    id: 'fan_2', fam: 'fan', slot: 'dmg', name: '折影', prof: 2,
+    cd: 5, cost: 6, fx: 'melee',
+    reach: 34, arc: 1.6, mul: 2.6, hits: 2, critLast: true, kb: 5,
+    pose: { mode: 'sideSwing', a0: -1.95, a1: 0.25, dur: 0.28, ease: 'in' },
+    shape: 'cross', color: [C.jade3, C.jade2],
+    snd: 'slash', hitSnd: 'crit',
+    desc: '一开一合两记，合扇那下必取破绽。',
+  },
+  fan_3: {
+    id: 'fan_3', fam: 'fan', slot: 'aoe', name: '扇风', prof: 3,
+    cd: 9, cost: 10.8, fx: 'shockwave',
+    radius: 72, speed: 250, dur: 0.5, mul: 7.4, kb: 12, centerBonus: 1.3, centerR: 22,
+    pose: { mode: 'sweepLow', a0: -2.20, a1: -0.80, dur: 0.30, ease: 'in' },
+    shape: 'shockwave', color: [C.white, C.jade2],
+    snd: 'windup', hitSnd: 'quake',
+    desc: '展扇推出一圈气浪，波前所过尽退，正中尤其沉重。',
+  },
+  fan_4: {
+    id: 'fan_4', fam: 'fan', slot: 'aoe', name: '落符', prof: 5,
+    cd: 10, cost: 12, fx: 'bolt',
+    count: 6, mul: 1.2, radius: 24, range: 160,
+    pose: { mode: 'overhead', a0: -0.71, a1: 0.59, dur: 0.42, ease: 'in' },
+    shape: 'rain', color: [C.pur3, C.pur2],
+    snd: 'thunder', hitSnd: 'thunder2',
+    desc: '六道符纸自扇面散落，各寻各的目标。',
+  },
+  fan_5: {
+    id: 'fan_5', fam: 'fan', slot: 'move', name: '随风', prof: 6,
+    cd: 8, cost: 9.6, fx: 'dash', mul: 3.2, radius: 24, kb: 4,
+    dash: { dir: 'side', dist: 62, iframe: 0.4 },
+    pose: { mode: 'leap', a0: -0.90, a1: 0.00, dur: 0.24, ease: 'out' },
+    shape: 'trail', color: [C.gold3, C.gold2],
+    snd: 'dash', hitSnd: 'boomerang',
+    desc: '借风侧掠六步，一路扇骨扫开追兵。',
+  },
+  fan_6: {
+    id: 'fan_6', fam: 'fan', slot: 'ctrl', name: '引风', prof: 8,
+    cd: 12, cost: 14.4, fx: 'zone', mul: 0.9,
+    zone: { dur: 4, tick: 0.5, radius: 60, shape: 'circle' },
+    status: { kind: 'slow', dur: 1.5, pct: 0.5 },
+    pose: { mode: 'guard', a0: 0.29, a1: 0.99, dur: 0.32, ease: 'in' },
+    shape: 'sigil', color: [C.jade2, C.jade1],
+    snd: 'forge', hitSnd: 'bell',
+    desc: '身周起四息旋风，踏入者步履滞涩。',
+  },
+  fan_7: {
+    id: 'fan_7', fam: 'fan', slot: 'buff', name: '凝神', prof: 10,
+    cd: 20, cost: 24, fx: 'buff', power: 9,
+    buff: { dur: 8, pierce: 1, atkPct: 15 },
+    pose: { mode: 'channel', a0: 0.84, a1: 1.44, dur: 0.40, ease: 'in' },
+    shape: 'fan', color: [C.gold2, C.gold1],
+    snd: 'levelup', hitSnd: 'shield',
+    desc: '敛息八息，出手更锐，也穿得更透。',
+  },
+  fan_8: {
+    id: 'fan_8', fam: 'fan', slot: 'special', name: '风雷引', prof: 4,
+    cd: 30, cost: 36, fx: 'cleave',
+    len: 110, width: 40, mul: 14, kb: 14, centerBonus: 1.4, centerR: 30,
+    pose: { mode: 'overheadBig', a0: -2.73, a1: 1.17, dur: 0.62, ease: 'in' },
+    shape: 'cleave', color: [C.red3, C.red2],
+    snd: 'boss', hitSnd: 'forge',
+    desc: '双扇尽展，一记风雷沿正前方直贯百步。',
   },
 };
 

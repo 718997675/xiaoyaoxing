@@ -11,10 +11,10 @@
   try {
     T('工作台就绪（__wbReady / __wb）', window.__wbReady === true && !!w);
     const B = w.base;
-    T('基线 64 招', Object.keys(B.arts).length === 64, Object.keys(B.arts).length);
-    T('形状池 19 / 动作池 20 / 声音池 17 / 原语 14 / 兵器 8 / 色板 20',
+    T('基线 80 招', Object.keys(B.arts).length === 80, Object.keys(B.arts).length);
+    T('形状池 19 / 动作池 20 / 声音池 17 / 原语 14 / 兵器 10 / 色板 20',
       B.shapes.length === 19 && B.poses.length === 20 && B.snds.length === 17 &&
-      B.fx.length === 14 && B.fams.length === 8 && B.palette.length === 20,
+      B.fx.length === 14 && B.fams.length === 10 && B.palette.length === 20,
       [B.shapes.length, B.poses.length, B.snds.length, B.fx.length, B.fams.length, B.palette.length].join('/'));
 
     // 重点回归：zone.shape（circle / line）曾经被当成招式的 shape 解析进来，
@@ -32,11 +32,18 @@
         bad.push(id + '.color=' + a.color.join('/'));
       if (!(a.mul > 0) || !(a.cd > 0) || !(a.reach > 0)) bad.push(id + '.数值');
     }
-    T('64 招字段全部落在登记池里（含 zone.shape 污染回归）', bad.length === 0, bad.slice(0, 6).join(' ') || 'OK');
+    T('80 招字段全部落在登记池里（含 zone.shape 污染回归）', bad.length === 0, bad.slice(0, 6).join(' ') || 'OK');
     for (const f of B.fams) {
       T('兵器 ' + (B.famLabel[f] || f) + ' 恰好 8 招',
         Object.keys(B.arts).filter(id => B.arts[id].fam === f).length === 8);
     }
+
+    T('工作台基线含链 / 扇各 8 招',
+      ['chain', 'fan'].every(f => B.fams.indexOf(f) >= 0
+        && Object.keys(B.arts).filter(id => B.arts[id].fam === f).length === 8),
+      B.fams.join('/'));
+    T('链 / 扇有中文标签', B.famLabel.chain === '链' && B.famLabel.fan === '扇',
+      (B.famLabel.chain || '?') + '/' + (B.famLabel.fan || '?'));
 
     // 时间轴：默认 30fps，刀光区间必须落在总帧内
     w.select('sword_1');
@@ -50,7 +57,7 @@
       const t = w.cur().timeline;
       if (t.fxStart + t.fxLen > t.total) tlBad.push(id);
     }
-    T('64 招的默认刀光区间都不越界', tlBad.length === 0, tlBad.join(' ') || 'OK');
+    T('80 招的默认刀光区间都不越界', tlBad.length === 0, tlBad.join(' ') || 'OK');
 
     // 预览画布真的画了东西（不是一块纯黑背景）
     w.select('sword_1'); w.setFrame(4);
@@ -67,7 +74,7 @@
       btns.every(id => !!document.getElementById(id)),
       btns.filter(id => !document.getElementById(id)).join(' ') || 'OK');
 
-    // 未编辑 → 空覆盖表，不许把 64 招全量写进覆盖表
+    // 未编辑 → 空覆盖表，不许把 80 招全量写进覆盖表
     w.clear();
     T('清空草稿可用', Object.keys(w.draft).length === 0);
     let p = w.buildPack();

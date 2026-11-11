@@ -1,6 +1,6 @@
 // artoverrides.js · 招式工作台的覆盖层
 //
-// 为什么需要它：arts.js 里 64 招是「基线」，工作台设计出来的招式不能每次都去改
+// 为什么需要它：arts.js 里 80 招是「基线」，工作台设计出来的招式不能每次都去改
 // 600 行数据表。这里按招式 id 存一份覆盖表，启动时原地改 ARTS 的字段 ——
 // 所有持有 ARTS 引用的地方自动生效，删掉覆盖表就回到基线，回滚零成本。
 //
@@ -98,7 +98,7 @@ export function exportOverrides() {
 }
 
 // 时间轴（30fps 帧数）→ 秒。工作台只写 fxStart / fxLen，这里换算成
-// slashGhosts 认识的 delay / t。基线 64 招没有 timeline，算出来全是 0，
+// slashGhosts 认识的 delay / t。基线 80 招没有 timeline，算出来全是 0，
 // 所以默认行为一个字节都不变。
 export function artTiming(a) {
   const t = a && a.timeline;

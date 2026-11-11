@@ -3097,10 +3097,13 @@ function afterArtHit(e, a, dealt, ang) {
 
 // ---------- 特效 ----------
 // 飞剑贴图只建一次：每次放招现画十二张 canvas 太浪费，而且武器图标生成不便宜。
-let _orbTex = null;
-function orbTexture() {
-  if (!_orbTex) _orbTex = tex(weaponIcon('sword', 3, 0, C.gold3));
-  return _orbTex;
+// P12-C：链也有 orbit 大招，飞出去的贴图得跟着兵器走；老八类里只有剑
+// 用这条通道，传 fam 之后取到的仍是原来那张剑贴图。
+const _orbTex = {};
+function orbTexture(fam) {
+  const key = fam || 'sword';
+  if (!_orbTex[key]) _orbTex[key] = tex(weaponIcon(key, 3, 0, C.gold3));
+  return _orbTex[key];
 }
 // 招式刀光复用 slashGhosts 这条通道（普攻刀光也在用）：
 // 它已经在 drawOverlay 里按世界坐标画、并且自己淡出，直接 push 就完事。
@@ -3444,7 +3447,7 @@ function execArt(a) {
     const dur = a.flight || 0.66;
     const col = artColor(a, W.trail);
     artSwingFx(a, aim, dist, a.arc || 1.6);
-    const mesh = quad(tex(weaponIcon('hammer', 3, 0, col[0])), 15, 15);
+    const mesh = quad(tex(weaponIcon(a.fam || 'hammer', 3, 0, col[0])), 15, 15);
     boomerangs.push({
       art: a, ox: player.x, oy: player.y - 8, ang: aim,
       x: player.x, y: player.y - 8, dist, bulge: a.bulge || 26,
@@ -3546,7 +3549,7 @@ function execArt(a) {
     for (let i = 0; i < n; i++) {
       // 用兵器图标当飞剑贴图，而不是一颗光点 —— 十二个光点绕着人转，
       // 玩家读到的是"护体灵气"，读不出"万剑"。图标会跟着角度转，一眼就是剑。
-      const mesh = quad(orbTexture(), 12, 12);
+      const mesh = quad(orbTexture(a.fam), 12, 12);
       mesh.material.blending = THREE.AdditiveBlending;
       scene.add(mesh);
       player.orbs.push({ i, mesh, cd: 0.15 + i * 0.04 });

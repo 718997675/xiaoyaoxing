@@ -1,6 +1,6 @@
 // tools/arts.js · 招式与专精自检（P6 验收）
-// 八兵器 × 八招 = 64 招，装配槽 6 个。
-// 覆盖：数据完整性 / 专精曲线 / 解锁门槛 / 装配换兵器 / 64 招都能放且真的有效果 /
+// 十兵器 × 八招 = 80 招，装配槽 6 个。（P12-C 追加链 / 扇两类，见 §1.3）
+// 覆盖：数据完整性 / 专精曲线 / 解锁门槛 / 装配换兵器 / 80 招都能放且真的有效果 /
 //       四种新原语（位移·增益·地面区域·拉拽）专项 / 冷却与真气 / 状态系统 /
 //       平衡校验 / 存读档 / 面板与 HUD
 (() => {
@@ -49,10 +49,11 @@
   try {
   {
     const ids = g.ART_IDS;
-    T('招式共 64 个', ids.length === 64, ids.length);
+    T('招式共 80 个', ids.length === 80, ids.length);
     const per = {};
     for (const id of ids) per[g.ARTS[id].fam] = (per[g.ARTS[id].fam] || 0) + 1;
-    T('八种兵器各 8 招', FAMS.every(f => per[f] === 8), FAMS.map(f => g.WEAPONS[f].name + per[f]).join(' '));
+    T('十种兵器各 8 招', FAMS.length === 10 && FAMS.every(f => per[f] === 8),
+      FAMS.map(f => g.WEAPONS[f].name + per[f]).join(' '));
 
     const bad = [];
     for (const id of ids) {
@@ -147,9 +148,9 @@
     // 锤是 P10 的试点；P11 把它的声音也一起重排了，四条签名现在都是八招八样
     const dupHammer = dup.concat(dupSound).filter(s => s.indexOf('锤') === 0);
     T('锤的八招四签名互不相同', dupHammer.length === 0, dupHammer.join(' / ') || 'OK');
-    T('八兵器每个签名字段都八招八样（形状/动作/色彩/起手音/命中音）',
-      dupSingle.length === 0, dupSingle.join(' ') || 'OK · 8 件 × 5 字段');
-    T('八兵器的声音对（起手音/命中音）互不重复',
+    T('十兵器每个签名字段都八招八样（形状/动作/色彩/起手音/命中音）',
+      dupSingle.length === 0, dupSingle.join(' ') || 'OK · 10 件 × 5 字段');
+    T('十兵器的声音对（起手音/命中音）互不重复',
       dupSound.length === 0, dupSound.join(' / ') || 'OK');
     // P10 留下的欠账数：7 件 → P11 全部重做完，必须为 0。
     T('签名撞车的兵器 0 件（P11 七件全部重做完毕）',
@@ -185,10 +186,76 @@
         '最近一对 ' + pair + ' 差 ' + (minGap * 57.3).toFixed(1) + '°');
     }
     const bad = worst.filter(w => w.minGap < 0.12);
-    T('八件兵器的连拍全部过关', bad.length === 0,
+    T('十件兵器的连拍全部过关', bad.length === 0,
       bad.length ? bad.map(w => w.name + ' ' + (w.minGap * 57.3).toFixed(1) + '°').join(' ')
-        : '8/8 · 最紧 ' + worst.reduce((a, b) => a.minGap < b.minGap ? a : b).name
+        : '10/10 · 最紧 ' + worst.reduce((a, b) => a.minGap < b.minGap ? a : b).name
           + ' ' + (Math.min(...worst.map(w => w.minGap)) * 57.3).toFixed(1) + '°');
+  }
+
+  // ---------- 1.3 P12-C：链 / 扇 16 招专项 ----------
+  // 施工图 CHAPTER-1-EXPANSION.md §9.7。两族只追加数据，不新增原语 / 形状 / 动作 / 声音，
+  // 也不改前 64 招与前 8 类兵器的顺序 —— 存档里存的是字符串 id，顺序即兼容性。
+  {
+    const NEWF = ['chain', 'fan'];
+    const newIds = g.ART_IDS.filter(id => NEWF.indexOf(g.ARTS[id].fam) >= 0);
+    T('链 / 扇各 8 招，共 16 招', newIds.length === 16
+      && NEWF.every(f => newIds.filter(id => g.ARTS[id].fam === f).length === 8), newIds.length);
+    T('16 招追加在表尾、前 64 招顺序未变',
+      g.ART_IDS.slice(0, 64).every(id => NEWF.indexOf(g.ARTS[id].fam) < 0)
+      && g.ART_IDS.slice(64).every(id => NEWF.indexOf(g.ARTS[id].fam) >= 0),
+      g.ART_IDS.length + ' 招');
+    T('前 8 类兵器顺序未变（存档兼容）',
+      g.WEAPON_IDS.slice(0, 8).join(',') === 'sword,blade,spear,staff,dual,hammer,mage,dart'
+      && g.WEAPON_IDS.slice(8).join(',') === 'chain,fan', g.WEAPON_IDS.join('/'));
+    const badF = [];
+    for (const id of newIds) {
+      const a = g.ARTS[id];
+      if (g.ART_FX.indexOf(a.fx) < 0) badF.push(id + ':fx');
+      if (g.ART_SHAPES.indexOf(g.artShape(a)) < 0) badF.push(id + ':shape');
+      if (g.ART_POSES.indexOf(g.artPose(a)) < 0) badF.push(id + ':pose');
+      if (g.ART_SNDS.indexOf(a.snd) < 0 || g.ART_SNDS.indexOf(a.hitSnd) < 0) badF.push(id + ':snd');
+      if (Math.abs(a.cost - a.cd * 1.2) > 1e-6) badF.push(id + ':cost');
+      if ((a.fx === 'buff' && !a.buff) || (a.fx === 'zone' && !a.zone) || (a.fx === 'dash' && !a.dash))
+        badF.push(id + ':缺表');
+    }
+    T('16 招全落在既有四池内且字段齐全', badF.length === 0,
+      badF.join(' ') || 'OK · 14 原语 / 19 形 / 20 式 / 17 音');
+    const profBad = [], slotBad = [], sigBad = [];
+    for (const f of NEWF) {
+      const list = g.artsOfWeapon(f);
+      const lv = list.map(a => a.prof).sort((x, y) => x - y).join(',');
+      if (lv !== '1,2,3,4,5,6,8,10') profBad.push(f + ':' + lv);
+      const c = {};
+      for (const a of list) c[a.slot] = (c[a.slot] || 0) + 1;
+      const want = { dmg: 2, aoe: 2, move: 1, ctrl: 1, buff: 1, special: 1 };
+      if (Object.keys(want).some(k => c[k] !== want[k])) slotBad.push(f + ':' + JSON.stringify(c));
+      for (const k of ['shape', 'pose', 'color', 'snd', 'hitSnd']) {
+        const vals = list.map(a => k === 'shape' ? g.artShape(a) : k === 'pose' ? g.artPose(a)
+          : k === 'color' ? g.artColor(a, g.WEAPONS[f].trail).join('|') : a[k]);
+        if (new Set(vals).size !== 8) sigBad.push(f + '.' + k + '=' + new Set(vals).size);
+      }
+    }
+    T('链 / 扇解锁门槛沿用 1/2/3/4/5/6/8/10', profBad.length === 0, profBad.join(' ') || 'OK');
+    T('链 / 扇功能位沿用八格模板', slotBad.length === 0, slotBad.join(' ') || 'OK');
+    T('链 / 扇逐招四签名八招八样', sigBad.length === 0, sigBad.join(' ') || 'OK · 2 族 × 5 字段');
+    for (const f of NEWF) {
+      const rows = g.artsOfWeapon(f).map(a => {
+        const sw = { mode: a.pose.mode, a0: a.pose.a0, a1: a.pose.a1, dur: a.pose.dur, ease: a.pose.ease };
+        return g.swingAng(sw, 0, Math.min(1, 0.15 / sw.dur)).ang;
+      });
+      let mn = 9;
+      for (let i = 0; i < rows.length; i++) for (let j = i + 1; j < rows.length; j++)
+        mn = Math.min(mn, Math.abs(rows[i] - rows[j]));
+      T(g.WEAPONS[f].name + ' 连拍八张角度互不重合（≥ 7°）', mn >= 0.12, (mn * 57.3).toFixed(1) + '°');
+      const W = g.WEAPONS[f];
+      const normalDps = (W.swings.reduce((s, x) => s + x.mul, 0) / W.swings.length * (W.hits || 1))
+        / Math.max(0.13, 0.30 * W.spdMul);
+      const d = g.artsOfWeapon(f).map(a => g.artPower(a) / a.cd);
+      const all = d.reduce((s, x) => s + x, 0) / normalDps;
+      const best6 = d.slice().sort((x, y) => y - x).slice(0, 6).reduce((s, x) => s + x, 0) / normalDps;
+      T(W.name + ' 全开 / 满配都不超普攻 2.8 倍', all <= 2.8 && best6 <= 2.8,
+        all.toFixed(2) + 'x / ' + best6.toFixed(2) + 'x');
+    }
   }
 
   // ---------- 2. 专精曲线 ----------
@@ -383,7 +450,7 @@
       '剑' + g.profKills('sword') + ' 刀' + g.profKills('blade'));
   }
 
-  // ---------- 5. 64 招全部可释放且真的有效果 ----------
+  // ---------- 5. 80 招全部可释放且真的有效果 ----------
   {
     const bad = [], noHit = [], noBuff = [], noFx = [];
     for (const fam of FAMS) {
@@ -429,8 +496,8 @@
         if (before - after <= 0) noHit.push(a.name);
       }
     }
-    T('64 招全部可释放且不报错', bad.length === 0, bad.join(' / ') || 'OK');
-    T('64 招都留下了自己的刀光（19 种形状真的画出了东西）',
+    T('80 招全部可释放且不报错', bad.length === 0, bad.join(' / ') || 'OK');
+    T('80 招都留下了自己的刀光（19 种形状真的画出了东西）',
       noFx.length === 0, noFx.join('/') || 'OK');
     T('所有伤害招都真的打到了木桩', noHit.length === 0, noHit.join('/') || 'OK');
     T('所有增益招都真的挂上了增益', noBuff.length === 0, noBuff.join('/') || 'OK');
