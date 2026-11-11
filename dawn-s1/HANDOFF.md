@@ -250,7 +250,14 @@ bundle。重新打包后 `dist/index.html` md5 `472546a0…`（2,018,389 字节�
 **验收**：模块版 11 套 **651 PASS / 0 FAIL**（`map` 12→19，其余条数不变）；
 `逍遥行.html` / `dist/index.html` 两条单文件路径共 11 套 eval 全绿；
 重新打包后 `dist/index.html` md5 `ebc6e8d6…` / 2,025,300 字节，工作台页 md5 未变。
-**发布验证**：待回填（提交 SHA / 线上 md5 / 线上自检条数）。
+**发布验证**（2026-11-11）：提交 `7b69444`（11 文件）。原生 `git push` 又被
+`github.com:443` 重置 → 走 `tools/push-api.js`，远端 / 本地 SHA 一致。Pages 工作流
+`in_progress → completed/success` 后比对：线上入口页 md5 `ebc6e8d6…` /
+2,025,300 字节，与本地逐字节一致；工作台页 md5 `b8b61794…` 未变。
+线上 `online` 探针 `ok=true`（画布 1326×746 有像素 / 控制台无错），线上六套自检
+`map` 19 / `camps` 17 / `quests` 38 / `arts` 131 / `art-overrides` 29 /
+`art-workbench` 32 全部 `ok=true`；`expr` 探针确认线上确是这一版：
+`MAPH=144`、`CH1_H=104`、南疆瘴林 / 江岸渡口、16 营地、蛊婆 / 周摆渡。
 
 ### 未完成（按顺序）
 

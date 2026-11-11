@@ -484,4 +484,9 @@ T('名字', 条件, '实测值');
 
 ### 9.5 发布验证
 
-待回填（发布后补 md5 / 线上自检条数 / 提交 SHA）。
+提交 `7b69444`（2026-11-11）。原生 `git push` 被 `github.com:443` 重置，改走
+`tools/push-api.js`，远端 / 本地 SHA 一致；Pages 工作流完成后线上入口页 md5
+`ebc6e8d6db5ac6545f49c16c8cfb18a5` / 2,025,300 字节，与本地逐字节一致。
+线上 `online` 探针 `ok=true`；线上 `map` 19 / `camps` 17 / `quests` 38 / `arts` 131 /
+`art-overrides` 29 / `art-workbench` 32 六套自检全 `ok=true`；钩子探针确认
+`MAPH=144` / `CH1_H=104` / 两区 / 16 营地 / 2 位新区 NPC。详见 `HANDOFF.md` §3。
