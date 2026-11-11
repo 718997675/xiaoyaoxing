@@ -946,3 +946,21 @@ P12-C 查重查的是「**同一把兵器内** 8 招的四签名不重复」（`
 - **14 种效果原语 / 6 个功能位 / 8 级专精阶梯**：每把兵器固定 2 输出 / 2 清场 / 1 位移 /
   1 控制 / 1 增益 / 1 特色，`prof` 固定 `1/2/3/4/5/6/8/10`，否则专精解锁与存档会崩。
 - **`cd` / `cost` 阶梯**：`cost = cd × 1.2` 是十兵器统一口径，DPS 平衡就靠它。
+
+**发布验证**（2026-11-11）：代码提交 `9b1b400`（18 文件）。原生 `git push` 被
+`github.com:443` 重置（`Recv failure: Connection was reset`），改走 `tools/push-api.js`
+的 Git Data API 通道 —— 远端 `main` 与本地 SHA 逐位一致（`9b1b400c`），不需要再 fetch。
+Pages 工作流 `42996625940` 排队后 `completed/success`。带 `?cb=<时间戳>` 绕 CDN 比对：
+线上入口页 md5 `1b63d7ee7a08c56790fe09daa3d11e62` / **2,088,806 字节**，
+工作台页 md5 `96e55d0f7658503e1398bcb13afe70db` / **60,268 字节**，均与本地逐字节一致。
+
+线上 `online` 探针 `ok=true`（画布 1326×746 有像素 / 控制台无错）。
+线上全表零重复体检（`URL=… node tools/run.js eval tools/art-unique.js`）**`ok=true`**：
+四条表现签名各 80/80 唯一，跨兵器整招撞车 0，30 段普攻 30/30 唯一。
+线上九套自检 `map` 23 / `camps` 17 / `quests` 43 / `story` 113 / `bosses` 38 /
+`arts` **158** / `weapons` 39 / `art-overrides` 29 / `art-workbench` **39**，
+**499 PASS / 0 FAIL** 全部 `ok=true`。
+唯一在线地址 https://718997675.github.io/xiaoyaoxing/ 。
+
+> 这一节里的提交号只是发布当时的历史记录：验收回填本身又是一笔文档提交，
+> 仓库 HEAD 会继续往前走，别拿它当「当前 HEAD」用。
