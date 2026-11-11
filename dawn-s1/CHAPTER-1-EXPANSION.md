@@ -574,7 +574,8 @@ tile 13 江水 / tile 9 桥面。实测第一章前 102 行指纹仍 `1093084102
 工作台根页与 `dist/art-workbench.html` 各 32 条全绿。重新打包后
 `dist/index.html` / `逍遥行.html` 同为 md5 `dbdd2cb6…` / 2,075,845 字节，
 工作台页 md5 `b8b61794…` 未变。
-**发布验证**（2026-11-11）：`3f1de3f`（15 文件）→ 原生 `git push` → Pages
+**发布验证**（2026-11-11）：`3f1de3f`（15 文件）→ 原生 `git push`；
+文档回填 `b3c2695` 被 443 重置 → `tools/push-api.js` → Pages
 `completed/success`（run `42977463853`）→ 线上入口页 md5 `dbdd2cb6…` /
 2,075,845 字节与本地一致，工作台页 `b8b61794…` 未变。线上 `online` 探针
 `ok=true`，线上八套自检（map 23 / camps 17 / quests 43 / story 113 / bosses 38 /
