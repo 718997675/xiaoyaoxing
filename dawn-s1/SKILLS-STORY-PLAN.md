@@ -1072,7 +1072,9 @@ P11 把 64 招做成了纯数据之后，改招式还得手改 `arts.js`。工�
 **验收**：模块版 11 套 644 PASS / 0 FAIL（既有 9 套 553 → 583）；`逍遥行.html` /
 `dist/index.html` 两条单文件路径的 `quests` / `bosses` / `arts` / `art-overrides` 全绿，
 `online` 探针 `ok=true`；重新打包后 `dist/index.html` md5 `472546a0…` / 2,018,389 字节，
-工作台页 md5 未变。详见 `HANDOFF.md` §3。
+工作台页 md5 未变。线上 `URL=` 探针 `ok=true`，直接跑 `quests` 38 / `bosses` 34 /
+`arts` 131 / `art-overrides` 29 / `art-workbench` 32 / `story` 96 六套全 `ok=true`，
+入口页与工作台页 md5 与本地一致。详见 `HANDOFF.md` §3。
 
 ---
 ## 五、施工批次（接在 CHAPTER-1-EXPANSION 的 P1~P4 之后）

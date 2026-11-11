@@ -207,7 +207,20 @@ for(let i=0;i<25;i++)g.tick(0.016)" \
 bundle。重新打包后 `dist/index.html` md5 `472546a0…`（2,018,389 字节），
 工作台页 md5 未变（`b8b61794…`）。
 
-**发布**：见本节末尾的发布验证补充（提交 / Pages 部署 / 线上 md5 与线上自检）。
+**发布验证（2026-11-11）**：
+- commit `575fbbb`（12 个文件）。原生 `git push` 又被 `github.com:443` 挡住
+  （`Recv failure: Connection was reset`），改走 `node dawn-s1/tools/push-api.js`，
+  远端 / 本地 SHA 一致 `575fbbb6`。
+- Actions `Deploy to GitHub Pages` 先 `waiting` 再 `completed/success`；排队期间 curl
+  拿到的是上一版 `d5a2109e…`（1,997,856 字节）。部署完带 `?cb=` 重取：线上入口页
+  md5 `472546a0…` / 2,018,389 字节，与本地 `dist/index.html` 逐字节一致；线上
+  `art-workbench.html` md5 `b8b61794…` 与本地一致（工作台没被动过）。
+- `URL=... node tools/run.js online`：`ok=true`，22 条心法 / 游方道人 /
+  `#ov` 1326×746 真有像素、控制台无错。
+- 线上直接跑六套自检全绿：`quests` 38、`bosses` 34、`arts` 131、
+  `art-overrides` 29、`art-workbench` 32、`story` 96（`STORY=1`），全部 `ok=true`。
+- 线上 `expr` 探针确认 `torch` / `dgRelight` / `turnInLines` / `bossSkillsOf` 都在，
+  `phases=3`、12 条任务齐全 —— 三件新功能确是这一版，不是旧缓存。
 
 ### 未完成（按顺序）
 
