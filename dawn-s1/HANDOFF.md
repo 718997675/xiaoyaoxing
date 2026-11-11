@@ -32,13 +32,13 @@ npx serve .        # 或 python -m http.server
 cd dawn-s1
 node tools/run.js devtest        # 全量断言，当前基线 148 pass / 0 fail
 node tools/run.js eval tools/weapons.js   # 八兵器 / 触屏专项，当前 32 pass / 0 fail
-node tools/run.js eval tools/map.js       # 大地图连通性与地貌，当前 12 pass / 0 fail
+node tools/run.js eval tools/map.js       # 大地图连通性与地貌，当前 23 pass / 0 fail
 node tools/run.js eval tools/camps.js     # 营地生态（巡逻/吹哨/食物链/作息），当前 17 pass / 0 fail
-node tools/run.js eval tools/bosses.js    # 首领（招式表/三阶段换兵器/巢穴/危险区/首杀专属），当前 34 pass / 0 fail
-node tools/run.js eval tools/quests.js    # 任务（12 条全通/交付对话逐句播放/三物门禁/存档），当前 38 pass / 0 fail
+node tools/run.js eval tools/bosses.js    # 首领（招式表/三阶段换兵器/巢穴/危险区/首杀专属），当前 38 pass / 0 fail
+node tools/run.js eval tools/quests.js    # 任务（18 条全通/交付对话逐句播放/三物门禁/存档），当前 43 pass / 0 fail
 node tools/run.js eval tools/arts.js      # 招式（64 招/十四种原语/专精/装配拖拽/签名查重/平衡/存档），当前 131 pass / 0 fail
 node tools/run.js eval tools/mantras.js   # 心法（22 条/互斥/12 个机制/200 组 DPS 分布），当前 75 pass / 0 fail
-STORY=1 QS=x=1 node tools/run.js eval tools/story.js   # 剧情（28 节点/七种触发/终章选择/旧事页/存档），当前 96 pass / 0 fail
+STORY=1 QS=x=1 node tools/run.js eval tools/story.js   # 剧情（49 节点/七种触发/两次终章选择/旧事页/存档），当前 113 pass / 0 fail
 PAGE=art-workbench.html node tools/run.js eval tools/art-workbench.js   # 工作台页，当前 32 pass / 0 fail
 node tools/run.js eval tools/art-overrides.js                            # 游戏侧覆盖层，当前 29 pass / 0 fail
 node tools/run.js shot out.png 1440 900   # 截图
@@ -259,14 +259,39 @@ bundle。重新打包后 `dist/index.html` md5 `472546a0…`（2,018,389 字节�
 `art-workbench` 32 全部 `ok=true`；`expr` 探针确认线上确是这一版：
 `MAPH=144`、`CH1_H=104`、南疆瘴林 / 江岸渡口、16 营地、蛊婆 / 周摆渡。
 
+### P12-B · 三幕新剧情 / 支线 9→15 / 新区首领（2026-11-11）
+
+施工图见 `CHAPTER-1-EXPANSION.md` **§9.6**。这一批**只做内容**：不碰第一章任何一格
+地形、不碰任何一招兵器，`MAPW/MAPH/CH1_H/rng/rng2` 调用顺序一字未改，
+`SAVE_KEY` 不升版本，第一章前 102 行指纹仍 `1093084102`。
+
+- **剧情**：28→49 节点，三幕各 7（南疆瘴林 / 江岸渡口 / 链尽头）；
+  17→35 条线索、10→20 处旧物、+12 地标、+2 位野外 NPC 三层对话，
+  文本量 6259→**10316 字**。暗线「守碑人 · 第四十」→「守链人 · 第四十一」收口，
+  章尾 `s_c2c_choice` 给「挂回去 / 砍断」两条不设对错的分支。
+  21 个新节点一律带 `killed_wumian` 且追加在表尾，第一章 28 节点不会被抢播。
+  唯一的运行时改动是 `storyChoose()` 的页签 / 收尾 msg 改成带回落值的通用写法。
+- **支线**：12→18 条任务（主线 3 / 支线 9→15），新增六条只用 `reach/kill/have`，
+  不给 `tools/quests.js` 的全通脚本加新分支；发放者分散在新老 NPC 之间。
+- **首领与风物**：`gumu` 蛊母 / `jianggui` 江鬼 / `shoulian` 守链人，
+  复用 `runBossSkills()` 既有 fx、各配一件首杀唯一装备；`dens` 4→7。
+  新区巢穴在江水与路网定稿后单独挖，`carveDen(d, protectWater)` 跳过江水 / 桥面，
+  实测江水 371 / 桥 36 一格没少。新增 4 种点阵风物（17 个固定坐标）。
+- **断言**：`story` 96→113 / `quests` 38→43 / `bosses` 34→38 / `map` 19→23，
+  四套各补第二章专属断言；其余 7 套条数不变。
+
+**验收**：模块版 11 套 **681 PASS / 0 FAIL**；`逍遥行.html` 与 `dist/index.html`
+两条单文件路径各 9 套 eval 全绿、`online` 探针通过，工作台两个页面各 32 条全绿。
+重新打包 `dist/index.html` md5 `dbdd2cb6…` / 2,075,845 字节，工作台页 md5 未变。
+
 ### 未完成（按顺序）
 
 | 批次 | 内容 | 文档 |
 |---|---|---|
-| **P12-B** | 三幕新剧情 + 支线 9→15 + 新区首领与章尾 Boss（P12-A 地图已完成） | `CHAPTER-1-EXPANSION.md` §9 |
+| ~~P12-B~~ | ✅ 2026-11-11 已完成，见 §3 | `CHAPTER-1-EXPANSION.md` §9.6 |
 | **P12-C** | 兵器第 9/10 类（16 招）+ 逐招四签名 + 平衡复校；「8 类 / 64 招」硬编码回归面最大 | `CHAPTER-1-EXPANSION.md` §9 |
-| — | 支线 9→15 与文本量加厚都并入 **P12-B**，不单独立批 | `SKILLS-STORY-PLAN.md` §4.2 |
-| — | 文本量还差一截：设计目标 3~5 万字，剧情自检实测 **6259 字**（旧记 6108 已过时）；另新增任务交付对话 1739 字 / 72 句，不计入该统计口径 | — |
+| — | 支线 9→15 与文本量加厚已随 **P12-B** 一并交付（10316 字） | `SKILLS-STORY-PLAN.md` §4.2 |
+| — | 文本量距设计目标 3~5 万字仍有差距：剧情自检实测 **10316 字**（P12-B 后）；任务交付对话另计，不含在该口径内 | — |
 
 ---
 
@@ -678,8 +703,8 @@ dawn-s1/
 
 **下一步（P12）**：第二章施工图见 `CHAPTER-1-EXPANSION.md` **§9**（旧版指向的
 第 7 节其实是第一章三区定案，已修正）。三件前置项与 **P12-A 地图南扩**都已在
-2026-11-11 收口，见 §3。剩下 **P12-B**（三幕新剧情 / 支线 9→15 / 新区首领）
-与 **P12-C**（兵器第 9/10 类 / 平衡复校），按 §9 的分批顺序推进，每批独立发版。
+2026-11-11 收口，见 §3；**P12-B**（三幕新剧情 / 支线 9→15 / 新区首领）亦在同日
+收口。剩下 **P12-C**（兵器第 9/10 类 / 平衡复校），按 §9 的分批顺序独立发版。
 
 > 用户 2026-11-11 定：招式工作台的「四轨道」（判定帧 / 人物动作帧 / 运动轨 / 瞬移）
 > 暂缓，工作台保持现状；`art-motion-preview.html` 只是本地效果预估草稿，

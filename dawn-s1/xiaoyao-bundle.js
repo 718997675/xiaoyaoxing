@@ -53951,6 +53951,159 @@ const MONSTERS = {
       '..ppp.pp.pp...', '..sss.pp.pp...', '..sss.pp.pp...',
     ],
   },
+  // ============ 第二章 P12-B：三个新区巢穴首领 ============
+  // 招式一律复用 runBossSkills() 已有的五种 fx（slam / zone / rain / summon / fan），
+  // 不新增 AI 分支。三个各配一件首杀唯一装备（见 game.js UNIQUES）。
+  // 蛊母：南疆土下的东西，白毛 + 红土，招式偏地面圈与召唤。
+  gumu: {
+    name: '蛊母', behavior: 'boss', tier: 2,
+    hp: 420, speed: 42, dmg: 15, xp: 210, range: 30, cd: 1.5, windup: 0.75, kb: 0, aggro: 145,
+    size: [22, 18], def: 0.12,
+    pal: { t: '#6B3B32', T: '#8A4A38', w: '#EDE4CE', W: '#B9C9A6', g: '#4E8F6A' },
+    rows: [
+      '....................',
+      '.......wwww.........',
+      '.....wwWWWWww.......',
+      '....wWWWWWWWWw......',
+      '...tttttttttttt.....',
+      '..tTTTTTTTTTTTTt....',
+      '..tTTwTTTTwTTTTt....',
+      '.tTTTTTTTTTTTTTTt...',
+      '.tTTTTTggTTTTTTTt...',
+      '.tTTTTggggTTTTTTt...',
+      '..tTTTTggTTTTTTt....',
+      '..ttTTTTTTTTTTtt....',
+      '...tttttttttttt.....',
+      '..t..t..t..t..t.....',
+      '.tt..tt..tt..tt.....',
+      '....................',
+    ],
+    rows2: [
+      '....................',
+      '......wwww..........',
+      '....wwWWWWww........',
+      '...wWWWWWWWWw.......',
+      '...tttttttttttt.....',
+      '..tTTTTTTTTTTTTt....',
+      '..tTTwTTTTwTTTTt....',
+      '.tTTTTTTTTTTTTTTt...',
+      '.tTTTTTggTTTTTTTt...',
+      '.tTTTTggggTTTTTTt...',
+      '..tTTTTggTTTTTTt....',
+      '..ttTTTTTTTTTTtt....',
+      '...tttttttttttt.....',
+      '...t..t..t..t..t....',
+      '..tt..tt..tt..tt....',
+      '....................',
+    ],
+    skills: [
+      { name: '白毛孢子', fx: 'zone', cd: 8, windup: 0.8, range: 260, count: 3,
+        r: 38, delay: 0.7, life: 2.6, dmg: 1.0, color: '#B9C9A6' },
+      { name: '土里伸手', fx: 'slam', cd: 5.2, windup: 0.65, range: 120, r: 100, dmg: 1.5 },
+      { name: '蛊虫群', fx: 'summon', cd: 13, windup: 0.75, range: 300, kind: 'snake', count: 2 },
+    ],
+  },
+  // 江鬼：挂满木牌的水鬼，招式偏弹幕与定身圈。
+  jianggui: {
+    name: '江鬼', behavior: 'boss', tier: 2,
+    hp: 470, speed: 54, dmg: 17, xp: 240, range: 28, cd: 1.3, windup: 0.6, kb: 0, aggro: 155,
+    size: [18, 22], def: 0.10,
+    pal: { q: '#2E5A5A', Q: '#4F8C86', i: '#3A4650', I: '#5C6B76', y: '#C9A24A', w: '#EDE4CE' },
+    rows: [
+      '....................',
+      '.......qqqq.........',
+      '......qQQQQq........',
+      '......qQwwQq........',
+      '.....qqQQQQqq.......',
+      '....iiIIIIIIii......',
+      '...iIyyIIyyIIi......',
+      '...iIyyIIyyIIi......',
+      '....iIIyyIIi........',
+      '....iIIIIIIi........',
+      '...iiIyyIIyyIii.....',
+      '..i..iIyyIi..i......',
+      '......iIIi..........',
+      '......iIIi..........',
+      '.....ii..ii.........',
+      '....................',
+    ],
+    rows2: [
+      '....................',
+      '........qqqq........',
+      '.......qQQQQq.......',
+      '.......qQwwQq.......',
+      '......qqQQQQqq......',
+      '....iiIIIIIIii......',
+      '...iIyyIIyyIIi......',
+      '...iIyyIIyyIIi......',
+      '....iIIyyIIi........',
+      '....iIIIIIIi........',
+      '...iiIyyIIyyIii.....',
+      '...i..iIyyIi..i.....',
+      '.......iIIi.........',
+      '.......iIIi.........',
+      '......ii..ii........',
+      '....................',
+    ],
+    skills: [
+      { name: '水底拽', fx: 'slam', cd: 5.6, windup: 0.7, range: 130, r: 108, dmg: 1.4 },
+      { name: '牌雨', fx: 'rain', cd: 7.4, windup: 0.65, range: 300, count: 5, spreadR: 96,
+        r: 30, delay: 0.85, dmg: 0.95, color: '#C9A24A' },
+      { name: '漩涡', fx: 'zone', cd: 9, windup: 0.9, range: 250, count: 2,
+        r: 44, delay: 0.8, life: 2.4, dmg: 1.1, color: '#4F8C86' },
+      { name: '链影', fx: 'summon', cd: 12, windup: 0.8, range: 320, kind: 'ghost', count: 2 },
+    ],
+  },
+  // 守链人：章尾 Boss。四招覆盖四种 fx，但仍是同一套选招引擎。
+  shoulian: {
+    name: '守链人', behavior: 'boss', tier: 3,
+    hp: 620, speed: 48, dmg: 20, xp: 340, range: 26, cd: 1.1, windup: 0.55, kb: 0, aggro: 165,
+    size: [18, 22], def: 0.16,
+    pal: { i: '#3A4650', I: '#5C6B76', y: '#C9A24A', r: '#8A2E1E', e: '#EDE4CE' },
+    rows: [
+      '..y..............y..',
+      '..yy............yy..',
+      '...yy..eeeeee..yy...',
+      '....yyiiiiiiyy......',
+      '.....iIIIIIIi.......',
+      '....iIIrrrrIIi......',
+      '....iIIIIIIIIi......',
+      '.....iIyyIIi........',
+      '....iiIIIIIIii......',
+      '...iIIIyyyyIIIi.....',
+      '....iIIIIIIIIi......',
+      '.....iIIyyIIi.......',
+      '.....iIIIIIIi.......',
+      '......iIIIIi........',
+      '.....ii....ii.......',
+      '....................',
+    ],
+    rows2: [
+      '.y................y.',
+      '.yy..............yy.',
+      '..yy..eeeeee..yy....',
+      '...yyiiiiiiyy.......',
+      '.....iIIIIIIi.......',
+      '....iIIrrrrIIi......',
+      '....iIIIIIIIIi......',
+      '.....iIyyIIi........',
+      '....iiIIIIIIii......',
+      '...iIIIyyyyIIIi.....',
+      '....iIIIIIIIIi......',
+      '.....iIIyyIIi.......',
+      '.....iIIIIIIi.......',
+      '......iIIIIi........',
+      '....ii......ii......',
+      '....................',
+    ],
+    skills: [
+      { name: '收链', fx: 'slam', cd: 4.8, windup: 0.6, range: 150, r: 120, dmg: 1.7 },
+      { name: '链梢横扫', fx: 'fan', cd: 3.4, windup: 0.4, range: 300, count: 3, spread: 0.42, speed: 230, dmg: 0.9 },
+      { name: '落环', fx: 'rain', cd: 7, windup: 0.7, range: 320, count: 5, spreadR: 110,
+        r: 32, delay: 0.8, dmg: 1.0, color: '#5C6B76' },
+      { name: '旧名', fx: 'summon', cd: 11, windup: 0.75, range: 320, kind: 'shadow', count: 2 },
+    ],
+  },
 };
 
 const MONSTER_IDS = Object.keys(MONSTERS);
@@ -56290,6 +56443,130 @@ const QUESTS = {
     ],
     outro: '灯盏打好了。他把它挂在营口，说这盏灯能烧三年 —— 正好烧到他出去那天。',
   },
+  // ============ P12-B 第二章支线（9 → 15） ============
+  // 目标只走 reach / kill / have 三种既有类型：tools/quests.js 的「全通」脚本
+  // 只认这几种，不给它加分支，也不给自己加一套只有线上才跑得通的判定。
+  // 发放者分散在新区两人与村里四人，六条各不重样；交付对话逐句不撞词。
+  q_side_banner: {
+    id: 'q_side_banner', kind: 'side', place: '南疆瘴林',
+    title: '蛊幡上的名字',
+    giver: 'w_gu',
+    brief: '寨外那面幡上，同一个姓被划掉又抄了七回。',
+    steps: [
+      { text: '去看寨外那面幡', kind: 'reach', at: { x: 352, y: 1856, r: 95 } },
+      { text: '清六只瘴里的符傀', kind: 'kill', types: ['fukui'], count: 6 },
+    ],
+    reward: { gold: 420, fame: 5, xp: 180 },
+    turnIn: [
+      { who: '蛊婆', text: '幡你去看过了。' },
+      { who: '你', text: '抄了七回，都是同一个姓。第四十行空着。' },
+      { who: '蛊婆', text: '她把炭条搁下，指腹在膝盖上蹭了两下，没有抬眼。' },
+      { who: '蛊婆', text: '「抄的人不是想记住。是怕自己忘了该轮到谁。」' },
+      { who: '你', text: '「那一行为什么留着？」' },
+      { who: null, text: '棚外的幡被风翻过来，背面一个字也没有。' },
+    ],
+    outro: '她到底没说那行该填谁，只把炭条收进了袖子。',
+  },
+  q_side_redsoil: {
+    id: 'q_side_redsoil', kind: 'side', place: '南疆瘴林',
+    title: '赤土不是染的',
+    giver: 'yu',
+    brief: '崔婆婆说赤土墟的土早年不是红的，要一根探条才肯信。',
+    steps: [
+      { text: '到赤土墟取土', kind: 'reach', at: { x: 768, y: 2112, r: 110 } },
+      { text: '交十块精铁打探条', kind: 'have', field: 'iron', count: 10, spend: true },
+    ],
+    reward: { gold: 360, fame: 4, xp: 160, potion: 1 },
+    turnIn: [
+      { who: '崔婆婆', text: '探条带回来了？土呢。' },
+      { who: '你', text: '没敢带。挖到两尺就是骨，一截一截码得整齐。' },
+      { who: '崔婆婆', text: '她把探条在围裙上擦了三遍，擦完还捏着不放。' },
+      { who: '崔婆婆', text: '「我小时候，那边的土是黄的。」' },
+      { who: '你', text: '「什么时候红的？」' },
+      { who: null, text: '灶上的水开了，她没去提，也没把手松开。' },
+    ],
+    outro: '她说等水凉了再讲，后来那壶水凉了一整夜，她也没讲。',
+  },
+  q_side_chain: {
+    id: 'q_side_chain', kind: 'side', place: '江岸渡口',
+    title: '水底的铁链',
+    giver: 'qiao',
+    brief: '石大说桥墩那圈铁链的磨痕不对劲，想让人替他下去看一眼。',
+    steps: [
+      { text: '走到渡桥中段', kind: 'reach', at: { x: 1600, y: 1952, r: 80 } },
+      { text: '顺着链子走到水底铁链', kind: 'reach', at: { x: 1792, y: 2112, r: 90 } },
+    ],
+    reward: { gold: 400, fame: 5, xp: 170 },
+    turnIn: [
+      { who: '石大', text: '桥底下那圈东西，你摸着了？' },
+      { who: '你', text: '摸着了。环内侧磨出一道沟，都偏向东。' },
+      { who: '石大', text: '他把柴捆往地上一顿，蹲下去比划那道沟的斜劲。' },
+      { who: '石大', text: '「柴顺水漂，也偏一头。可这东西不漂。」' },
+      { who: '你', text: '「那是谁在拉？」' },
+      { who: null, text: '他没答，把柴捆重新扛起来，绳头在肩上勒出一道白印。' },
+    ],
+    outro: '走的时候他绕开了桥，宁可多趟半里水，也没从板子上过。',
+  },
+  q_side_ferrycoin: {
+    id: 'q_side_ferrycoin', kind: 'side', place: '江岸渡口',
+    title: '过江钱',
+    giver: 'w_ferry',
+    brief: '渡口价目牌上的三文被划掉了，可还是有人替没上岸的人给钱。',
+    steps: [
+      { text: '清五只江匪', kind: 'kill', types: ['zhiren'], count: 5 },
+      { text: '交九文过江钱', kind: 'have', field: 'gold', count: 9, spend: true },
+    ],
+    reward: { gold: 500, fame: 4, xp: 175 },
+    turnIn: [
+      { who: '周摆渡', text: '钱搁着吧，别递过来。' },
+      { who: '你', text: '牌子上写着三文，我数了九文。' },
+      { who: '周摆渡', text: '他把铜钱一枚一枚推回你这边，推到最后一枚停了手。' },
+      { who: '周摆渡', text: '「三文是给活人算的。多出来的，是替没上岸的人给的。」' },
+      { who: '你', text: '「那你为什么不收？」' },
+      { who: null, text: '江面上有东西浮起来又沉下去，他没有转头去看。' },
+    ],
+    outro: '那九文最后还搁在牌子上，谁也没动，风把最上面一枚吹得翻了个面。',
+  },
+  q_side_plates: {
+    id: 'q_side_plates', kind: 'side', place: '链尽头',
+    title: '挂在链上的木牌',
+    giver: 'shuo',
+    brief: '柳先生要一个真结局，可那串木牌上四十一个人都没有名字。',
+    steps: [
+      { text: '斩了挂满木牌的江鬼', kind: 'kill', types: ['jianggui'], count: 1 },
+      { text: '走到链尽头', kind: 'reach', at: { x: 2112, y: 2208, r: 95 } },
+    ],
+    reward: { gold: 620, fame: 8, xp: 260, gear: { r: 3, kind: 'artifact' } },
+    turnIn: [
+      { who: '柳先生', text: '听说你翻过那一串牌。' },
+      { who: '你', text: '四十一块，名字全凿了，第四十一块连纹都没有。' },
+      { who: '柳先生', text: '醒木在手里转了两圈，一下也没往桌上落。' },
+      { who: '柳先生', text: '「说书的最怕这个。有头有尾，中间四十个人没名字。」' },
+      { who: '你', text: '「那怎么讲？」' },
+      { who: null, text: '他把醒木放回原处，摆得和原先那一道印子严丝合缝。' },
+    ],
+    outro: '那天他没开书，只跟听客说了一句：今儿这回，得等名字齐了再讲。',
+  },
+  q_side_nightlamp: {
+    id: 'q_side_nightlamp', kind: 'side', place: '江岸渡口',
+    title: '渡口夜灯',
+    giver: 'geng',
+    brief: '老周打了四十年更，说渡口该有一盏不归他管也得亮着的灯。',
+    steps: [
+      { text: '交十四块精铁铸灯', kind: 'have', field: 'iron', count: 14, spend: true },
+      { text: '把灯挂到渡口', kind: 'reach', at: { x: 1600, y: 1856, r: 100 } },
+    ],
+    reward: { gold: 340, fame: 4, xp: 150, potion: 2 },
+    turnIn: [
+      { who: '老周', text: '灯挂上了？' },
+      { who: '你', text: '挂在棚檐底下，风从江上来，火苗歪了歪，没灭。' },
+      { who: '老周', text: '他把灯笼从手里放下，敲了敲更梆，敲得比平时轻。' },
+      { who: '老周', text: '「我打更四十年，村口那盏从来不用人管。」' },
+      { who: '你', text: '「渡口这盏得管？」' },
+      { who: null, text: '他往南看了一眼，把更梆夹在腋下，没再敲第二下。' },
+    ],
+    outro: '后来渡口那盏灯每夜都亮着，添油的是谁，村里没人说得上来。',
+  },
 };
 
 const QUEST_IDS = Object.keys(QUESTS);
@@ -56414,6 +56691,21 @@ const POI = {
   // 古洞占 tile 57..87 × 10..38，中间那 88px 的岩层就是"最后三尺"。
   // 这个坐标是洪水填充验过连通的 —— 只是 canStand 为真还不够，中间被岩层隔断照样走不到。
   breakthrough: { x: 824, y: 496, r: 95,  name: '打通的侧壁' },
+  // —— 第二章 P12-B：全部落在 CH1_H 以南 ——
+  // 坐标先过 canStand 与洪水填充：每一处周围 10/18/26/34px 都有可站格，
+  // 且与第一章的 20 处地标两两不重叠（最近的一对也隔着 700px 以上）。
+  southGate:   { x: 544,  y: 1696, r: 90,  name: '南疆关口' },
+  guHut:       { x: 544,  y: 1856, r: 100, name: '蛊婆的棚子' },
+  guBanner:    { x: 352,  y: 1856, r: 95,  name: '蛊幡' },
+  redSoil:     { x: 768,  y: 2112, r: 110, name: '赤土墟' },
+  gumuDen:     { x: 224,  y: 2048, r: 95,  name: '蛊母巢' },
+  riverGate:   { x: 1904, y: 1696, r: 90,  name: '江岸关口' },
+  ferry:       { x: 1600, y: 1856, r: 100, name: '渡口' },
+  riverBridge: { x: 1600, y: 1952, r: 80,  name: '渡桥' },
+  jiangDock:   { x: 1984, y: 2144, r: 70,  name: '江匪坞' },
+  jiangguiDen: { x: 1792, y: 2112, r: 90,  name: '水底铁链' },
+  chainEnd:    { x: 2112, y: 2208, r: 95,  name: '链尽头' },
+  chainPost:   { x: 1888, y: 2176, r: 80,  name: '拴链石桩' },
 };
 
 // ============ 幕 ============
@@ -56424,6 +56716,10 @@ const ACTS = [
   { id: 'act2',     name: '第二幕 · 竹海',     place: '南岭竹海' },
   { id: 'act3',     name: '第三幕 · 石窟',     place: '西荒石窟' },
   { id: 'final',    name: '终章 · 古洞',       place: '青云古洞' },
+  // —— 第二章 P12-B：追加三幕，第一章五幕的 id / 顺序一字不改 ——
+  { id: 'ch2a',     name: '第二章一幕 · 南疆瘴林', place: '南疆瘴林' },
+  { id: 'ch2b',     name: '第二章二幕 · 江岸渡口', place: '江岸渡口' },
+  { id: 'ch2c',     name: '第二章三幕 · 链尽头',   place: '链尽头' },
 ];
 
 // ============ 剧情节点 ============
@@ -56939,6 +57235,375 @@ const STORY = {
       },
     },
   },
+  // ================= 第二章 P12-B：表尾追加 21 个节点 =================
+  // 为什么一律追加在表尾：storyScan() 按 STORY_IDS 顺序扫，遇到第一个满足的就播。
+  // 放在表尾 + need 至少含 killed_wumian，第一章 28 个节点的判定、台词、选择、
+  // 存档逐字节不变 —— killed_wumian 是终章「无面剑客」落下的 flag，两条结局都必经。
+  // 于是老存档打完第一章南下，第二章自然开放，SAVE_KEY 不用升版本。
+  //
+  // 两幕的入口分别挂在南疆关口与江岸关口，先后随意；三幕再收口。
+  // 暗线：第一章「守碑人 · 第四十」→「守链人 · 第四十一」；
+  // 陈九那句「铁链是往上拴的」，在链尽头给出拴链的人。
+  // ---------------- 第二章一幕 · 南疆瘴林（7）----------------
+  s_c2a_gate: {
+    id: 's_c2a_gate', act: 'ch2a', title: '南边的口子',
+    trigger: { type: 'enter', at: 'southGate' },
+    need: ['killed_wumian'],
+    lines: [
+      { who: 'narrator', text: '你往南走。走了一天，路开始变窄。' },
+      { who: 'narrator', text: '两边的树不往高长，往横里长，枝子交在一起，把天封住。' },
+      { who: 'narrator', text: '风从林子里出来，是热的，带着一股甜。' },
+      { who: 'narrator', text: '旧底边塌了一段，砖茬上长着一层白毛。有人把塌的地方清过，清得很干净。' },
+      { who: 'narrator', text: '清出来的口子只有五格宽。刚好一个人过。' },
+      { who: null, text: '（南疆瘴林。袖子里那块木牌还是凉的。）' },
+    ],
+    onEnd: { flag: 'c2a_gate', clue: 'c2a_gate' },
+  },
+  s_c2a_gu: {
+    id: 's_c2a_gu', act: 'ch2a', title: '她不抬头',
+    trigger: { type: 'enter', at: 'guHut' },
+    need: ['killed_wumian', 'c2a_gate'],
+    lines: [
+      { who: 'narrator', text: '林子边上一间棚子，四面挂着草把。' },
+      { who: 'w_gu', text: '往北走。' },
+      { who: 'narrator', text: '她坐在矮凳上捣药，没抬头。' },
+      { who: 'w_gu', text: '这土是红的，不是染的。' },
+      { who: 'narrator', text: '石臼里的东西是黑的，捣一下，白毛似的东西从缝里翻出来。' },
+      { who: 'w_gu', text: '你听见虫子叫了吗？' },
+      { who: 'narrator', text: '你听了一会儿。不是虫。是有人在数数，数得很慢。' },
+      { who: null, text: '（她始终没抬头。）' },
+    ],
+    onEnd: { flag: 'c2a_gu', clue: 'c2a_gu' },
+  },
+  s_c2a_banner: {
+    id: 's_c2a_banner', act: 'ch2a', title: '幡上的名字',
+    trigger: { type: 'enter', at: 'guBanner' },
+    need: ['killed_wumian', 'c2a_gu'],
+    lines: [
+      { who: 'narrator', text: '寨子外挑着一面幡，布已经烂了，字还在。' },
+      { who: 'narrator', text: '幡上一个名字，被人用炭划掉，又在底下重抄了一遍。' },
+      { who: 'narrator', text: '抄了七回。七回都是同一个姓：守。' },
+      { who: 'narrator', text: '名字后面跟着数目，从三十三排到三十九。' },
+      { who: 'narrator', text: '第四十那一行空着，只剩一个墨点，笔尖顿在那里没往下写。' },
+      { who: 'narrator', text: '幡脚钉着一枚木牌，三道纹，和你袖子里那块一样。' },
+      { who: null, text: '（钉子是从背面钉进去的。）' },
+    ],
+    onEnd: { flag: 'c2a_banner', clue: 'c2a_banner' },
+  },
+  s_c2a_red: {
+    id: 's_c2a_red', act: 'ch2a', title: '赤土不是染的',
+    trigger: { type: 'enter', at: 'redSoil' },
+    need: ['killed_wumian', 'c2a_banner'],
+    lines: [
+      { who: 'narrator', text: '墟子里的土是红的，红到发黑。' },
+      { who: 'narrator', text: '你蹲下去捻了一点。指腹上留下一层细沙，沙里有更小的白粒。' },
+      { who: 'narrator', text: '不是矿，不是朱砂。' },
+      { who: 'narrator', text: '往下挖一尺，土还是红的。挖到两尺，铲子碰到一个硬东西。' },
+      { who: 'narrator', text: '是一截指骨，摆得很正，旁边还有一截，再旁边还有。' },
+      { who: 'narrator', text: '一层一层码下去，像谁在底下砌墙。' },
+      { who: null, text: '（蛊婆说得对。这土不是染的。）' },
+    ],
+    onEnd: { flag: 'c2a_red', clue: 'c2a_red' },
+  },
+  s_c2a_gumu: {
+    id: 's_c2a_gumu', act: 'ch2a', title: '数到一半',
+    trigger: { type: 'kill', lord: 'gumu', label: '蛊母' },
+    need: ['killed_wumian', 'c2a_red'],
+    lines: [
+      { who: 'narrator', text: '蛊母从土里翻出来的时候，身上还带着一层白毛。' },
+      { who: 'narrator', text: '它不动的时候像一堆土。动起来，土底下全是手。' },
+      { who: 'narrator', text: '你把它劈开，里面没有脏腑，只有一窝小石头，每块石头上刻着一道。' },
+      { who: 'narrator', text: '数了数，四十道。' },
+      { who: 'narrator', text: '最后一道刻到一半，石头从中间裂了。' },
+      { who: 'narrator', text: '土合上的时候，数数声停了一下，又从一重新开始。' },
+      { who: null, text: '（有人在底下接着数。）' },
+    ],
+    onEnd: { flag: 'c2a_gumu', clue: 'c2a_gumu' },
+  },
+  s_c2a_midnight: {
+    id: 's_c2a_midnight', act: 'ch2a', title: '子时的数数声',
+    trigger: { type: 'time', phase: 'zi' },
+    need: ['killed_wumian', 'c2a_banner'],
+    lines: [
+      { who: 'narrator', text: '子时。瘴气贴着地皮走，白得像一层水。' },
+      { who: 'narrator', text: '数数声又起来了。' },
+      { who: 'narrator', text: '一，二，三……数得不快，每一声之间隔着一次呼吸。' },
+      { who: 'narrator', text: '你顺着声音走，走到赤土墟边上，声音又从身后过来。' },
+      { who: 'narrator', text: '数到四十，停了。' },
+      { who: 'narrator', text: '隔了很久，有一个很轻的声音说：四十一。' },
+      { who: 'narrator', text: '然后就没有了。' },
+      { who: null, text: '（那个声音不是从土里来的。是从更南边。）' },
+    ],
+    onEnd: { flag: 'c2a_midnight', clue: 'c2a_count' },
+  },
+  s_c2a_fourth: {
+    id: 's_c2a_fourth', act: 'ch2a', title: '第四道纹',
+    trigger: { type: 'enter', at: 'guBanner' },
+    need: ['killed_wumian', 'c2a_gumu', 'c2a_midnight'],
+    lines: [
+      { who: 'narrator', text: '你回到幡底下。' },
+      { who: 'narrator', text: '袖子里的木牌发烫。' },
+      { who: 'narrator', text: '三道纹旁边多了一道。新的，刻痕里还是木头的白茬。' },
+      { who: 'narrator', text: '前三道都指北。第四道指南，偏东。' },
+      { who: 'narrator', text: '你用手摸那道新纹，摸到一点水。' },
+      { who: 'narrator', text: '天没下雨。' },
+      { who: null, text: '（往南，再往东。那边有水。）' },
+    ],
+    onEnd: { flag: 'c2a_fourth' },
+  },
+
+  // ---------------- 第二章二幕 · 江岸渡口（7）----------------
+  s_c2b_gate: {
+    id: 's_c2b_gate', act: 'ch2b', title: '东边的口子',
+    trigger: { type: 'enter', at: 'riverGate' },
+    need: ['killed_wumian'],
+    lines: [
+      { who: 'narrator', text: '东边也塌了一段。这一段比南边宽，砖被码在两侧，码得齐齐整整。' },
+      { who: 'narrator', text: '有人修过。不是修墙，是修路。' },
+      { who: 'narrator', text: '过了口子，风里的甜味没了，换成一股铁腥。' },
+      { who: 'narrator', text: '再走半里，听见水。' },
+      { who: 'narrator', text: '水声很闷，像隔着一层什么东西。' },
+      { who: null, text: '（江岸渡口。）' },
+    ],
+    onEnd: { flag: 'c2b_gate', clue: 'c2b_gate' },
+  },
+  s_c2b_ferry: {
+    id: 's_c2b_ferry', act: 'ch2b', title: '桥是去年才架的',
+    trigger: { type: 'enter', at: 'ferry' },
+    need: ['killed_wumian', 'c2b_gate'],
+    lines: [
+      { who: 'narrator', text: '渡口的棚子是新盖的，柱子上还没有裂。' },
+      { who: 'w_ferry', text: '过江？往东走，别下水。' },
+      { who: 'narrator', text: '他手里的桨搁在膝上，桨叶是干的。' },
+      { who: 'w_ferry', text: '桥是去年才架的。架之前，这一段的船一年翻三回。' },
+      { who: 'w_ferry', text: '架之后不翻了。可水底下的东西还在。' },
+      { who: 'narrator', text: '你往水面看了一眼。水不深，能看见底下横着一道黑线，从这岸一直拉到那岸。' },
+      { who: 'w_ferry', text: '别往下看。' },
+    ],
+    onEnd: { flag: 'c2b_ferry', clue: 'c2b_ferry' },
+  },
+  s_c2b_bridge: {
+    id: 's_c2b_bridge', act: 'ch2b', title: '桥不是给活人走的',
+    trigger: { type: 'enter', at: 'riverBridge' },
+    need: ['killed_wumian', 'c2b_ferry'],
+    lines: [
+      { who: 'narrator', text: '桥面是新的，木板还没被踩出槽。' },
+      { who: 'narrator', text: '走到中间，桥往下沉了一寸。' },
+      { who: 'narrator', text: '不是板子软，是下面有东西拽了一下。' },
+      { who: 'narrator', text: '桥墩上缠着铁链，一圈一圈，缠得极紧。链子从桥底下去，往东。' },
+      { who: 'narrator', text: '链环有巴掌大，每一环内侧都磨出一道亮痕。' },
+      { who: 'narrator', text: '亮痕在同一侧。链子长期被往一个方向拉。' },
+      { who: null, text: '（陈九说过，铁链是往上拴的。）' },
+    ],
+    onEnd: { flag: 'c2b_bridge', clue: 'c2b_bridge' },
+  },
+  s_c2b_dock: {
+    id: 's_c2b_dock', act: 'ch2b', title: '坞里的账',
+    trigger: { type: 'enter', at: 'jiangDock' },
+    need: ['killed_wumian', 'c2b_bridge'],
+    lines: [
+      { who: 'narrator', text: '江匪坞里没有人。' },
+      { who: 'narrator', text: '桌上摊着一本账，记的不是货，是日子。' },
+      { who: 'narrator', text: '「初一，捞上一块牌。初二，两块。初三，没有。」' },
+      { who: 'narrator', text: '往后每一页都写着「没有」，写了二十几页，笔迹一天比一天轻。' },
+      { who: 'narrator', text: '最后一页只写了一句：「链子今天又往上走了一寸。」' },
+      { who: 'narrator', text: '账本底下压着一枚铜钱，穿了孔，孔里穿着一截铁丝。' },
+      { who: null, text: '（渡口的规矩：过江钱不收铜钱，收牌子。）' },
+    ],
+    onEnd: { flag: 'c2b_dock', clue: 'c2b_dock' },
+  },
+  s_c2b_jianggui: {
+    id: 's_c2b_jianggui', act: 'ch2b', title: '挂在链上的',
+    trigger: { type: 'kill', lord: 'jianggui', label: '江鬼' },
+    need: ['killed_wumian', 'c2b_dock'],
+    lines: [
+      { who: 'narrator', text: '江鬼从水里立起来的时候，身上淌下来的不是水。' },
+      { who: 'narrator', text: '是一串木牌，用铁丝穿着，从脖子上一直挂到膝盖。' },
+      { who: 'narrator', text: '它每动一下，牌子就互相敲，敲出那个数数的节拍。' },
+      { who: 'narrator', text: '你把牌子拨开。最上面一块写着「守碑人 · 第三十九」。' },
+      { who: 'narrator', text: '下面一块是第四十，再下面一块是空的。' },
+      { who: 'narrator', text: '它倒下去的时候没有沉。链子把它拽住了，往东拖。' },
+      { who: null, text: '（水底下有东西在收链。）' },
+    ],
+    onEnd: { flag: 'c2b_jianggui', clue: 'c2b_jianggui' },
+  },
+  s_c2b_midnight: {
+    id: 's_c2b_midnight', act: 'ch2b', title: '水底的敲击',
+    trigger: { type: 'time', phase: 'zi' },
+    need: ['killed_wumian', 'c2b_dock'],
+    lines: [
+      { who: 'narrator', text: '子时。江水不响，桥也不响。' },
+      { who: 'narrator', text: '底下敲了一下。' },
+      { who: 'narrator', text: '隔一会儿，又敲一下。间隔和瘴林里那个数数声一样。' },
+      { who: 'narrator', text: '你趴在桥板上往下看，黑线上有一处亮了，接着往东移了一格。' },
+      { who: 'narrator', text: '再亮，再移一格。' },
+      { who: 'narrator', text: '链子在走。不是被水冲的，是被拽的。' },
+      { who: null, text: '（一下，一格。有人在收。）' },
+    ],
+    onEnd: { flag: 'c2b_midnight', clue: 'c2b_knock' },
+  },
+  s_c2b_chain: {
+    id: 's_c2b_chain', act: 'ch2b', title: '链不是往下坠的',
+    trigger: { type: 'enter', at: 'jiangguiDen' },
+    need: ['killed_wumian', 'c2b_jianggui', 'c2b_midnight'],
+    lines: [
+      { who: 'narrator', text: '水退了一截，链子露出来。' },
+      { who: 'narrator', text: '你顺着链子往东走。它不往下沉，一直贴着地面往高处去。' },
+      { who: 'narrator', text: '每隔十步有一根石桩，链子从桩上的铁环里穿过去。' },
+      { who: 'narrator', text: '桩子是后加的，比链子新得多。有人怕它沉，一路给它垫了桩。' },
+      { who: 'narrator', text: '最远的那根桩上刻着一行字：「别让它回头」。' },
+      { who: 'narrator', text: '链子尽头看不见。东边的地势还在往上。' },
+      { who: null, text: '（陈九撑了二十年船，从没见它到底。因为它根本没有底。）' },
+    ],
+    onEnd: { flag: 'c2b_chain' },
+  },
+
+  // ---------------- 第二章三幕 · 链尽头（7）----------------
+  s_c2c_count: {
+    id: 's_c2c_count', act: 'ch2c', title: '第几个了',
+    trigger: { type: 'enter', at: 'chainPost' },
+    need: ['killed_wumian', 'c2a_fourth', 'c2b_chain'],
+    lines: [
+      { who: 'narrator', text: '石桩到了尽头。' },
+      { who: 'narrator', text: '最后一根桩比别的高，桩顶磨出一个圆窝，链子在窝里卡住，不再往前。' },
+      { who: 'narrator', text: '窝边刻着一道道的短横，刻满了整圈。' },
+      { who: 'narrator', text: '你数了一遍。四十一道。' },
+      { who: 'narrator', text: '最后一道比别的新，刻痕里还是石粉。' },
+      { who: 'narrator', text: '石粉没被风吹走。刻的人刚走不久。' },
+      { who: null, text: '（第四十一个。碑上那个是第四十个。）' },
+    ],
+    onEnd: { flag: 'c2c_count', clue: 'c2c_count' },
+  },
+  s_c2c_plates: {
+    id: 's_c2c_plates', act: 'ch2c', title: '四十一块牌',
+    trigger: { type: 'enter', at: 'chainEnd' },
+    need: ['killed_wumian', 'c2c_count'],
+    lines: [
+      { who: 'narrator', text: '链子末端的环上挂着木牌，一串，用铁丝穿着。' },
+      { who: 'narrator', text: '一块一块翻过去。守碑人 · 第一，守碑人 · 第二……' },
+      { who: 'narrator', text: '名字都被凿掉了，只剩数目。' },
+      { who: 'narrator', text: '翻到第四十块，背面刻着「此名自刻」。' },
+      { who: 'narrator', text: '第四十一块是空的，一个字也没有，连三道纹都还没刻。' },
+      { who: 'narrator', text: '你摸了摸袖子。你那块还在。' },
+      { who: null, text: '（原来那块空牌不是给你的。是还没轮到。）' },
+    ],
+    onEnd: { flag: 'c2c_plates', clue: 'c2c_plates' },
+  },
+  s_c2c_gu: {
+    id: 's_c2c_gu', act: 'ch2c', title: '蛊婆没走',
+    trigger: { type: 'enter', at: 'guHut' },
+    need: ['killed_wumian', 'c2c_plates'],
+    lines: [
+      { who: 'narrator', text: '你回了一趟瘴林。棚子还在，草把换了新的。' },
+      { who: 'w_gu', text: '你数到四十一了。' },
+      { who: 'narrator', text: '她这次抬头了。' },
+      { who: 'w_gu', text: '我娘数到三十九。我数到四十。' },
+      { who: 'w_gu', text: '数的人不换，链子就一直往上走。' },
+      { who: 'narrator', text: '她把石臼推到一边，底下压着一块木牌，三道纹，磨得发亮。' },
+      { who: 'w_gu', text: '我没敢挂。挂上去，就该我往东走了。' },
+      { who: null, text: '（她把木牌又压回去了。）' },
+    ],
+    onEnd: { flag: 'c2c_gu', clue: 'c2c_gu' },
+  },
+  s_c2c_ferry: {
+    id: 's_c2c_ferry', act: 'ch2c', title: '周摆渡收桨',
+    trigger: { type: 'time', phase: 'mao' },
+    need: ['killed_wumian', 'c2c_plates'],
+    lines: [
+      { who: 'narrator', text: '卯时。天还没全亮，渡口有人收桨。' },
+      { who: 'w_ferry', text: '你要往东。' },
+      { who: 'narrator', text: '他把桨扛进棚子，横搁在梁上，桨叶朝里。' },
+      { who: 'w_ferry', text: '我爹撑到第四十一年，把船留给我，自己往东去了。' },
+      { who: 'w_ferry', text: '他说链子得有人收。收慢一点，下面的人就能多歇一晚。' },
+      { who: 'narrator', text: '他从怀里摸出一枚木牌，放在桨边上，没给你。' },
+      { who: 'w_ferry', text: '这块我先替他收着。' },
+      { who: null, text: '（他把棚门带上了，没锁。）' },
+    ],
+    onEnd: { flag: 'c2c_ferry', clue: 'c2c_ferry' },
+  },
+  s_c2c_shoulian: {
+    id: 's_c2c_shoulian', act: 'ch2c', title: '拴链的人',
+    trigger: { type: 'kill', lord: 'shoulian', label: '守链人' },
+    need: ['killed_wumian', 'c2c_count'],
+    lines: [
+      { who: 'narrator', text: '链尽头站着一个人。' },
+      { who: 'narrator', text: '他背对着你，两只手握着链子，往上提。' },
+      { who: 'narrator', text: '提一寸，歇一会儿，再提一寸。' },
+      { who: 'narrator', text: '你走过去，他没回头。你叫了一声，他还是没回头。' },
+      { who: 'narrator', text: '他腰上挂着木牌，牌背刻着「守链人 · 第四十一」。' },
+      { who: 'narrator', text: '你出手的时候，他没有招架。他先把链子挂回桩上，才转过身。' },
+      { who: 'narrator', text: '他倒下之后，链子没有松。' },
+      { who: null, text: '（他不是拦路的。他是接班的。）' },
+    ],
+    onEnd: { flag: 'c2c_shoulian', clue: 'c2c_shoulian' },
+  },
+  // 第二章的选择。复用终章那套机制：storyChoose() 的页签改成取 storyCur.page，
+  // 第一章仍是「终章 · 古洞」，第二章自然落「第二章三幕 · 链尽头」。
+  // options 里的 endMsg 是给结局旁白收尾用的，第一章没写，回落到「第一章 · 终」。
+  s_c2c_choice: {
+    id: 's_c2c_choice', act: 'ch2c', title: '挂回去，还是砍断',
+    trigger: { type: 'kill', lord: 'shoulian', label: '守链人' },
+    need: ['killed_wumian', 'c2c_shoulian'],
+    lines: [
+      { who: 'narrator', text: '桩顶的空环还在晃。' },
+      { who: 'narrator', text: '第四十一块牌是空的。你袖子里那块也是空的。' },
+      { who: 'narrator', text: '链子还绷着，绷得很紧，一直往东，看不见那一头。' },
+      { who: 'narrator', text: '你可以把牌子挂上去，接住这一寸。' },
+      { who: 'narrator', text: '也可以把链子砍了。' },
+      { who: 'narrator', text: '砍了，下面的人就不用再数了。' },
+    ],
+    onEnd: {
+      choice: {
+        prompt: '这件事也没有对错。',
+        options: [
+          {
+            id: 'hang', label: '挂回去', hint: '把木牌扣进空环',
+            flag: 'chose_hang', fame: 12, msg: '你把木牌挂回了链上', endMsg: '第二章 · 终',
+            lines: [
+              { who: 'narrator', text: '你把木牌扣进空环。' },
+              { who: 'narrator', text: '扣上的一瞬间，链子沉了半寸，又绷回去。' },
+              { who: 'narrator', text: '你握住链子，往上提。' },
+              { who: 'narrator', text: '提一寸，歇一会儿，再提一寸。' },
+              { who: 'narrator', text: '东边还是看不见那一头。' },
+              { who: 'narrator', text: '瘴林那边，数数声停了。' },
+              { who: 'narrator', text: '过了很久，有人从一重新开始数。' },
+              { who: null, text: '（第二章 · 终）' },
+            ],
+          },
+          {
+            id: 'cut', label: '砍断', hint: '一刀削在最后的链环上',
+            flag: 'chose_cut', msg: '你把链子砍断了', endMsg: '第二章 · 终',
+            lines: [
+              { who: 'narrator', text: '你一刀削在最后的链环上。' },
+              { who: 'narrator', text: '断口是斜的，和竹桥那道一样。' },
+              { who: 'narrator', text: '链子往两头缩。东边那一截收得很快，像有人在那头拽。' },
+              { who: 'narrator', text: '水底的敲击声一下没了。' },
+              { who: 'narrator', text: '四十一块木牌落在地上，没有响。' },
+              { who: 'narrator', text: '你把袖子里那块也放上去，和它们摆成一排。' },
+              { who: 'narrator', text: '天亮了。江面上没有链子的影子。' },
+              { who: null, text: '（第二章 · 终）' },
+            ],
+          },
+        ],
+      },
+    },
+  },
+  // 最后一节不依赖位置：和上面两节一样挂在「守链人已倒」上，
+  // 排在 choice 之后，玩家选完、结局旁白播完才轮到它。
+  s_c2c_coda: {
+    id: 's_c2c_coda', act: 'ch2c', title: '数到哪儿',
+    trigger: { type: 'kill', lord: 'shoulian', label: '守链人' },
+    need: ['killed_wumian', 'c2c_shoulian'],
+    lines: [
+      { who: 'narrator', text: '后来村里没人提过链子。' },
+      { who: 'narrator', text: '渡口的桥还在，桥墩上那圈铁链被人拆走了，木头上的印子还在。' },
+      { who: 'narrator', text: '南边的口子慢慢长满了枝子。' },
+      { who: 'narrator', text: '你偶尔会听见有人数数，数到某个数就停。' },
+      { who: 'narrator', text: '停在哪里，看那天风往哪边吹。' },
+      { who: null, text: '（数到哪儿，就到哪儿。）' },
+    ],
+    onEnd: { flag: 'c2c_end', clue: 'c2c_coda' },
+  },
 };
 
 const STORY_IDS = Object.keys(STORY);
@@ -56979,6 +57644,25 @@ const CLUES = {
   breakthrough: { name: '从对面凿过来', text: '打通的那面石壁，凿痕的斜坡朝着这边 —— 对面有人在往这边凿，比三年久得多。' },
   forty: { name: '第四十次', text: '古洞第三层地上有一把断刀，刀鞘三道刻纹。旁边刻着「第四十次」。' },
   wumian_face: { name: '无面的牌', text: '无面剑客腰间那块木牌和主角的一样，三道纹。牌背刻着「守碑人 · 第四十」。' },
+  // —— 第二章 P12-B：18 条，每条都由一个第二章节点发放 ——
+  c2a_gate:   { name: '南下的口子', text: '旧底边只塌了五格宽，砖茬上的白毛被人清过一遍 —— 有人一直在这儿进出。' },
+  c2a_gu:     { name: '她不抬头', text: '蛊婆捣的药里翻出白毛。她说听见虫叫，可那声音有间隔，是在数数。' },
+  c2a_banner: { name: '幡上的数目', text: '同一个姓被炭划掉又抄了七回，数目从三十三排到三十九，第四十那行空着。' },
+  c2a_red:    { name: '赤土', text: '红土挖到两尺就是码得整齐的指骨，一层压一层，像有人在底下砌墙。' },
+  c2a_gumu:   { name: '四十道', text: '蛊母腹中是一窝刻着横道的小石头，数到四十，最后一道刻到一半石头就裂了。' },
+  c2a_count:  { name: '子时数数', text: '子时的数数声数到四十会停，隔很久才有一个更轻的声音说「四十一」，从更南边来。' },
+  c2b_gate:   { name: '修路的人', text: '东边塌口的砖被码在两侧，齐齐整整 —— 不是修墙，是有人把这里当路在养。' },
+  c2b_ferry:  { name: '桥是去年架的', text: '架桥之前这段江一年翻三回船，架完之后不翻了，可水底的东西一样还在。' },
+  c2b_bridge: { name: '磨亮的一侧', text: '桥墩铁链每一环内侧都有磨痕，且都在同一侧 —— 链子长期被往一个方向拉。' },
+  c2b_dock:   { name: '坞里的账', text: '江匪坞的账不记货，只记捞上来的木牌。最后一页写着「链子今天又往上走了一寸」。' },
+  c2b_jianggui: { name: '挂在链上的', text: '江鬼身上挂满木牌，最上面是第三十九，下面第四十，再下面那块是空的。' },
+  c2b_knock:  { name: '一下一格', text: '子时水底每敲一下，链上就有一处亮起并往东移一格。链子在被人收。' },
+  c2c_count:  { name: '四十一道', text: '链尽头最后一根石桩的圆窝边刻满短横，四十一道，最后一道的石粉还没被吹走。' },
+  c2c_plates: { name: '空着的第四十一', text: '链上四十一块木牌名字全被凿掉，只留数目；第四十一块连三道纹都还没刻。' },
+  c2c_gu:     { name: '没敢挂', text: '蛊婆的娘数到三十九，她数到四十。她说数的人不换，链子就一直往上走。' },
+  c2c_ferry:  { name: '收桨', text: '周摆渡的爹撑到第四十一年就往东去了，说链子得有人收，收慢些下面的人能多歇一晚。' },
+  c2c_shoulian: { name: '守链人 · 第四十一', text: '链尽头那人不是在拦路，是在接班。他倒下前先把链子挂回桩上，链子始终没松。' },
+  c2c_coda:   { name: '数到哪儿', text: '后来村里没人再提链子，桥墩上的印子还在；偶尔有人数数，停在哪里看那天风往哪边吹。' },
 };
 const CLUE_IDS = Object.keys(CLUES);
 
@@ -57059,6 +57743,79 @@ const ENV_TEXTS = {
       + '沟的尽头换了个人接着划 —— 笔迹比前面细，划得更慢。'
       + '最下面有一行字：「数到这儿，就不数了。反正天也不亮。」'
       + '字底下压着六枚铜钱，摆成一排。像是给谁留的船钱。',
+  },
+  // —— 第二章 P12-B：10 处旧物，全部落在 CH1_H 以南 ——
+  // 坐标逐个过 canStand()：中心格必须能站（碑要走近按 E 读，站不住就是死物）。
+  // 两处渡口旧物特意离周摆渡 34px 对话圈远一些 —— 一个点击位只做一件事。
+  e_c2_south_gate: {
+    at: { x: 552, y: 1720, r: 34 }, name: '关口砖额',
+    text: '塌口的砖额上原本有字，被凿掉了，只剩三个字的下半截。'
+      + '能认出中间那个是「南」。砖缝里塞着几十枚木屑，都削成小牌子的形状，'
+      + '每一枚正面光滑，背面朝墙 —— 塞的人不想让人看见背面写了什么。'
+      + '最上面一枚是新的，木茬还白。',
+  },
+  e_c2_banner: {
+    at: { x: 360, y: 1880, r: 34 }, name: '幡脚木牌',
+    text: '幡脚那枚木牌拆下来看，三道纹，一道朝西南，一道朝西北，一道正北。'
+      + '牌背用刀尖划了一行极小的字：「抄一遍，就少一个人往东」。'
+      + '划痕里嵌着炭，和幡上划名字的是同一块炭。牌角有一个穿绳的孔，孔壁磨得很圆 ——'
+      + '它被人挂过很久，不是钉上去就没动过。',
+  },
+  e_c2_red_soil: {
+    at: { x: 760, y: 2120, r: 34 }, name: '赤土界石',
+    text: '界石半埋在红土里，只露头。上刻「下三尺，勿再下」。'
+      + '「再」字被后来的人改过，原先刻的是「勿下」，改的时候把旧笔画填了土再刻，'
+      + '填的土和这里的红土不是一个颜色。石根压着一排白粒，摆得很匀，'
+      + '数了数，四十粒。最后一粒只有半颗。',
+  },
+  e_c2_gumu: {
+    at: { x: 232, y: 2040, r: 34 }, name: '巢口的石堆',
+    text: '蛊母巢口垒着一圈小石头，每块一道横刻。'
+      + '石头不是随便堆的：大的在下，小的在上，最上面那块刻到一半就裂了，'
+      + '裂缝里长出白毛。圈的缺口朝东南，缺口处多摆了两块空石，一道也没刻。'
+      + '像是给还没数到的两个先留了位置。',
+  },
+  e_c2_river_gate: {
+    at: { x: 1912, y: 1720, r: 34 }, name: '东口界碑',
+    text: '碑上只有一行：「往东者，自记其数」。'
+      + '碑侧密密麻麻全是短横，一层压一层，后来的人刻在先人的刻痕上，'
+      + '已经数不清。最底下一层是深的，最上面一层浅得几乎看不见。'
+      + '碑脚搁着一把凿子，刃口卷了，木柄被手汗浸成深色。凿子还在等人用。',
+  },
+  e_c2_ferry: {
+    at: { x: 1608, y: 1800, r: 34 }, name: '渡口价目牌',
+    text: '木牌上写着「过江：铜钱三文，木牌一面」。'
+      + '「铜钱三文」被人划掉了，划得很轻，还看得清；「木牌一面」四个字反倒描过好几遍，'
+      + '墨堆起来，摸上去是凸的。牌子背面钉着一只小布袋，袋里没有钱，'
+      + '只有一截铁丝，弯成环，环口没收。',
+  },
+  e_c2_bridge: {
+    at: { x: 1608, y: 1960, r: 34 }, name: '桥墩铁环',
+    text: '桥墩上那只铁环比链子旧得多，环座是砌进石头里的。'
+      + '环内侧磨出一道深沟，沟偏向东。环座四周有八个凿眼，'
+      + '眼里的木楔只剩三个 —— 有人想把环撬走，撬到一半停了。'
+      + '停手的地方刻了两个字，刻得歪：「别撬」。',
+  },
+  e_c2_dock: {
+    at: { x: 2024, y: 2152, r: 34 }, name: '坞里账本',
+    text: '账本最后一页除了那句「链子今天又往上走了一寸」，背面还有一行铅笔似的淡字：'
+      + '「我今天没敢数。没数，是不是就不算过了一天」。'
+      + '再往后是十几页空白，每页右下角都有一个指印，同一只手，'
+      + '一天一个，越到后面按得越轻。最后一页没有指印。',
+  },
+  e_c2_chain_post: {
+    at: { x: 1896, y: 2184, r: 34 }, name: '拴链石桩',
+    text: '桩身四面都刻着字，四面说的是同一件事，写法各不一样。'
+      + '东面「别让它回头」，南面「别松手」，西面「还没到」，北面只剩半句「等我」。'
+      + '四面的笔迹是四个人的。北面那半句刻得最浅，也最新，'
+      + '最后一笔拖出去很长，像刻的人被什么拽了一下。',
+  },
+  e_c2_chain_end: {
+    at: { x: 2120, y: 2216, r: 34 }, name: '链尽头的牌堆',
+    text: '链环下面积了一层木屑，是历年刻牌落下来的，踩上去软。'
+      + '木屑里混着几十个磨秃的刻刀头，都朝着东边倒。'
+      + '最底下一层木屑已经发黑，捏起来是湿的；最上面一层还白。'
+      + '有人在这儿刻了很久，久到换过好几把刀，也久到没换过站的地方。',
   },
 };
 const ENV_IDS = Object.keys(ENV_TEXTS);
@@ -57250,6 +58007,37 @@ const NPC_LINES = {
     close: {
       lines: ['你要是出去了，别跟人说我们在下面。', '说了，也没人来。'],
       ask: '往东凿，能到古洞的侧壁。这话我憋了三年 —— 你别去。',
+    },
+  },
+  // —— 第二章 P12-B：两位新区 NPC 的三层 ——
+  // 和第一章野外四人一样：不是"态度变好"，是"越来越不想瞒"。
+  // 蛊婆从「往北走」到交出自己没敢挂的牌；周摆渡从「桥是去年架的」到说出他爹的去向。
+  w_gu: {
+    first: {
+      lines: ['往北走，别往南。', '这土是红的，不是染的。', '你听见虫子叫了吗？'],
+      ask: '瘴气夜里最重。白天来，我还能替你认路。',
+    },
+    known: {
+      lines: ['你又往南去了。', '幡上的字，别抄。', '抄一遍，就少一个人往东。'],
+      ask: '幡上数到三十九就停了。第四十那行是我留的空 —— 留了十一年，没敢填。',
+    },
+    close: {
+      lines: ['……你也听见了。', '（她把石臼往你这边推了推。）', '数到四十，就该换人了。'],
+      ask: '我娘数到三十九，我数到四十。这块牌我压在臼底下，没敢挂。挂上去，就该我往东走了。',
+    },
+  },
+  w_ferry: {
+    first: {
+      lines: ['桥是去年才架的。', '水底下有东西，别往下看。', '过江往东，是江匪的地界。'],
+      ask: '铁链还在水底。上游冲下来的东西，都挂在链子上。',
+    },
+    known: {
+      lines: ['今天不摆渡。', '桨叶还没干，昨天就没人过江。', '链子又紧了一寸。'],
+      ask: '陈九撑了二十年船，说链子往上拴。我原先当他讲胡话，后来自己收过一夜的链。',
+    },
+    close: {
+      lines: ['上船吧。', '不用钱，牌子也别给。', '（他把桨横搁在梁上。）'],
+      ask: '我爹撑到第四十一年，把船留给我，自己往东去了。他说收慢一点，下面的人能多歇一晚。这块牌我替他收着。',
     },
   },
 };
@@ -58727,6 +59515,69 @@ const TORCH = spriteCanvas([
   '...s....',
   '..sss...',
 ], { y: C.gold2, r: C.red2, s: C.ink3 });
+// —— 第二章 P12-B：四种新区专属风物（固定坐标摆放，不抽随机数）——
+const GUBANNER = spriteCanvas([
+  '.....s..........',
+  '.....s..........',
+  '.....srrrrrrr...',
+  '.....srRRRRRr...',
+  '.....srRwwwRr...',
+  '.....srRwwwRr...',
+  '.....srRRRRRr...',
+  '.....srrrrrrr...',
+  '.....srrrrrr....',
+  '.....srrrrr.....',
+  '.....srrrr......',
+  '.....srrr.......',
+  '.....srr........',
+  '.....sr.........',
+  '.....s..........',
+  '.....s..........',
+  '....sss.........',
+  '...sssss........',
+], { s: C.ink3, r: '#8A2E1E', R: '#C24A2A', w: C.paper1 });
+const ZHANGGU = spriteCanvas([
+  '....uuuuuu....',
+  '..uuUUUUUUuu..',
+  '.uUUwwwwUUUUu.',
+  '.UUUwUUwUUUu..',
+  '..uuuuuuuuuu..',
+  '.....pppp.....',
+  '.....pPPp.....',
+  '.....pPPp.....',
+  '....ppPPpp....',
+  '...pppppppp...',
+], { u: '#4A3A6B', U: '#8A6FC4', w: '#EDE4CE', p: '#B9C9A6', P: '#EDE4CE' });
+const LANZHUANG = spriteCanvas([
+  '....iiii....',
+  '...iIIIIi...',
+  '...iIIIIi...',
+  '..iiIIIIii..',
+  '..bBBBBBBb..',
+  '..bByyyyBb..',
+  '..bBBBBBBb..',
+  '...bBBBBb...',
+  '...bBBBBb...',
+  '...bBBBBb...',
+  '...bBBBBb...',
+  '..bbBBBBbb..',
+  '..bbbbbbbb..',
+  '............',
+], { i: '#3A4650', I: '#5C6B76', b: '#5A4632', B: '#3A2E22', y: C.gold2 });
+const DUZHOU = spriteCanvas([
+  '....................',
+  '.........s..........',
+  '.........s..........',
+  '........sss.........',
+  '.........s..........',
+  '.......rrrrrr.......',
+  '.....bbbbbbbbbb.....',
+  '...bbBBBBBBBBBBbb...',
+  '..bBBBBBBBBBBBBBBb..',
+  '...bbBBBBBBBBBBbb...',
+  '.....bbbbbbbbbb.....',
+  '....................',
+], { s: C.ink3, r: '#C9A24A', b: '#5A4632', B: '#3A2E22' });
 // 营地道具三件套：篝火 / 帐篷 / 哨塔。
 // 它们不是装饰 —— 玩家从远处一眼认出"那片地方有人住"，才知道该绕路还是该打。
 const CAMPFIRE = spriteCanvas([
@@ -58920,10 +59771,14 @@ const dens = [
   { type: 'kuilei',  x: 54 * TILE, y: 76 * TILE, name: '废弃机坊', r: 3 },
   { type: 'shimu',   x: 9 * TILE,  y: 34 * TILE, name: '石母洞', r: 3 },
   { type: 'huoya',   x: 40 * TILE, y: 20 * TILE, name: '火鸦绝壁', r: 3 },
+  // —— 第二章 P12-B：三个新区巢穴，坐标与 story.js 的 POI 对齐 ——
+  { type: 'gumu',     x: 14 * TILE,  y: 128 * TILE, name: '蛊母巢',   r: 3 },
+  { type: 'jianggui', x: 112 * TILE, y: 132 * TILE, name: '水底铁链', r: 3 },
+  { type: 'shoulian', x: 128 * TILE, y: 136 * TILE, name: '链尽头',   r: 3 },
 ];
 // 巢穴的空场：把半径内的实心块清掉，再把底材换成踩秃的土。
 // 不做这一步的话，青鳞蟒会刷在岩层里 —— 它血厚，卡住之后玩家只能隔着石头打。
-function carveDen(d) {
+function carveDen(d, protectWater) {
   const cx = (d.x / TILE) | 0, cy = (d.y / TILE) | 0;
   for (let y = cy - d.r; y <= cy + d.r; y++) for (let x = cx - d.r; x <= cx + d.r; x++) {
     if (x < 3 || y < 3 || x >= MAPW - 3 || y >= MAPH - 3) continue;
@@ -58931,6 +59786,9 @@ function carveDen(d) {
     if (dd > d.r + 0.4) continue;
     const i = y * MAPW + x;
     if (tiles[i] === 4) continue;
+    // 只有新区巢穴传 protectWater：江水与桥面是 P12-A 定稿的地貌，
+    // 挖空场时踩过去会把「江水 371 / 桥 36」的计数和过江路线一起改坏。
+    if (protectWater && (tiles[i] === 13 || tiles[i] === 9)) continue;
     if (inDungeon(x * TILE + 8, y * TILE + 8, 10)) continue;
     solid[i] = 0;
     if (dd < d.r - 0.6) tiles[i] = 2;
@@ -59025,7 +59883,7 @@ for (const by of [62, 76, 90]) {
 }
 
 // 首领空场：放在溪涧之后 —— 溪水是实心的，巢穴正落在水上就会变成"打不到的 Boss"。
-for (const d of dens) carveDen(d);
+for (const d of dens) if (d.y < CH1_H * TILE) carveDen(d);
 
 // 路网。先在 tile 空间里走，主方向多走、次方向偶尔拐 ——
 // 这样出来的是"人踩出来的路"，不是尺子画出来的 45° 斜线。
@@ -59107,6 +59965,13 @@ for (let x = REGION.river.x0 + 2; x < REGION.river.x1 - 2; x++) {
     if (tiles[i] === 2) { tiles[i] = 9; solid[i] = 0; }
   }
 }
+
+
+// —— 第二章 P12-B：三个新区巢穴的空场 ——
+// 必须放在江水、渡桥、两区路网都定稿之后：先挖的话，江带会被改回土路，
+// 桥面也会消失。protectWater 再兜一层底，跳过 tile 13 江水 / tile 9 桥面。
+// 第一章那四个仍在上面按原顺序 carve，前 102 行指纹不受影响。
+for (const d of dens) if (d.y >= CH1_H * TILE) carveDen(d, true);
 
 // —— 青云集：先把村址从野地里"清"出来 ——
 // 顺序很关键：必须在 nearClear / 物件生成之前改地块，否则竹子会照常长在街上。
@@ -59204,6 +60069,18 @@ for (const c of camps) {
 objects.push({ kind: 'shrine', x: SPAWN.x, y: SPAWN.y - 16 });
 objects.push({ kind: 'lantern', x: ALTAR.x - 26, y: ALTAR.y + 10 });
 objects.push({ kind: 'lantern', x: ALTAR.x + 26, y: ALTAR.y + 10 });
+
+// —— 第二章 P12-B：新区专属风物 ——
+// 全部固定坐标、不抽 rng / rng2：插在两区风物撒点之后，第一章的随机序列
+// 与物件数量一个字节都不动。也不设 solid —— 摆的是景，不该把路堵了。
+for (const [kind, x, y] of [
+  ['gubanner', 368, 1872], ['gubanner', 336, 1888], ['gubanner', 392, 1904],
+  ['zhanggu', 300, 1968], ['zhanggu', 420, 2000], ['zhanggu', 500, 1960],
+  ['zhanggu', 260, 2100], ['zhanggu', 620, 2060], ['zhanggu', 700, 2160],
+  ['lanzhuang', 1568, 1968], ['lanzhuang', 1632, 1968], ['lanzhuang', 1744, 2128],
+  ['lanzhuang', 1840, 2160], ['lanzhuang', 1960, 2184],
+  ['duzhou', 1568, 1920], ['duzhou', 1648, 1904], ['duzhou', 1680, 1936],
+]) objects.push({ kind, x, y });
 
 const groundC = document.createElement('canvas');
 groundC.width = MAPW * TILE; groundC.height = MAPH * TILE;
@@ -59432,11 +60309,15 @@ const objTex = {
   bamboo: tex(BAMBOO), peach: tex(PEACH), lantern: tex(LANTERN), shrine: tex(SHRINE), stone: tex(STONE),
   grave: tex(GRAVE), deadtree: tex(DEADTREE), stalag: tex(STALAG), torch: tex(TORCH),
   campfire: tex(CAMPFIRE), tent: tex(TENT), tower: tex(TOWER),
+  gubanner: tex(GUBANNER), zhanggu: tex(ZHANGGU),
+  lanzhuang: tex(LANZHUANG), duzhou: tex(DUZHOU),
 };
 const objSize = {
   bamboo: [16, 20], peach: [16, 14], lantern: [10, 8], shrine: [16, 8], stone: [12, 7],
   grave: [12, 10], deadtree: [16, 18], stalag: [10, 14], torch: [8, 12],
   campfire: [12, 9], tent: [16, 12], tower: [14, 18],
+  gubanner: [16, 18], zhanggu: [14, 10],
+  lanzhuang: [12, 14], duzhou: [20, 12],
 };
 for (const o of objects) {
   const [w, h] = objSize[o.kind];
@@ -60998,6 +61879,10 @@ const UNIQUES = {
   shimu:   { name: '石母胎', kind: 'armor',    tag: '厚土', stat: 'def',      val: 11, note: '防御 +11，受击时 20% 概率再减半' },
   huoya:   { name: '火鸦翎', kind: 'necklace', tag: '灼翼', stat: 'critDmg',  val: 36, note: '暴伤 +36，暴击附带灼烧' },
   wumian:  { name: '无面刃', kind: 'weapon',   tag: '拔刀', stat: 'atk',      val: 24, fam: 'blade', note: '攻击 +24，拔刀斩伤害 +40%' },
+  // —— 第二章 P12-B：三个新区首领各一件首杀唯一 ——
+  gumu:     { name: '蛊母胎', kind: 'armor',    tag: '白毛', stat: 'hp',       val: 34, note: '气血 +34，站在毒圈里缓缓回血' },
+  jianggui: { name: '沉牌链', kind: 'necklace', tag: '拖拽', stat: 'critDmg',  val: 30, note: '暴伤 +30，命中时把敌人往回拽半步' },
+  shoulian: { name: '守链环', kind: 'artifact', tag: '接班', stat: 'skillDmg', val: 18, note: '术法 +18%，首领战开场先手一击' },
 };
 function makeUnique(type, ilvl) {
   const u = UNIQUES[type];
@@ -63548,7 +64433,8 @@ function storyChoose(optId) {
     if (o.lines && o.lines.length) {
       // 选择是"你做了什么"，结局旁白是"后来怎样了"。两段必须分开播，
       // 挤在同一屏里的话，玩家会以为那只是选择的说明文字。
-      storyShow({ id: s.id, page: '终章 · 古洞', lines: o.lines, onEnd: { msg: '第一章 · 终' } });
+      storyShow({ id: s.id, page: s.page || '终章 · 古洞', lines: o.lines,
+                 onEnd: { msg: o.endMsg || '第一章 · 终' } });
     } else {
       storyEl.classList.add('hidden');
       storyCur = null;
@@ -66802,7 +67688,7 @@ window.__game = {
   },
   MAPW, MAPH, CH1_H, SPAWN, camps, dens, WEAPONS, WEAPON_IDS, MONSTERS, NODES, SLOTS,
   get solid() { return solid; }, REGION,
-  get objects() { return objects; },
+  get objects() { return objects; }, objTex, objSize,
   get hazards() { return hazards; }, addHazard, clearHazards, UNIQUES, makeUnique,
   killEnemy, execSkill, runBossSkills, bossSkillsOf, wumianPhase, bossArtColors,
   QUESTS, QUEST_IDS, QUEST_ITEMS, WANDERERS, ALL_TALKERS, NPCS,

@@ -18,7 +18,7 @@
       if (!q.reward) bad.push(id + ':无奖励');
       if (q.id !== id) bad.push(id + ':id 不一致');
     }
-    T('12 条任务定义齐全', g.QUEST_IDS.length === 12 && bad.length === 0,
+    T('18 条任务定义齐全', g.QUEST_IDS.length === 18 && bad.length === 0,
       g.QUEST_IDS.length + ' 条' + (bad.length ? '，问题：' + bad.join('/') : ''));
     // P12 前置项 ①：每条任务都要有一段「交任务时的对话」，不是一句 outro 了事。
     const dlgBad = [];
@@ -36,14 +36,14 @@
       }
       if (speakers.size < 2) dlgBad.push(id + ':只有一个说话人');
     }
-    T('12 条任务都有多说话人的交付对话', dlgBad.length === 0,
+    T('18 条任务都有多说话人的交付对话', dlgBad.length === 0,
       g.QUEST_IDS.length + ' 段 / ' + seen.size + ' 句' + (dlgBad.length ? '，问题：' + dlgBad.slice(0, 4).join('/') : ''));
     T('交付对话末句仍接得上 outro', g.QUEST_IDS.every(id => {
       const seq = g.turnInLines(Q[id]);
       return seq[seq.length - 1].text === Q[id].outro;
     }), 'outro 不丢');
     const mains = g.QUEST_IDS.filter(id => Q[id].kind === 'main');
-    T('主线 3 条 / 支线 9 条', mains.length === 3 && g.QUEST_IDS.length - mains.length === 9,
+    T('主线 3 条 / 支线 15 条', mains.length === 3 && g.QUEST_IDS.length - mains.length === 15,
       '主线 ' + mains.length + ' / 支线 ' + (g.QUEST_IDS.length - mains.length));
   }
 
@@ -295,11 +295,33 @@
     for (const id of order) finish(id);
 
     const finished = g.QUEST_IDS.filter(id => g.player.quests[id] && g.player.quests[id].st === 'done');
-    T('12 条任务全部可完成', finished.length === 12 && fails.length === 0,
-      finished.length + '/12' + (fails.length ? '，问题：' + fails.join(' / ') : ''));
+    T('18 条任务全部可完成', finished.length === 18 && fails.length === 0,
+      finished.length + '/18' + (fails.length ? '，问题：' + fails.join(' / ') : ''));
     T('主线三件三物都到手', g.tripleState().ok === true,
       '竹心=' + (g.player.relics.bamboo_heart || 0) + ' 石髓=' + (g.player.relics.stone_marrow || 0) +
       ' 阴土=' + (g.player.relics.yin_soil || 0));
+  }
+
+  // ---------- 11. P12-B：第二章六条支线 ----------
+  {
+    const CH2 = ['q_side_banner', 'q_side_redsoil', 'q_side_chain',
+      'q_side_ferrycoin', 'q_side_plates', 'q_side_nightlamp'];
+    const miss = CH2.filter(id => !Q[id] || Q[id].kind !== 'side');
+    T('6 条第二章支线都在表内', miss.length === 0,
+      miss.length ? '缺：' + miss.join('/') : CH2.length + '/6');
+    const givers = new Set(CH2.map(id => Q[id].giver));
+    T('六条支线发放者互不重复', givers.size === 6, [...givers].join('/'));
+    const kinds = new Set();
+    for (const id of CH2) for (const o of Q[id].steps) kinds.add(o.kind);
+    T('第二章支线只用 reach / kill / have',
+      [...kinds].every(k => ['reach', 'kill', 'have'].indexOf(k) >= 0), [...kinds].join('/'));
+    const south = CH2.filter(id => Q[id].steps.some(o =>
+      o.kind === 'reach' && o.at && o.at.y >= g.CH1_H * 16));
+    T('至少 4 条支线的目标落在第二章两区', south.length >= 4, south.length + ' 条');
+    const thin = CH2.filter(id => !Q[id].reward || !Q[id].brief || !Q[id].outro ||
+      !Array.isArray(Q[id].turnIn) || Q[id].turnIn.length < 4);
+    T('六条支线的奖励 / 简述 / 交付对话齐全', thin.length === 0,
+      thin.length ? thin.join('/') : 'ok');
   }
 
   R.ok = R.checks.every(c => c.startsWith('PASS'));

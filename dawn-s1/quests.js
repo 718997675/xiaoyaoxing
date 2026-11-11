@@ -261,6 +261,130 @@ export const QUESTS = {
     ],
     outro: '灯盏打好了。他把它挂在营口，说这盏灯能烧三年 —— 正好烧到他出去那天。',
   },
+  // ============ P12-B 第二章支线（9 → 15） ============
+  // 目标只走 reach / kill / have 三种既有类型：tools/quests.js 的「全通」脚本
+  // 只认这几种，不给它加分支，也不给自己加一套只有线上才跑得通的判定。
+  // 发放者分散在新区两人与村里四人，六条各不重样；交付对话逐句不撞词。
+  q_side_banner: {
+    id: 'q_side_banner', kind: 'side', place: '南疆瘴林',
+    title: '蛊幡上的名字',
+    giver: 'w_gu',
+    brief: '寨外那面幡上，同一个姓被划掉又抄了七回。',
+    steps: [
+      { text: '去看寨外那面幡', kind: 'reach', at: { x: 352, y: 1856, r: 95 } },
+      { text: '清六只瘴里的符傀', kind: 'kill', types: ['fukui'], count: 6 },
+    ],
+    reward: { gold: 420, fame: 5, xp: 180 },
+    turnIn: [
+      { who: '蛊婆', text: '幡你去看过了。' },
+      { who: '你', text: '抄了七回，都是同一个姓。第四十行空着。' },
+      { who: '蛊婆', text: '她把炭条搁下，指腹在膝盖上蹭了两下，没有抬眼。' },
+      { who: '蛊婆', text: '「抄的人不是想记住。是怕自己忘了该轮到谁。」' },
+      { who: '你', text: '「那一行为什么留着？」' },
+      { who: null, text: '棚外的幡被风翻过来，背面一个字也没有。' },
+    ],
+    outro: '她到底没说那行该填谁，只把炭条收进了袖子。',
+  },
+  q_side_redsoil: {
+    id: 'q_side_redsoil', kind: 'side', place: '南疆瘴林',
+    title: '赤土不是染的',
+    giver: 'yu',
+    brief: '崔婆婆说赤土墟的土早年不是红的，要一根探条才肯信。',
+    steps: [
+      { text: '到赤土墟取土', kind: 'reach', at: { x: 768, y: 2112, r: 110 } },
+      { text: '交十块精铁打探条', kind: 'have', field: 'iron', count: 10, spend: true },
+    ],
+    reward: { gold: 360, fame: 4, xp: 160, potion: 1 },
+    turnIn: [
+      { who: '崔婆婆', text: '探条带回来了？土呢。' },
+      { who: '你', text: '没敢带。挖到两尺就是骨，一截一截码得整齐。' },
+      { who: '崔婆婆', text: '她把探条在围裙上擦了三遍，擦完还捏着不放。' },
+      { who: '崔婆婆', text: '「我小时候，那边的土是黄的。」' },
+      { who: '你', text: '「什么时候红的？」' },
+      { who: null, text: '灶上的水开了，她没去提，也没把手松开。' },
+    ],
+    outro: '她说等水凉了再讲，后来那壶水凉了一整夜，她也没讲。',
+  },
+  q_side_chain: {
+    id: 'q_side_chain', kind: 'side', place: '江岸渡口',
+    title: '水底的铁链',
+    giver: 'qiao',
+    brief: '石大说桥墩那圈铁链的磨痕不对劲，想让人替他下去看一眼。',
+    steps: [
+      { text: '走到渡桥中段', kind: 'reach', at: { x: 1600, y: 1952, r: 80 } },
+      { text: '顺着链子走到水底铁链', kind: 'reach', at: { x: 1792, y: 2112, r: 90 } },
+    ],
+    reward: { gold: 400, fame: 5, xp: 170 },
+    turnIn: [
+      { who: '石大', text: '桥底下那圈东西，你摸着了？' },
+      { who: '你', text: '摸着了。环内侧磨出一道沟，都偏向东。' },
+      { who: '石大', text: '他把柴捆往地上一顿，蹲下去比划那道沟的斜劲。' },
+      { who: '石大', text: '「柴顺水漂，也偏一头。可这东西不漂。」' },
+      { who: '你', text: '「那是谁在拉？」' },
+      { who: null, text: '他没答，把柴捆重新扛起来，绳头在肩上勒出一道白印。' },
+    ],
+    outro: '走的时候他绕开了桥，宁可多趟半里水，也没从板子上过。',
+  },
+  q_side_ferrycoin: {
+    id: 'q_side_ferrycoin', kind: 'side', place: '江岸渡口',
+    title: '过江钱',
+    giver: 'w_ferry',
+    brief: '渡口价目牌上的三文被划掉了，可还是有人替没上岸的人给钱。',
+    steps: [
+      { text: '清五只江匪', kind: 'kill', types: ['zhiren'], count: 5 },
+      { text: '交九文过江钱', kind: 'have', field: 'gold', count: 9, spend: true },
+    ],
+    reward: { gold: 500, fame: 4, xp: 175 },
+    turnIn: [
+      { who: '周摆渡', text: '钱搁着吧，别递过来。' },
+      { who: '你', text: '牌子上写着三文，我数了九文。' },
+      { who: '周摆渡', text: '他把铜钱一枚一枚推回你这边，推到最后一枚停了手。' },
+      { who: '周摆渡', text: '「三文是给活人算的。多出来的，是替没上岸的人给的。」' },
+      { who: '你', text: '「那你为什么不收？」' },
+      { who: null, text: '江面上有东西浮起来又沉下去，他没有转头去看。' },
+    ],
+    outro: '那九文最后还搁在牌子上，谁也没动，风把最上面一枚吹得翻了个面。',
+  },
+  q_side_plates: {
+    id: 'q_side_plates', kind: 'side', place: '链尽头',
+    title: '挂在链上的木牌',
+    giver: 'shuo',
+    brief: '柳先生要一个真结局，可那串木牌上四十一个人都没有名字。',
+    steps: [
+      { text: '斩了挂满木牌的江鬼', kind: 'kill', types: ['jianggui'], count: 1 },
+      { text: '走到链尽头', kind: 'reach', at: { x: 2112, y: 2208, r: 95 } },
+    ],
+    reward: { gold: 620, fame: 8, xp: 260, gear: { r: 3, kind: 'artifact' } },
+    turnIn: [
+      { who: '柳先生', text: '听说你翻过那一串牌。' },
+      { who: '你', text: '四十一块，名字全凿了，第四十一块连纹都没有。' },
+      { who: '柳先生', text: '醒木在手里转了两圈，一下也没往桌上落。' },
+      { who: '柳先生', text: '「说书的最怕这个。有头有尾，中间四十个人没名字。」' },
+      { who: '你', text: '「那怎么讲？」' },
+      { who: null, text: '他把醒木放回原处，摆得和原先那一道印子严丝合缝。' },
+    ],
+    outro: '那天他没开书，只跟听客说了一句：今儿这回，得等名字齐了再讲。',
+  },
+  q_side_nightlamp: {
+    id: 'q_side_nightlamp', kind: 'side', place: '江岸渡口',
+    title: '渡口夜灯',
+    giver: 'geng',
+    brief: '老周打了四十年更，说渡口该有一盏不归他管也得亮着的灯。',
+    steps: [
+      { text: '交十四块精铁铸灯', kind: 'have', field: 'iron', count: 14, spend: true },
+      { text: '把灯挂到渡口', kind: 'reach', at: { x: 1600, y: 1856, r: 100 } },
+    ],
+    reward: { gold: 340, fame: 4, xp: 150, potion: 2 },
+    turnIn: [
+      { who: '老周', text: '灯挂上了？' },
+      { who: '你', text: '挂在棚檐底下，风从江上来，火苗歪了歪，没灭。' },
+      { who: '老周', text: '他把灯笼从手里放下，敲了敲更梆，敲得比平时轻。' },
+      { who: '老周', text: '「我打更四十年，村口那盏从来不用人管。」' },
+      { who: '你', text: '「渡口这盏得管？」' },
+      { who: null, text: '他往南看了一眼，把更梆夹在腋下，没再敲第二下。' },
+    ],
+    outro: '后来渡口那盏灯每夜都亮着，添油的是谁，村里没人说得上来。',
+  },
 };
 
 export const QUEST_IDS = Object.keys(QUESTS);

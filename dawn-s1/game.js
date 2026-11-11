@@ -271,6 +271,69 @@ const TORCH = spriteCanvas([
   '...s....',
   '..sss...',
 ], { y: C.gold2, r: C.red2, s: C.ink3 });
+// —— 第二章 P12-B：四种新区专属风物（固定坐标摆放，不抽随机数）——
+const GUBANNER = spriteCanvas([
+  '.....s..........',
+  '.....s..........',
+  '.....srrrrrrr...',
+  '.....srRRRRRr...',
+  '.....srRwwwRr...',
+  '.....srRwwwRr...',
+  '.....srRRRRRr...',
+  '.....srrrrrrr...',
+  '.....srrrrrr....',
+  '.....srrrrr.....',
+  '.....srrrr......',
+  '.....srrr.......',
+  '.....srr........',
+  '.....sr.........',
+  '.....s..........',
+  '.....s..........',
+  '....sss.........',
+  '...sssss........',
+], { s: C.ink3, r: '#8A2E1E', R: '#C24A2A', w: C.paper1 });
+const ZHANGGU = spriteCanvas([
+  '....uuuuuu....',
+  '..uuUUUUUUuu..',
+  '.uUUwwwwUUUUu.',
+  '.UUUwUUwUUUu..',
+  '..uuuuuuuuuu..',
+  '.....pppp.....',
+  '.....pPPp.....',
+  '.....pPPp.....',
+  '....ppPPpp....',
+  '...pppppppp...',
+], { u: '#4A3A6B', U: '#8A6FC4', w: '#EDE4CE', p: '#B9C9A6', P: '#EDE4CE' });
+const LANZHUANG = spriteCanvas([
+  '....iiii....',
+  '...iIIIIi...',
+  '...iIIIIi...',
+  '..iiIIIIii..',
+  '..bBBBBBBb..',
+  '..bByyyyBb..',
+  '..bBBBBBBb..',
+  '...bBBBBb...',
+  '...bBBBBb...',
+  '...bBBBBb...',
+  '...bBBBBb...',
+  '..bbBBBBbb..',
+  '..bbbbbbbb..',
+  '............',
+], { i: '#3A4650', I: '#5C6B76', b: '#5A4632', B: '#3A2E22', y: C.gold2 });
+const DUZHOU = spriteCanvas([
+  '....................',
+  '.........s..........',
+  '.........s..........',
+  '........sss.........',
+  '.........s..........',
+  '.......rrrrrr.......',
+  '.....bbbbbbbbbb.....',
+  '...bbBBBBBBBBBBbb...',
+  '..bBBBBBBBBBBBBBBb..',
+  '...bbBBBBBBBBBBbb...',
+  '.....bbbbbbbbbb.....',
+  '....................',
+], { s: C.ink3, r: '#C9A24A', b: '#5A4632', B: '#3A2E22' });
 // 营地道具三件套：篝火 / 帐篷 / 哨塔。
 // 它们不是装饰 —— 玩家从远处一眼认出"那片地方有人住"，才知道该绕路还是该打。
 const CAMPFIRE = spriteCanvas([
@@ -464,10 +527,14 @@ const dens = [
   { type: 'kuilei',  x: 54 * TILE, y: 76 * TILE, name: '废弃机坊', r: 3 },
   { type: 'shimu',   x: 9 * TILE,  y: 34 * TILE, name: '石母洞', r: 3 },
   { type: 'huoya',   x: 40 * TILE, y: 20 * TILE, name: '火鸦绝壁', r: 3 },
+  // —— 第二章 P12-B：三个新区巢穴，坐标与 story.js 的 POI 对齐 ——
+  { type: 'gumu',     x: 14 * TILE,  y: 128 * TILE, name: '蛊母巢',   r: 3 },
+  { type: 'jianggui', x: 112 * TILE, y: 132 * TILE, name: '水底铁链', r: 3 },
+  { type: 'shoulian', x: 128 * TILE, y: 136 * TILE, name: '链尽头',   r: 3 },
 ];
 // 巢穴的空场：把半径内的实心块清掉，再把底材换成踩秃的土。
 // 不做这一步的话，青鳞蟒会刷在岩层里 —— 它血厚，卡住之后玩家只能隔着石头打。
-function carveDen(d) {
+function carveDen(d, protectWater) {
   const cx = (d.x / TILE) | 0, cy = (d.y / TILE) | 0;
   for (let y = cy - d.r; y <= cy + d.r; y++) for (let x = cx - d.r; x <= cx + d.r; x++) {
     if (x < 3 || y < 3 || x >= MAPW - 3 || y >= MAPH - 3) continue;
@@ -475,6 +542,9 @@ function carveDen(d) {
     if (dd > d.r + 0.4) continue;
     const i = y * MAPW + x;
     if (tiles[i] === 4) continue;
+    // 只有新区巢穴传 protectWater：江水与桥面是 P12-A 定稿的地貌，
+    // 挖空场时踩过去会把「江水 371 / 桥 36」的计数和过江路线一起改坏。
+    if (protectWater && (tiles[i] === 13 || tiles[i] === 9)) continue;
     if (inDungeon(x * TILE + 8, y * TILE + 8, 10)) continue;
     solid[i] = 0;
     if (dd < d.r - 0.6) tiles[i] = 2;
@@ -569,7 +639,7 @@ for (const by of [62, 76, 90]) {
 }
 
 // 首领空场：放在溪涧之后 —— 溪水是实心的，巢穴正落在水上就会变成"打不到的 Boss"。
-for (const d of dens) carveDen(d);
+for (const d of dens) if (d.y < CH1_H * TILE) carveDen(d);
 
 // 路网。先在 tile 空间里走，主方向多走、次方向偶尔拐 ——
 // 这样出来的是"人踩出来的路"，不是尺子画出来的 45° 斜线。
@@ -651,6 +721,13 @@ for (let x = REGION.river.x0 + 2; x < REGION.river.x1 - 2; x++) {
     if (tiles[i] === 2) { tiles[i] = 9; solid[i] = 0; }
   }
 }
+
+
+// —— 第二章 P12-B：三个新区巢穴的空场 ——
+// 必须放在江水、渡桥、两区路网都定稿之后：先挖的话，江带会被改回土路，
+// 桥面也会消失。protectWater 再兜一层底，跳过 tile 13 江水 / tile 9 桥面。
+// 第一章那四个仍在上面按原顺序 carve，前 102 行指纹不受影响。
+for (const d of dens) if (d.y >= CH1_H * TILE) carveDen(d, true);
 
 // —— 青云集：先把村址从野地里"清"出来 ——
 // 顺序很关键：必须在 nearClear / 物件生成之前改地块，否则竹子会照常长在街上。
@@ -748,6 +825,18 @@ for (const c of camps) {
 objects.push({ kind: 'shrine', x: SPAWN.x, y: SPAWN.y - 16 });
 objects.push({ kind: 'lantern', x: ALTAR.x - 26, y: ALTAR.y + 10 });
 objects.push({ kind: 'lantern', x: ALTAR.x + 26, y: ALTAR.y + 10 });
+
+// —— 第二章 P12-B：新区专属风物 ——
+// 全部固定坐标、不抽 rng / rng2：插在两区风物撒点之后，第一章的随机序列
+// 与物件数量一个字节都不动。也不设 solid —— 摆的是景，不该把路堵了。
+for (const [kind, x, y] of [
+  ['gubanner', 368, 1872], ['gubanner', 336, 1888], ['gubanner', 392, 1904],
+  ['zhanggu', 300, 1968], ['zhanggu', 420, 2000], ['zhanggu', 500, 1960],
+  ['zhanggu', 260, 2100], ['zhanggu', 620, 2060], ['zhanggu', 700, 2160],
+  ['lanzhuang', 1568, 1968], ['lanzhuang', 1632, 1968], ['lanzhuang', 1744, 2128],
+  ['lanzhuang', 1840, 2160], ['lanzhuang', 1960, 2184],
+  ['duzhou', 1568, 1920], ['duzhou', 1648, 1904], ['duzhou', 1680, 1936],
+]) objects.push({ kind, x, y });
 
 const groundC = document.createElement('canvas');
 groundC.width = MAPW * TILE; groundC.height = MAPH * TILE;
@@ -976,11 +1065,15 @@ const objTex = {
   bamboo: tex(BAMBOO), peach: tex(PEACH), lantern: tex(LANTERN), shrine: tex(SHRINE), stone: tex(STONE),
   grave: tex(GRAVE), deadtree: tex(DEADTREE), stalag: tex(STALAG), torch: tex(TORCH),
   campfire: tex(CAMPFIRE), tent: tex(TENT), tower: tex(TOWER),
+  gubanner: tex(GUBANNER), zhanggu: tex(ZHANGGU),
+  lanzhuang: tex(LANZHUANG), duzhou: tex(DUZHOU),
 };
 const objSize = {
   bamboo: [16, 20], peach: [16, 14], lantern: [10, 8], shrine: [16, 8], stone: [12, 7],
   grave: [12, 10], deadtree: [16, 18], stalag: [10, 14], torch: [8, 12],
   campfire: [12, 9], tent: [16, 12], tower: [14, 18],
+  gubanner: [16, 18], zhanggu: [14, 10],
+  lanzhuang: [12, 14], duzhou: [20, 12],
 };
 for (const o of objects) {
   const [w, h] = objSize[o.kind];
@@ -2542,6 +2635,10 @@ const UNIQUES = {
   shimu:   { name: '石母胎', kind: 'armor',    tag: '厚土', stat: 'def',      val: 11, note: '防御 +11，受击时 20% 概率再减半' },
   huoya:   { name: '火鸦翎', kind: 'necklace', tag: '灼翼', stat: 'critDmg',  val: 36, note: '暴伤 +36，暴击附带灼烧' },
   wumian:  { name: '无面刃', kind: 'weapon',   tag: '拔刀', stat: 'atk',      val: 24, fam: 'blade', note: '攻击 +24，拔刀斩伤害 +40%' },
+  // —— 第二章 P12-B：三个新区首领各一件首杀唯一 ——
+  gumu:     { name: '蛊母胎', kind: 'armor',    tag: '白毛', stat: 'hp',       val: 34, note: '气血 +34，站在毒圈里缓缓回血' },
+  jianggui: { name: '沉牌链', kind: 'necklace', tag: '拖拽', stat: 'critDmg',  val: 30, note: '暴伤 +30，命中时把敌人往回拽半步' },
+  shoulian: { name: '守链环', kind: 'artifact', tag: '接班', stat: 'skillDmg', val: 18, note: '术法 +18%，首领战开场先手一击' },
 };
 function makeUnique(type, ilvl) {
   const u = UNIQUES[type];
@@ -5092,7 +5189,8 @@ function storyChoose(optId) {
     if (o.lines && o.lines.length) {
       // 选择是"你做了什么"，结局旁白是"后来怎样了"。两段必须分开播，
       // 挤在同一屏里的话，玩家会以为那只是选择的说明文字。
-      storyShow({ id: s.id, page: '终章 · 古洞', lines: o.lines, onEnd: { msg: '第一章 · 终' } });
+      storyShow({ id: s.id, page: s.page || '终章 · 古洞', lines: o.lines,
+                 onEnd: { msg: o.endMsg || '第一章 · 终' } });
     } else {
       storyEl.classList.add('hidden');
       storyCur = null;
@@ -8346,7 +8444,7 @@ window.__game = {
   },
   MAPW, MAPH, CH1_H, SPAWN, camps, dens, WEAPONS, WEAPON_IDS, MONSTERS, NODES, SLOTS,
   get solid() { return solid; }, REGION,
-  get objects() { return objects; },
+  get objects() { return objects; }, objTex, objSize,
   get hazards() { return hazards; }, addHazard, clearHazards, UNIQUES, makeUnique,
   killEnemy, execSkill, runBossSkills, bossSkillsOf, wumianPhase, bossArtColors,
   QUESTS, QUEST_IDS, QUEST_ITEMS, WANDERERS, ALL_TALKERS, NPCS,

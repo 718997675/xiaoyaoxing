@@ -55,7 +55,7 @@
     }
     return true;
   });
-  T('4 个首领巢穴都可达', g.dens.length === 4 && badDen.length === 0,
+  T('7 个首领巢穴都可达', g.dens.length === 7 && badDen.length === 0,
     g.dens.length + ' 个' + (badDen.length ? '，不通：' + badDen.map(d => d.name).join('/') : ''));
 
   // 四区地貌确实刷出来了
@@ -126,6 +126,33 @@
     const wild = g.WANDERERS.filter(w => w.y / 16 >= g.CH1_H);
     T('新区有人说话（不是空地）', wild.length >= 2 && wild.every(w => g.canStand(w.x, w.y)),
       wild.map(w => w.name).join('/'));
+  }
+
+  // ---------- 第二章 P12-B ----------
+  {
+    const newDens = g.dens.filter(d => d.y / 16 >= g.CH1_H);
+    T('3 个新区巢穴都在 CH1_H 以南',
+      newDens.length === 3 && newDens.every(d => g.canStand(d.x, d.y)),
+      newDens.map(d => d.name).join('/'));
+
+    // 巢穴是在江水与路网定稿之后单独挖的，且 carveDen 跳过 tile 13 / 9。
+    // 这两格计数要和 P12-A 收口时一模一样，多一格少一格都说明 carving 啃到江带。
+    let river2 = 0, bridge2 = 0;
+    for (let i = 0; i < W * H; i++) { if (t[i] === 13) river2++; if (t[i] === 9) bridge2++; }
+    T('挖新区巢穴没啃掉江水与桥面', river2 === 371 && bridge2 === 36,
+      '江水 ' + river2 + ' / 桥 ' + bridge2);
+
+    // 四种新区专属风物：贴图、尺寸、固定坐标、mesh 全都要在，
+    // 少登记一个 kind，运行时 objSize[o.kind] 就会 undefined。
+    const KINDS = ['gubanner', 'zhanggu', 'lanzhuang', 'duzhou'];
+    const noDef = KINDS.filter(k => !g.objTex[k] || !g.objSize[k]);
+    T('4 种新区风物都登记了贴图与尺寸', noDef.length === 0,
+      noDef.length ? noDef.join('/') : KINDS.join('/'));
+    const noMesh = g.objects.filter(o => KINDS.indexOf(o.kind) >= 0 && !o.mesh);
+    const placed = KINDS.filter(k => g.objects.some(o => o.kind === k && o.y / 16 >= g.CH1_H));
+    T('4 种新区风物都摆在 CH1_H 以南且建出了 mesh',
+      noMesh.length === 0 && placed.length === 4,
+      placed.length + '/4，缺 mesh ' + noMesh.length + ' 个');
   }
 
   R.ok = R.checks.every(c => c.startsWith('PASS'));

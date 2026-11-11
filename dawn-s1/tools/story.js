@@ -427,16 +427,16 @@
       const ok = g.CLUES[c] && g.CLUES[c].name && g.CLUES[c].text && g.CLUES[c].text.length >= 12;
       return !hasNode || !ok;
     });
-    T('11 条线索都有节点且正文齐全', orphan.length === 0,
+    T('35 条线索都有节点且正文齐全', orphan.length === 0 && g.CLUE_IDS.length === 35,
       g.CLUE_IDS.length + ' 条' + (orphan.length ? '，问题：' + orphan.join('/') : ''));
 
     // 野外 NPC 也要有三层 —— 他们才是玩家跑图时见得最多的人
-    const wild = ['w_hunter', 'w_stone', 'w_boat', 'w_miner'];
+    const wild = ['w_hunter', 'w_stone', 'w_boat', 'w_miner', 'w_gu', 'w_ferry'];
     const noLayers = wild.filter(id => {
       const t = g.NPC_LINES[id];
       return !t || g.NPC_LAYERS.some(L => !t[L.id] || !t[L.id].ask);
     });
-    T('四个野外 NPC 也有三层', noLayers.length === 0, noLayers.length ? noLayers.join('/') : wild.join(','));
+    T('六个野外 NPC（含新区两位）也有三层', noLayers.length === 0, noLayers.length ? noLayers.join('/') : wild.join(','));
   }
 
   // ---------- 17. P9：第三幕 / 终章 ----------
@@ -448,7 +448,8 @@
     }
     T('第三幕节点 ≥ 7', (byAct.act3 || 0) >= 7, (byAct.act3 || 0) + ' 个');
     T('终章节点 ≥ 5', (byAct.final || 0) >= 5, (byAct.final || 0) + ' 个');
-    T('全篇 28 个节点', g.STORY_IDS.length === 28, g.STORY_IDS.length + ' 个');
+    T('全篇 49 个节点（第一章 28 + 第二章 21）', g.STORY_IDS.length === 49,
+      g.STORY_IDS.length + ' 个');
 
     // floor 是 P9 新加的第七种触发器。它必须"没进洞就不成立"——
     // 不然读档之后人在村里，终章那两节会站在村口播。
@@ -563,6 +564,97 @@
     T('存档带回选择', JSON.stringify(g.player.choices || {}) === want,
       want + ' → ' + JSON.stringify(g.player.choices || {}));
     T('读档后不再问一次', !g.storyChoice, 'ok');
+  }
+
+  // ---------- 20. P12-B：第二章三幕 / 不抢播 / 第二次选择 ----------
+  {
+    const ch2 = g.STORY_IDS.filter(id => /^s_c2/.test(id));
+    const acts = ['ch2a', 'ch2b', 'ch2c'];
+    const byAct = {};
+    for (const id of ch2) byAct[S[id].act] = (byAct[S[id].act] || 0) + 1;
+    T('第二章 21 个节点，三幕各 7 个',
+      ch2.length === 21 && acts.every(a => byAct[a] === 7),
+      acts.map(a => a + ':' + (byAct[a] || 0)).join(' / '));
+    T('第一章 28 个节点仍整段排在表头',
+      g.STORY_IDS.length === 49 && g.STORY_IDS.slice(0, 28).every(id => !/^s_c2/.test(id)) &&
+      g.STORY_IDS[27] === 's_fin_choice',
+      g.STORY_IDS.slice(0, 2).join('/') + ' … ' + g.STORY_IDS[27]);
+
+    // 这一条是第二章兼容性的全部：storyScan 按表顺序取第一个满足的节点，
+    // 只要有一个第二章节点漏了 killed_wumian，它就可能在序章把字抢过来播。
+    const loose = ch2.filter(id => (S[id].need || []).indexOf('killed_wumian') < 0);
+    T('第二章节点一律需要 killed_wumian', loose.length === 0,
+      loose.length ? loose.join('/') : ch2.length + '/21');
+    const ctx = {
+      flags: {}, relics: {}, read: {}, fame: 99, phase: 'zi',
+      kills: { gumu: 9, jianggui: 9, shoulian: 9 },
+      bossKills: { gumu: 1, jianggui: 1, shoulian: 1 },
+      triple: true, pos: g.POI.chainEnd, floor: 9,
+    };
+    const leaked = ch2.filter(id => g.storyReady(S[id], ctx));
+    T('没打完第一章时第二章一个都不播', leaked.length === 0,
+      leaked.length ? leaked.join('/') : '0/21');
+    const CH2_LORDS = ['gumu', 'jianggui', 'shoulian'];
+    const badKill = ch2.filter(id => S[id].trigger.type === 'kill' &&
+      CH2_LORDS.indexOf(S[id].trigger.lord) < 0);
+    T('第二章 kill 只认三个新区首领', badKill.length === 0,
+      badKill.join('/') || CH2_LORDS.join('/'));
+
+    const CH2_POI = ['southGate', 'guHut', 'guBanner', 'redSoil', 'gumuDen', 'riverGate',
+      'ferry', 'riverBridge', 'jiangDock', 'jiangguiDen', 'chainEnd', 'chainPost'];
+    const north = CH2_POI.filter(k => !g.POI[k] || g.POI[k].y < g.CH1_H * 16);
+    T('12 处第二章地标都在 CH1_H 以南', north.length === 0,
+      north.length ? north.join('/') : CH2_POI.length + ' 处');
+    const e2 = g.ENV_IDS.filter(id => /^e_c2_/.test(id));
+    T('10 处第二章旧物都站得住且有正文',
+      e2.length === 10 && e2.every(id => g.canStand(g.ENV_TEXTS[id].at.x, g.ENV_TEXTS[id].at.y) &&
+        g.ENV_TEXTS[id].text.length >= 20), e2.length + ' 处');
+    const c2 = g.CLUE_IDS.filter(id => /^c2/.test(id));
+    T('18 条第二章线索都有节点发放',
+      c2.length === 18 && c2.every(c => g.STORY_IDS.some(id => (S[id].onEnd || {}).clue === c)),
+      c2.length + ' 条');
+
+    // 第二次选择：页签与收尾 msg 都必须跟着 storyCur / option 走，
+    // 否则第二章结局会顶着「终章 · 古洞」的页签、收在「第一章 · 终」。
+    const play2 = (pick) => {
+      const read = {};
+      for (const id of g.STORY_IDS) read[id] = 1;
+      delete read.s_c2c_choice;
+      g.player.readLog = read;
+      g.player.flags = { killed_wumian: 1, c2c_shoulian: 1 };
+      g.player.fame = 0;
+      g.player.choices = {};
+      g.storyReset();
+      g.storyPlay('s_c2c_choice');
+      return g.finishStory();
+    };
+    const r = play2('hang');
+    T('第二章播到选择处停下', !!r.choice && g.storyCur && g.storyCur.id === 's_c2c_choice',
+      r.choice || '没停');
+    T('第二章选择屏有两个按钮',
+      document.querySelectorAll('#storyChoice button').length === 2, '2 个');
+    g.storyChoose('hang');
+    T('第二章连点第二下无效', g.storyChoose('cut') === false, '已锁');
+    g.storyPickGo();
+    T('第二章结局页签落在链尽头那一幕',
+      g.storyCur && g.storyCur.page === '第二章三幕 · 链尽头', g.storyCur ? g.storyCur.page : '无');
+    T('第二章结局收在「第二章 · 终」',
+      g.storyCur && g.storyCur.onEnd.msg === '第二章 · 终', g.storyCur ? g.storyCur.onEnd.msg : '无');
+    g.finishStory();
+    T('「挂回去」落 flag 且给侠名',
+      g.player.flags.chose_hang === 1 && g.player.fame > 0, '侠名 ' + g.player.fame);
+    T('第二章选择也进 choices', g.player.choices.s_c2c_choice === 'hang',
+      JSON.stringify(g.player.choices));
+
+    play2('cut');
+    g.storyChoose('cut');
+    g.storyPickGo();
+    const epi = g.storyPlaying() ? g.storyCur.lines.map(l => l.text).join('') : '';
+    g.finishStory();
+    T('「砍断」落 flag 且不落另一条',
+      g.player.flags.chose_cut === 1 && !g.player.flags.chose_hang, 'ok');
+    T('两条第二章结局旁白不一样',
+      /链子往两头缩/.test(epi) && !/从一重新开始数/.test(epi), epi.slice(0, 18) + '…');
   }
 
   R.ok = R.checks.every(c => c.startsWith('PASS'));

@@ -8,7 +8,7 @@
   const alive = () => g.enemies.filter(e => !e.dead);
   const byType = t => alive().find(e => e.type === t);
 
-  const NEW = ['qingshe', 'kuilei', 'shimu', 'huoya', 'wumian'];
+  const NEW = ['qingshe', 'kuilei', 'shimu', 'huoya', 'wumian', 'gumu', 'jianggui', 'shoulian'];
 
   // ---------- 1. 定义完整性 ----------
   {
@@ -23,7 +23,7 @@
       const fxs = new Set((m.skills || []).map(s => s.fx));
       if (fxs.size < 2) bad.push(t + ':招式效果单一');
     }
-    T('5 个新首领定义齐全且各带 ≥2 种招式', bad.length === 0, bad.join(' / ') || 'OK');
+    T('8 个新首领定义齐全且各带 ≥2 种招式', bad.length === 0, bad.join(' / ') || 'OK');
     const fx = new Set();
     for (const t of NEW) for (const s of g.MONSTERS[t].skills || []) fx.add(s.fx);
     T('招式引擎覆盖 4 种以上效果', fx.size >= 4, [...fx].join('/'));
@@ -34,7 +34,7 @@
   g.setLevel(12);
   step(2);
   {
-    T('4 个野外巢穴', g.dens.length === 4, g.dens.map(d => d.name).join('/'));
+    T('7 个野外巢穴', g.dens.length === 7, g.dens.map(d => d.name).join('/'));
     const missing = g.dens.filter(d => !alive().some(e => e.type === d.type));
     T('巢穴首领都刷出来了', missing.length === 0, missing.map(d => d.name).join('/') || 'OK');
     const stuck = g.dens.filter(d => {
@@ -49,7 +49,7 @@
   // ---------- 3. 首领血条 / 标记 ----------
   {
     const bs = alive().filter(e => e.boss);
-    T('e.boss 标记覆盖所有首领', bs.length >= 6, bs.length + ' 只（含树妖/寨主/4 巢穴）');
+    T('e.boss 标记覆盖所有首领', bs.length >= 9, bs.length + ' 只（含树妖/寨主/7 巢穴）');
     const den = byType('qingshe');
     if (den) {
       g.setClock(0.35, 3);
@@ -228,6 +228,32 @@
     const n = g.hazards.length;
     g.startGame(false); step(2);
     T('重开一局会清空地面危险区', n > 0 && g.hazards.length === 0, n + ' → ' + g.hazards.length);
+  }
+
+  // ---------- 10. P12-B：三个新区巢穴首领 ----------
+  {
+    const CH2 = ['gumu', 'jianggui', 'shoulian'];
+    const OKFX = ['slam', 'zone', 'rain', 'summon', 'fan'];
+    const bad = [];
+    for (const k of CH2) {
+      const m = g.MONSTERS[k];
+      if (!m || m.behavior !== 'boss') { bad.push(k + ':不是首领'); continue; }
+      if (!g.UNIQUES[k]) bad.push(k + ':没唯一装备');
+      for (const sk of m.skills || []) if (OKFX.indexOf(sk.fx) < 0) bad.push(k + ':未知 fx ' + sk.fx);
+    }
+    T('三个新区首领复用既有招式引擎', bad.length === 0, bad.join('/') || OKFX.join('/'));
+    const uniqBad = CH2.filter(k => {
+      const it = g.makeUnique(k, 10);
+      return !it || !it.unique || !it.affixes.some(a => a.uniq) || it.name !== g.UNIQUES[k].name;
+    });
+    T('三件新区唯一装备都能产出', uniqBad.length === 0,
+      uniqBad.join('/') || CH2.map(k => g.UNIQUES[k].name).join('/'));
+    const south = g.dens.filter(d => d.y / 16 >= g.CH1_H);
+    T('3 个新区巢穴都在 CH1_H 以南',
+      south.length === 3 && south.every(d => CH2.indexOf(d.type) >= 0),
+      south.map(d => d.name).join('/'));
+    const hp = CH2.map(k => g.MONSTERS[k].hp);
+    T('章尾守链人是三只里最硬的', hp[0] < hp[1] && hp[1] < hp[2], hp.join(' < '));
   }
 
   R.ok = R.checks.every(c => c.startsWith('PASS'));
