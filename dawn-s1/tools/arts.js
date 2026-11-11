@@ -103,37 +103,57 @@
       badSlot.length === 0, badSlot.join(' ') || 'OK');
   }
 
-  // ---------- 1.1 招式签名：形状 / 动作 / 色彩，同兵器内不许重复 ----------
-  // ARTS-DESIGN.md §1 的四条硬规矩里，能自动断言的三条都在这里。
-  // 这一节是"64 招千篇一律"那个问题的验收线：以后加招、改招，
-  // 只要和同兵器的另一招撞了签名，这里就直接红，不用等玩家来说"怎么都一样"。
-  // 第四条（声音）目前没有可查的表，靠 ARTS-DESIGN.md 逐条对。
+  // ---------- 1.1 招式签名：形状 / 动作 / 色彩 / 声音，四件都不许重复 ----------
+  // ARTS-DESIGN.md §1 的四条硬规矩，P11 起四条全部能自动断言。
+  // 查得比 P10 更严：不只查 (shape, pose, color) 拼出来的组合，
+  // 五个字段各自也要在兵器内唯一 —— 否则八招里六招都是 hit 命中音，
+  // 组合虽然不撞，听感上又回到"用哪个都一样"。
+  // 声音签名是「起手音 + 命中音」这一对，两个字段分开查、对子也单独查。
   {
-    const dup = [], badShape = [], badPose = [], noColor = [];
+    const dup = [], badShape = [], badPose = [], noColor = [], badSnd = [];
+    const dupSingle = [], dupSound = [], dupFams = new Set();
     for (const f of FAMS) {
-      const seen = {};
+      const seen = {}, seenSound = {}, cnt = {};
+      const wn = g.WEAPONS[f].name;
+      const ck = (k, v) => {
+        cnt[k] = cnt[k] || {};
+        cnt[k][v] = (cnt[k][v] || 0) + 1;
+        if (cnt[k][v] === 2) dupSingle.push(wn + '.' + k + '=' + v);
+      };
       for (const a of g.artsOfWeapon(f)) {
         const sh = g.artShape(a), po = g.artPose(a);
         const col = g.artColor(a, g.WEAPONS[f].trail);
         if (g.ART_SHAPES.indexOf(sh) < 0) badShape.push(a.name + ':' + sh);
         if (g.ART_POSES.indexOf(po) < 0) badPose.push(a.name + ':' + po);
         if (!Array.isArray(col) || !col[0]) noColor.push(a.name);
-        const sig = sh + '|' + po + '|' + (Array.isArray(col) ? col[0] : col);
-        if (seen[sig]) dup.push(g.WEAPONS[f].name + ' ' + seen[sig] + '≈' + a.name + '(' + sig + ')');
+        if (!a.snd || !a.hitSnd || g.ART_SNDS.indexOf(a.snd) < 0 || g.ART_SNDS.indexOf(a.hitSnd) < 0)
+          badSnd.push(a.name + ':' + a.snd + '/' + a.hitSnd);
+        const ckCol = Array.isArray(col) ? col.join('|') : String(col);
+        ck('shape', sh); ck('pose', po); ck('color', ckCol);
+        ck('snd', a.snd); ck('hitSnd', a.hitSnd);
+        const sig = sh + '|' + po + '|' + ckCol;
+        if (seen[sig]) { dup.push(wn + ' ' + seen[sig] + '≈' + a.name + '(' + sig + ')'); dupFams.add(wn); }
         else seen[sig] = a.name;
+        const sound = a.snd + '/' + a.hitSnd;
+        if (seenSound[sound]) { dupSound.push(wn + ' ' + seenSound[sound] + '≈' + a.name + '(' + sound + ')'); dupFams.add(wn); }
+        else seenSound[sound] = a.name;
       }
     }
     T('形状/动作都登记在 ART_SHAPES / ART_POSES 里',
       badShape.length === 0 && badPose.length === 0,
       badShape.concat(badPose).join(' ') || 'OK');
     T('每招都拿得到刀光色', noColor.length === 0, noColor.join('/') || 'OK');
-    // 锤是 P10 的试点：八招八种形状、八种动作、八种颜色，一格都不许重
-    const dupHammer = dup.filter(s => s.indexOf('锤') === 0);
-    T('锤的八招签名互不相同', dupHammer.length === 0, dupHammer.join(' / ') || 'OK');
-    // 其余七件还没重做，这是"欠账数"。每做完一件就把 7 减一，最后必须到 0。
-    const dupFams = [...new Set(dup.map(s => s.split(' ')[0]))];
-    T('签名撞车的兵器只剩 7 件（每重做一件就把这个数减一）',
-      dupFams.length <= 7, dupFams.length + ' 件：' + (dupFams.join('/') || '无'));
+    T('起手音/命中音都登记在 ART_SNDS 里', badSnd.length === 0, badSnd.join(' ') || 'OK');
+    // 锤是 P10 的试点；P11 把它的声音也一起重排了，四条签名现在都是八招八样
+    const dupHammer = dup.concat(dupSound).filter(s => s.indexOf('锤') === 0);
+    T('锤的八招四签名互不相同', dupHammer.length === 0, dupHammer.join(' / ') || 'OK');
+    T('八兵器每个签名字段都八招八样（形状/动作/色彩/起手音/命中音）',
+      dupSingle.length === 0, dupSingle.join(' ') || 'OK · 8 件 × 5 字段');
+    T('八兵器的声音对（起手音/命中音）互不重复',
+      dupSound.length === 0, dupSound.join(' / ') || 'OK');
+    // P10 留下的欠账数：7 件 → P11 全部重做完，必须为 0。
+    T('签名撞车的兵器 0 件（P11 七件全部重做完毕）',
+      dupFams.size === 0, dupFams.size + ' 件：' + ([...dupFams].join('/') || '无'));
   }
 
   // ---------- 1.2 八张连拍：武器角度必须各不相同 ----------
@@ -142,24 +162,33 @@
   // 取"施法后固定 0.15 息"而不是进度百分比：起手长的招那时才刚抬起来，
   // 按百分比量的话「震地」和「开天辟地」会算出几乎同一个角度。
   {
-    const rows = [];
-    for (const a of g.artsOfWeapon('hammer')) {
-      const sw = a.pose
-        ? { mode: a.pose.mode, a0: a.pose.a0 || 0, a1: a.pose.a1 || 0, dur: a.pose.dur || 0.22, ease: a.pose.ease }
-        : { mode: a.fx === 'proj' ? 'thrust' : 'swing', a0: 0, a1: 0, dur: 0.22 };
-      const p = Math.min(1, 0.15 / sw.dur);
-      rows.push({ n: a.name, ang: g.swingAng(sw, 0, p).ang });
-    }
-    let minGap = 9, pair = '';
-    for (let i = 0; i < rows.length; i++) {
-      for (let j = i + 1; j < rows.length; j++) {
-        const gap = Math.abs(rows[i].ang - rows[j].ang);
-        if (gap < minGap) { minGap = gap; pair = rows[i].n + '↔' + rows[j].n; }
+    const worst = [];
+    for (const f of FAMS) {
+      const rows = [];
+      for (const a of g.artsOfWeapon(f)) {
+        const sw = a.pose
+          ? { mode: a.pose.mode, a0: a.pose.a0 || 0, a1: a.pose.a1 || 0, dur: a.pose.dur || 0.22, ease: a.pose.ease }
+          : { mode: a.fx === 'proj' ? 'thrust' : 'swing', a0: 0, a1: 0, dur: 0.22 };
+        const p = Math.min(1, 0.15 / sw.dur);
+        rows.push({ n: a.name, ang: g.swingAng(sw, 0, p).ang });
       }
+      let minGap = 9, pair = '';
+      for (let i = 0; i < rows.length; i++) {
+        for (let j = i + 1; j < rows.length; j++) {
+          const gap = Math.abs(rows[i].ang - rows[j].ang);
+          if (gap < minGap) { minGap = gap; pair = rows[i].n + '↔' + rows[j].n; }
+        }
+      }
+      worst.push({ f, name: g.WEAPONS[f].name, minGap, pair });
+      T(g.WEAPONS[f].name + ' 的八招在 0.15 息时武器角度各不相同（最近一对 ≥ 7°）',
+        minGap >= 0.12,
+        '最近一对 ' + pair + ' 差 ' + (minGap * 57.3).toFixed(1) + '°');
     }
-    T('锤的八招在 0.15 息时武器角度各不相同（最近一对也差 ≥ 7°）', minGap >= 0.12,
-      rows.map(r => r.n + (r.ang * 57.3).toFixed(0) + '°').join(' ')
-      + ' · 最近一对 ' + pair + ' 差 ' + (minGap * 57.3).toFixed(1) + '°');
+    const bad = worst.filter(w => w.minGap < 0.12);
+    T('八件兵器的连拍全部过关', bad.length === 0,
+      bad.length ? bad.map(w => w.name + ' ' + (w.minGap * 57.3).toFixed(1) + '°').join(' ')
+        : '8/8 · 最紧 ' + worst.reduce((a, b) => a.minGap < b.minGap ? a : b).name
+          + ' ' + (Math.min(...worst.map(w => w.minGap)) * 57.3).toFixed(1) + '°');
   }
 
   // ---------- 2. 专精曲线 ----------
@@ -356,7 +385,7 @@
 
   // ---------- 5. 64 招全部可释放且真的有效果 ----------
   {
-    const bad = [], noHit = [], noBuff = [];
+    const bad = [], noHit = [], noBuff = [], noFx = [];
     for (const fam of FAMS) {
       arena(14);
       g.equipFam(fam);
@@ -375,9 +404,12 @@
         const before0 = ds.reduce((s, e) => s + e.hp, 0);
         g.player.qi = 999;
         g.setLoadout([a.id]);
+        g.slashGhosts.length = 0;
         let ok = false;
         try { ok = g.castArt(0) === true; } catch (err) { bad.push(a.name + ':' + err.message); }
         if (!ok) bad.push(a.name + ':放不出');
+        // P11：形状签名必须真的落到 2D 覆盖层上，不能只写在 arts.js 里
+        if (g.slashGhosts.length === 0) noFx.push(a.name);
         // 增益类不造成伤害，验的是"挂上了"
         if (a.fx === 'buff') {
           const has = g.artBuffs.some(b => b.id === a.id);
@@ -398,6 +430,8 @@
       }
     }
     T('64 招全部可释放且不报错', bad.length === 0, bad.join(' / ') || 'OK');
+    T('64 招都留下了自己的刀光（19 种形状真的画出了东西）',
+      noFx.length === 0, noFx.join('/') || 'OK');
     T('所有伤害招都真的打到了木桩', noHit.length === 0, noHit.join('/') || 'OK');
     T('所有增益招都真的挂上了增益', noBuff.length === 0, noBuff.join('/') || 'OK');
   }
@@ -537,6 +571,53 @@
     T('开天辟地：正前方 90px 的人挨了', front.hp < front.maxHp, (front.maxHp - front.hp).toFixed(0));
     T('开天辟地：身后的人没被圈到', behind.hp === behind.maxHp, (behind.maxHp - behind.hp).toFixed(0));
     T('开天辟地：正侧面 120px 的人没被圈到', side.hp === side.maxHp, (side.maxHp - side.hp).toFixed(0));
+  }
+
+  // ---------- 6.2 P11：七件兵器换用新原语后的形状专项 ----------
+  // P10 造的四个原语本来就是给后面七件用的。这两招是第一批搬过去的：
+  // 枪的「贯甲刺」以前是身前一记 melee，「枪阵」才叫贯穿；现在名字与判定对齐了。
+  // 棍的「跃棍」以前是普通 melee，跃起来却没有任何落点概念；现在有波前 + 中心加成。
+  {
+    // 贯甲刺：正前方一条长条，沿路全中，身后与侧面都不该被圈到
+    arena(14);
+    g.equipFam('spear');
+    g.setLoadout(['spear_1']);
+    g.setDir('down');
+    g.player.qi = 999;
+    const s1 = g.spawnDummy(g.player.x, g.player.y + 50, 99999);
+    const s2 = g.spawnDummy(g.player.x, g.player.y + 105, 99999);
+    const s3 = g.spawnDummy(g.player.x, g.player.y - 50, 99999);
+    const s4 = g.spawnDummy(g.player.x + 60, g.player.y, 99999);
+    g.castArt(0);
+    T('贯甲刺：近处沿路的目标挨了', s1.hp < s1.maxHp, (s1.maxHp - s1.hp).toFixed(0));
+    T('贯甲刺：长条尽头 105px 的目标也挨了（真贯穿）', s2.hp < s2.maxHp, (s2.maxHp - s2.hp).toFixed(0));
+    T('贯甲刺：身后的没被圈到', s3.hp === s3.maxHp, (s3.maxHp - s3.hp).toFixed(0));
+    T('贯甲刺：侧面 60px 的没被圈到', s4.hp === s4.maxHp, (s4.maxHp - s4.hp).toFixed(0));
+    T('贯甲刺用的是 cleave 原语', g.artById('spear_1').fx === 'cleave', g.artById('spear_1').fx);
+
+    // 跃棍：波前有速度，且落点正中更重
+    const waveCast = (d) => {
+      const rnd = Math.random;
+      Math.random = () => 0.99;   // 连 equipFam 生成的兵器词条也一起钉死
+      try {
+        arena(14);
+        g.resetCombat();          // 连击数不清零，两次施法的伤害基准就不同
+        g.setClock(0.5, 1);       // 时辰会影响伤害
+        g.equipFam('staff');
+        g.setLoadout(['staff_4']);
+        g.player.qi = 999;
+        const e = g.spawnDummy(g.player.x + d, g.player.y, 99999);
+        g.castArt(0);
+        step(60);
+        return e.maxHp - e.hp;
+      } finally { Math.random = rnd; }
+    };
+    const inner = waveCast(10), outer = waveCast(48);
+    T('跃棍：波扩出去确实打到了远处', outer > 0, outer.toFixed(0));
+    T('跃棍：落点正中比外圈重（centerBonus 真的生效）',
+      inner > outer * 1.40 && inner < outer * 1.60,
+      '中心 ' + inner.toFixed(0) + ' / 外圈 ' + outer.toFixed(0) + ' = ' + (inner / Math.max(1, outer)).toFixed(2) + 'x');
+    T('跃棍用的是 shockwave 原语', g.artById('staff_4').fx === 'shockwave', g.artById('staff_4').fx);
   }
 
   // ---------- 7. 冷却与真气 ----------

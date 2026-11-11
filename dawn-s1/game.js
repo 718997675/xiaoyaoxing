@@ -24,7 +24,7 @@ import {
 import {
   ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_SLOT_LABEL, ART_FX, PROF_MAX, PROF_WEIGHT,
   artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower,
-  artShape, artPose, artColor, ART_SHAPES, ART_POSES,
+  artShape, artPose, artColor, ART_SHAPES, ART_POSES, ART_SNDS,
 } from './arts.js';
 import {
   MAIN, SUB, MANTRAS, MAIN_IDS, SUB_IDS, MANTRA_IDS, MANTRA_MAX_LV, SUB_SLOTS,
@@ -2746,7 +2746,14 @@ function tickEnemyStatus(e, dt) {
   dotTick(e, dt);
 }
 // 招式命中之后的附加效果（状态 / 击飞 / 吸血）
+let lastArtHitSnd = 0;
 function afterArtHit(e, a, dealt, ang) {
+  // P11：第四条签名是声音。命中音逐招不同，但「乱舞」一息能命中十几次，
+  // 用真实时间节流，免得叠成一串爆音。
+  if (a.hitSnd) {
+    const now = Date.now();
+    if (now - lastArtHitSnd > 200) { AUDIO.play(a.hitSnd); lastArtHitSnd = now; }
+  }
   if (a.status) applyStatus(e, a.status, dealt);
   if (a.launch) {
     e.launchDur = 0.55; e.launchT = 0.55;
@@ -2780,10 +2787,12 @@ function orbTexture() {
 //   line  { ang, len, w } 一道有方向的刃光
 //   grow  [r0, r1] 环从 r0 长到 r1（冲击波）
 //   delay 秒数：先等这么久再开始淡出（依次裂开用）
-function artSwingFx(a, base, reach, arc) {
+function artSwingFx(a, base, reach, arc, ox, oy) {
   const W = WEAPONS[a.fam];
   const col = artColor(a, W.trail);
-  const x = player.x, y = player.y - 8;
+  // 位移招把起点传进来：刀光要留在走过的路上，不是落点前方
+  const x = ox === undefined ? player.x : ox;
+  const y = oy === undefined ? player.y - 8 : oy;
   const shape = artShape(a);
   const push = (g) => { slashGhosts.push(Object.assign({ x, y, colors: col }, g)); };
 
@@ -2881,6 +2890,68 @@ function artSwingFx(a, base, reach, arc) {
     // 插地：脚下一小圈尘
     push({ ring: true, R: 16, t: 0.30, max: 0.30 });
 
+  } else if (shape === 'fan') {
+    // 扇面齐射：n 条放射短线，中间最长、两侧渐短
+    const n = Math.min(a.count || 5, 12);
+    for (let i = 0; i < n; i++) {
+      const ang = base + (n === 1 ? 0 : (i / (n - 1) - 0.5) * (a.spread || 0.9));
+      const k = 1 - Math.abs(i / Math.max(1, n - 1) - 0.5) * 0.9;
+      push({ line: { ang, len: reach * 0.85 * k, w: 1.1 }, t: 0.26, max: 0.26 });
+    }
+
+  } else if (shape === 'cross') {
+    // 两道交叉刃光 + 交点一个爆点（十字斩 / 血战八方 / 淬毒）
+    push({ line: { ang: base - 0.62, len: reach, w: 1.7 }, t: 0.28, max: 0.28 });
+    push({ line: { ang: base + 0.62, len: reach, w: 1.7 }, t: 0.28, max: 0.28 });
+    push({ dot: 5, t: 0.24, max: 0.24 });
+
+  } else if (shape === 'rain') {
+    // 天降：若干道自上而下的短刃，按顺序点亮（剑雨 / 火雨 / 天雷引）
+    const n = Math.min(a.count || (a.zone && a.zone.count) || 8, 10);
+    for (let i = 0; i < n; i++) {
+      const ang = i / n * Math.PI * 2;
+      const dd = reach * (0.30 + (i % 3) * 0.26);
+      slashGhosts.push({
+        x: x + Math.cos(ang) * dd, y: y + Math.sin(ang) * dd - 16,
+        line: { ang: Math.PI / 2, len: 18, w: 1.3 }, colors: col,
+        t: 0.30, max: 0.30, delay: i * 0.035,
+      });
+    }
+
+  } else if (shape === 'sigil') {
+    // 法阵：两圈同心 + 六道放射。布场 / 增益类招式的「看得见的状态」
+    push({ ring: true, R: Math.max(18, reach * 0.62), t: 0.42, max: 0.42 });
+    push({ ring: true, R: Math.max(10, reach * 0.34), t: 0.36, max: 0.36 });
+    for (let i = 0; i < 6; i++) {
+      push({ line: { ang: base + i / 6 * Math.PI * 2, len: reach * 0.5, w: 1.0 }, t: 0.34, max: 0.34 });
+    }
+
+  } else if (shape === 'trail') {
+    // 递进残影：多段 / 多发的招式，一段比一段远、一段比一段淡
+    const n = Math.min(a.hits || a.times || a.count || 4, 6);
+    for (let i = 0; i < n; i++) {
+      const k = (i + 1) / n;
+      push({
+        x: x + Math.cos(base) * reach * 0.6 * k, y: y + Math.sin(base) * reach * 0.6 * k,
+        line: { ang: base + (i % 2 ? 0.34 : -0.34), len: reach * 0.34, w: 1.2 },
+        t: 0.28 - k * 0.08, max: 0.28 - k * 0.08,
+      });
+    }
+
+  } else if (shape === 'spiral') {
+    // 旋身：一圈 + 一道扫过大半圆的弧 + 四根辐条（旋风斩 / 舞棍 / 乱舞）
+    push({ ring: true, R: reach * 0.72, t: 0.34, max: 0.34 });
+    push({ a0: base - 1.2, a1: base + 2.6, R: reach * 0.92, t: 0.30, max: 0.30 });
+    for (let i = 0; i < 4; i++) {
+      push({ line: { ang: base + i * Math.PI / 2, len: reach * 0.58, w: 1.1 }, t: 0.24, max: 0.24 });
+    }
+
+  } else if (shape === 'hook') {
+    // 回勾：一记直出 + 末端折回来的勾（回马枪 / 断筋 / 缠棍 / 割喉）
+    push({ line: { ang: base, len: reach, w: 1.5 }, t: 0.30, max: 0.30 });
+    push({ line: { ang: base + 1.95, len: reach * 0.42, w: 1.5 }, t: 0.28, max: 0.28 });
+    push({ dot: 4, t: 0.24, max: 0.24 });
+
   } else if (shape === 'ring') {
     push({ ring: true, R: reach * 0.9, t: 0.34, max: 0.34 });
     for (let i = 0; i < 14; i++) {
@@ -2939,11 +3010,12 @@ function execArt(a) {
   player.swing = { fam, base: aim, cast: true, sw: psw, t: psw.dur, dur: psw.dur };
   // 收招后的保持（地裂：落地后前倾 0.4 息不动）—— 收招空档也是重量的一部分
   player.holdT = (ps && ps.mode !== 'plant' && ps.hold) ? ps.hold : 0;
-  AUDIO.play(a.fx === 'bolt' ? 'thunder' : a.fx === 'proj' ? 'qi' :
+  // P11：起手音改由招式自带（snd）；没写的退回 P10 的按原语分派
+  AUDIO.play(a.snd || (a.fx === 'bolt' ? 'thunder' : a.fx === 'proj' ? 'qi' :
     a.fx === 'buff' ? 'levelup' :
     a.fx === 'dash' || a.fx === 'pull' || a.fx === 'charge' ? 'dash' :
     a.fx === 'boomerang' ? 'boomerang' :
-    a.fx === 'cleave' ? 'windup' : 'slash', fam);
+    a.fx === 'cleave' ? 'windup' : 'slash'), fam);
 
   if (a.fx === 'melee') {
     const reach = (a.reach || 40) * (1 + artBuff('reachPct') / 100);
@@ -2993,6 +3065,7 @@ function execArt(a) {
     if (a.centerBonus) { shakeX += 6; shakeY += 6; hitstop = Math.max(hitstop, 0.09); }
 
   } else if (a.fx === 'proj') {
+    if (a.shape) artSwingFx(a, aim, a.reach || 44, a.arc || 1.6);
     const n = a.count || 1;
     const life = (a.life || 0.8) * (1 + artBuff('reachPct') / 100);
     for (let i = 0; i < n; i++) {
@@ -3111,12 +3184,14 @@ function execArt(a) {
     AUDIO.play('quake');
 
   } else if (a.fx === 'spin') {
+    if (a.shape) artSwingFx(a, aim, a.radius || 46, 6.28);
     player.artSpin = {
       a, t: a.dur, tick: 0,
       radius: (a.radius || 46) * (1 + artBuff('reachPct') / 100),
     };
 
   } else if (a.fx === 'orbit') {
+    if (a.shape) artSwingFx(a, aim, a.radius || 34, 6.28);
     const n = a.count || 12;
     player.orbs = [];
     for (let i = 0; i < n; i++) {
@@ -3132,9 +3207,11 @@ function execArt(a) {
     player.orbAng = 0;
 
   } else if (a.fx === 'blink') {
+    if (a.shape) artSwingFx(a, aim, a.dist || 52, 1.6);
     player.blinkQ = { a, n: a.times || 3, t: 0 };
 
   } else if (a.fx === 'bolt') {
+    if (a.shape) artSwingFx(a, aim, a.range || 180, 1.6);
     const n = a.count || 5;
     const pool = enemies.filter(e => !e.dead &&
       Math.hypot(e.x - player.x, e.y - player.y) < (a.range || 200));
@@ -3218,7 +3295,9 @@ function execArt(a) {
       const dealt = hitEnemy(e, { dmg: r.dmg, crit: r.crit, pierceDef: a.pierceDef || 0 }, da, a.kb || 6);
       afterArtHit(e, a, dealt, da);
     }
-    slashGhosts.push({
+    // P11：位移招把起点交给 artSwingFx，刀光留在走过的路上
+    if (a.shape) artSwingFx(a, ang, dist, 1.6, (ox + tx) / 2, (oy + ty) / 2 - 8);
+    else slashGhosts.push({
       x: (ox + tx) / 2, y: (oy + ty) / 2 - 8, thrust: ang,
       len: dist * 0.95, colors: W.trail, t: 0.3, max: 0.3,
     });
@@ -3296,7 +3375,8 @@ function execArt(a) {
       const d = Math.hypot(e.x - player.x, e.y - player.y);
       if (d < bd) { bd = d; best = e; }
     }
-    slashGhosts.push({
+    if (a.shape) artSwingFx(a, aim, a.radius || 80, 6.28);
+    else slashGhosts.push({
       x: player.x, y: player.y - 8, ring: true, R: (a.radius || 80) * 0.9,
       colors: W.trail, t: 0.32, max: 0.32,
     });
@@ -3413,7 +3493,8 @@ function updateWaves(dt) {
       const d = Math.hypot(e.x - w.x, (e.y - e.h * 0.5) - w.y);
       if (d > w.r + e.h * 0.3) continue;
       w.hitSet.add(e);
-      const r = rollDamage(w.art.mul, { skill: true });
+      const cb = (w.art.centerBonus && d < (w.art.centerR || 24)) ? w.art.centerBonus : 1;
+      const r = rollDamage(w.art.mul * cb, { skill: true });
       const da = Math.atan2((e.y - e.h * 0.5) - w.y, e.x - w.x);
       const dealt = hitEnemy(e, {
         dmg: r.dmg, crit: r.crit, pierceDef: w.art.pierceDef || 0,
@@ -6678,6 +6759,16 @@ function swingAng(sw, base, p) {
   if (sw.mode === 'plant') return { ang: sweep.ang, off: -e * 3, cast: false };
   // 冲锋：锤端在正前方不动，动的是人
   if (sw.mode === 'charge') return { ang: base + sw.a0, off: e * 10, cast: false };
+  // P11：七件兵器的八种新动作。角度仍走 sweep，差的是武器位移与身体姿态 ——
+  // 起手慢的招在 0.15 息时刚抬起来，跟快招自然错开，连拍八张不会重样。
+  if (sw.mode === 'lunge') return { ang: sweep.ang, off: e * 12, cast: false };
+  if (sw.mode === 'flick') return { ang: sweep.ang, off: e * 2.5, cast: false };
+  if (sw.mode === 'sweepLow') return { ang: sweep.ang, off: -2 + e * 3, cast: false };
+  if (sw.mode === 'reverse') return { ang: sweep.ang + Math.PI * 0.55, off: -e * 2, cast: false };
+  if (sw.mode === 'guard') return { ang: sweep.ang, off: -e * 4, cast: true };
+  if (sw.mode === 'channel') return { ang: sweep.ang, off: -e * 6, cast: true };
+  if (sw.mode === 'leap') return { ang: sweep.ang, off: -e * 9, cast: false };
+  if (sw.mode === 'spin') return { ang: sweep.ang + e * Math.PI, off: 0, cast: false };
   return { ang: sweep.ang, off: 0, cast: false };
 }
 
@@ -7830,7 +7921,7 @@ window.__game = {
   // 招式 / 专精
   ARTS, ART_IDS, ART_SLOTS, ART_KEYS, ART_FX, ART_SLOT_LABEL, PROF_MAX,
   artById, artsOfWeapon, artUnlocked, unlockedArts, profLevel, profLeft, profFrac, artBrief, artPower,
-  artShape, artPose, artColor, ART_SHAPES, ART_POSES, swingAng,
+  artShape, artPose, artColor, ART_SHAPES, ART_POSES, ART_SNDS, swingAng,
   castArt, execArt, updateArts, clearArts, autoLoadout, addProf, applyStatus, afterArtHit,
   renderArts, showArtPage, artMaxOf, artCdOf,
   get artCds() { return artCds; },
