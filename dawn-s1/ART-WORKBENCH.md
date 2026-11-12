@@ -15,14 +15,25 @@
 | 线上 | `https://718997675.github.io/xiaoyaoxing/art-workbench.html` |
 | 游戏内 | 行囊 → 招式页 → 顶部「打开招式工作台」 |
 
-工作台是独立单文件 HTML，80 招基线（十类兵器各 8 招）/ 19 种刀光形状 / 20 种身体动作 / 17 个音效名 /
-24 色锁定板（页面里 20 色）全部内联，不 import 任何 ESM，所以双击就能开。
+工作台是独立单文件 HTML，80 招基线（十类兵器各 8 招）/ 80 个刀光形状名 /
+80 个身体动作名 / 80 个音效名 / 24 色锁定板（页面里 20 色），
+以及 `shapeSpecs`（61 条）/ `poseSpecs`（60 条）两张规格表全部内联，
+不 import 任何 ESM，所以双击就能开。
 
-> **P12-D 起，基线多一个「几何变体 shv」**：19 种刀光形状是共享的渲染原型，
-> 每招靠 `shv`（1~9）拿到自己的刀光几何 —— 半径 / 长度 / 线宽 / 扫角按级差拉开。
-> 属性面板里可以直接改，预览画布用的尺子与游戏里完全一致。改完导出覆盖表时
-> `shv` 会一起带走。**全表 80 招的 `shape@shv` / 动作全参数 / 色彩对 / 声音对
-> 各自 80 个不同值**，生成器会在内联基线时当场卡死。
+> **P12-D 起，基线多一个「几何变体 shv」**：刀光几何靠 `shv`（1~9）拉开
+> —— 半径 / 长度 / 线宽 / 扫角按级差缩放。属性面板里可以直接改，预览画布用的尺子
+> 与游戏里完全一致，导出覆盖表时 `shv` 会一起带走。
+>
+> **P12-E 起，四个下拉框各有 80 个互不相同的值**：`shape` / `pose.mode` /
+> `snd` / `hitSnd` 字段本身全表零重复。新名字不是新实现 —— 61 个新刀光共用
+> 16 类画法原子（`shapeSpecs` 给参数）、60 个新动作共用 16 类运动原子
+> （`poseSpecs` 给参数）、80 个音效名是 16 个音色原型 × 5 档。
+> 工作台的 `drawSpec()` 与 `weaponAng()` 读的就是这两张表，`ease()` 也与
+> `game.js` 同一套曲线，所以预览里看到的和游戏里放出来的是一回事，不是第二套实现。
+>
+> 生成器内联基线时**两种口径都当场卡死**：四条表现实例签名
+> （`shape@shv` / 动作全参数 / 色彩对 / 声音对）各 80/80，
+> 以及四个字段本身各 80/80。改了 `arts.js` 忘了重跑，发不了版。
 
 ---
 
@@ -74,9 +85,17 @@
 
 ### 内置库（不用导任何东西）
 
-属性面板里直接换：刀光形状（19 种）、身体动作（20 式）、起手音 / 命中音（17 个名字）、
-主色 / 副色（点色板或取色器）、以及 `mul` / `cd` / `cost` / `reach` 四个数值。
-这些走的是游戏里本来就有的程序化画法，改完立刻能在预览里看到。
+属性面板里直接换：刀光形状（80 个名字）、身体动作（80 式）、
+起手音 / 命中音（各 80 个名字）、几何变体 `shv`、主色 / 副色（点色板或取色器）、
+以及 `mul` / `cd` / `cost` / `reach` 四个数值。
+这些走的是游戏里本来就有的程序化画法：19 个老形状直接画，61 个新形状经
+`drawSpec()` 用 16 类原子 + `shapeSpecs` 参数画；动作同理走 `poseSpecs`。
+改完立刻能在预览里看到。
+
+> **换名字时的两条约束**：① 覆盖表只能覆盖表现层字段，四个下拉框的值必须落在
+> `wbBase` 的三张池里，否则游戏侧会掉进兜底分支；② 基线 80 招的四个字段已经
+> 各自用满 80 个值，若把两招改成同一个名字，生成器与 `tools/arts.js` §1.5
+> 的字面零重复断言会立刻报错 —— 要换就先扩池，别从已有招里借。
 
 ### PNG 序列帧
 
@@ -147,7 +166,7 @@
 - **按招式 id 存**，只写改过的字段。没有的字段继续用 `arts.js` 的基线值。
 - **白名单硬规矩**（`artoverrides.js` 的 `OVERRIDE_SAFE`）：只能覆盖表现层与数值层
   —— `name / desc / cd / cost / mul / reach / arc / radius / len / width / kb /
-  pierceDef / status / fx / color / shape / pose / snd / hitSnd /
+  pierceDef / status / fx / color / shape / shv / pose / snd / hitSnd /
   fxDelay / fxLife / timeline / frames / frameScale / frameRotate`。
   `id / fam / slot / prof` 等结构字段**不许覆盖**，否则会破坏专精解锁、装配页和存档。
   导入时会先过 `cleanPack()` 把这些字段剥掉。
@@ -173,14 +192,20 @@
 
 ```bash
 cd dawn-s1
-node tools/gen-artworkbench.js   # 重新内联 80 招 / 形状池 / 动作池 / 声音池 / 调色板
+node tools/gen-artworkbench.js   # 重新内联 80 招 / 三张池 / 两张规格表 / 调色板
                                  # P12-C 起 FAM_IDS / famLabel 含链 / 扇，
+                                 # P12-E 起 shapeSpecs / poseSpecs 一起内联
                                  # 改了 arts.js 必须先跑它，再跑 build.js
 node build.js                    # 把新工作台和覆盖数据打进 dist/
 ```
 
 生成器会逐项校验解析结果落在 `ART_SHAPES / ART_POSES / ART_SNDS / ART_FX` 登记池里，
-对不上就直接报错。这是有原因的：早先一版用宽泛正则匹配 `shape`，
+对不上就直接报错；还会**同时**校验两种零重复口径：
+四个字段本身各 80/80（`shape` / `pose.mode` / `snd` / `hitSnd`），
+以及 P12-D 的四条表现实例签名各 80/80（`shape@shv` / 动作全参数 / 色彩对 / 声音对）。
+另会检查 61 条 `ART_SHAPE_SPECS`、60 条 `ART_POSE_SPECS` 解析齐全，
+每招的形状 / 动作都有对应规格，不会掉进兜底分支。
+这是有原因的：早先一版用宽泛正则匹配 `shape`，
 把 `zone: { ..., shape: 'circle' }`（地面区域几何）当成了招式的刀光形状，
 `spear_6` 等 5 招在工作台里显示成空下拉框。现在 `shape / color` 只从
 「招式顶层那一行」取：
@@ -196,7 +221,7 @@ node build.js                    # 把新工作台和覆盖数据打进 dist/
 ```bash
 cd dawn-s1
 
-# 工作台页（32 条）：基线数据 / 时间轴 / 预览像素 / 导出 / 草稿闭环
+# 工作台页（43 条）：基线数据 / 规格表预览 / 时间轴 / 预览像素 / 导出 / 草稿闭环
 PAGE=art-workbench.html node tools/run.js eval tools/art-workbench.js
 PAGE=dist/art-workbench.html node tools/run.js eval tools/art-workbench.js
 
@@ -204,7 +229,20 @@ PAGE=dist/art-workbench.html node tools/run.js eval tools/art-workbench.js
 node tools/run.js eval tools/art-overrides.js
 PAGE="逍遥行.html" QS=x=1 node tools/run.js eval tools/art-overrides.js
 PAGE=dist/index.html QS=x=1 node tools/run.js eval tools/art-overrides.js
+
+# 80 招零重复体检（游戏页）：literal / signatures / atoms 三段，ok=true 才算过
+node tools/run.js eval tools/art-unique.js
+URL="https://718997675.github.io/xiaoyaoxing/" node tools/run.js eval tools/art-unique.js
 ```
 
 `tools/run.js` 的就绪等待同时认 `window.__game` 与 `window.__wbReady`，
 所以同一套 CDP runner 能开工作台页；工作台页没有 `__game`。
+本地默认 URL 与 `URL=` 远程都会自动补 `story=0`，只有 `tools/story.js` 要带 `STORY=1`；
+线上裸地址不补会让序章暂停世界，招式自检容易成片假红。
+
+P12-E 后的模块版基线是 **11 套 740 PASS / 0 FAIL**（工作台 43 / 覆盖层 29），
+单文件版两条路径各 549 PASS / 0 FAIL；线上体检同样 `ok=true`。
+唯一在线地址 https://718997675.github.io/xiaoyaoxing/ 。
+
+> 界面上「四轨道时间轴」（判定帧 / 人物动作帧 / 运动轨 / 瞬移）的效果预估草稿
+> `art-motion-preview.html` 暂缓，未提交 / 未打包 / 未发布，工作台保持现状。
