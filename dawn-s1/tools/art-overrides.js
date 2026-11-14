@@ -68,6 +68,21 @@
     for (const f of g.WEAPON_IDS) g.player.prof[f] = 999;
     g.player.qi = 999;
 
+    // CINE 演武层（2026-11-14）接管后，玩家看到的刀光由 `cine-catalog` 逐帧出，
+    // 旧的 `artSwingFx` 只在 `enabled:false` 时执行。这一节验的是「工作台覆盖表
+    // 的时间轴 / 序列帧真的落到 `slashGhosts` 上」——量的是兜底路径，所以放招前
+    // 先把演武层关掉，量完原样还原（覆盖表本身不受影响）。
+    // 必须按 `ART_IDS` 铺满 80 条：`CINE_TUNING.arts` 只写了手调过的招，漏掉的那几招
+    // `enabled()` 会走 `!!specOf(id)` 默认开。
+    function withLegacyFx(fn) {
+      const tu = globalThis.CINE_TUNING;
+      if (!tu || !tu.arts) return fn();
+      const bak = tu.arts, off = {};
+      for (const id of g.ART_IDS) off[id] = Object.assign({}, bak[id] || {}, { enabled: false });
+      tu.arts = off;
+      try { return fn(); } finally { tu.arts = bak; }
+    }
+
     function arm(text) {
       ov.clear();
       if (text !== null) ov.importText(text);
@@ -76,7 +91,7 @@
       g.slashGhosts.length = 0;
       g.player.qi = 999;
       g.setLoadout(['sword_1']);
-      return g.castArt(0);
+      return withLegacyFx(() => g.castArt(0));
     }
 
     // 基线：没有 timeline / fxDelay 的招式，delay 与 life 必须完全不变

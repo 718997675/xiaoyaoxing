@@ -135,6 +135,11 @@ node build.js           # 产出 xiaoyao-bundle.js 与 逍遥行.html
   锤按名字重做完（碎骨锤是一个点、回旋锤真的脱手再回手、开天辟地是一条线不是一个圆）；
   P11 把其余七件一次推完，还把「贯甲刺」改成真贯穿的长条、「跃棍」改成有波前与落点中心加成的扩散环。
   十兵器同位置连拍，最紧一对 8.1°。逐招画面与口径见 `ARTS-DESIGN.md` §7 / §10 / §11。
+- **每一招有自己的演出**（2026-11-14）：参数不撞车 ≠ 招式长得不一样。`cine-catalog.js` 把
+  80 招摊成 26 / 30 / 34 帧（30fps）的分镜，`cine-vfx.js` 逐帧出图元，`game.js` 的
+  `drawOverlay()` 直接播；旧的 `artSwingFx` 一行没删，降级成「单招 `enabled:false` 就退回
+  旧刀光」的兜底路径。两套路径各有一组自检卡着（`arts.js` §5 / §5.1 + `art-overrides.js`），
+  不会出现「新的坏了没人发现、旧的删了没法退」。
 - **心法系统**：22 条心法（一主二辅互斥，共 540 种组合），零动画纯数据构筑层。
 - **剧情**：第一章（序章 + 乱葬岗 / 竹海 / 石窟三幕 + 终章）28 节点，第二章
   （南疆瘴林 / 江岸渡口 / 链尽头三幕）21 节点，共 **49 个剧情节点**，
@@ -169,6 +174,9 @@ xiaoyaoxing/
 │   ├── art.js  monsters.js  程序化美术与敌手定义
 │   ├── weapons.js items.js  兵器招式、装备与词缀
 │   ├── arts.js   mantras.js  招式系统（80 招 · 十四种原语）、心法系统（22 条）
+│   ├── cine-catalog.js       80 招演武目录（逐招分镜：26/30/34 帧 · 五阶亮芯）
+│   ├── cine-tuning.js        单招手调覆盖层（改档位 / 贴身度；enabled:false 退回旧刀光）
+│   ├── cine-vfx.js           演武渲染器（帧号 → 图元，四方向正交变换，游戏内缩到真人尺度）
 │   ├── art-workbench.html    招式工作台（单文件 · 30fps 时间轴 · PNG 序列帧 · 导出覆盖表）
 │   ├── artoverrides.js      工作台覆盖层（白名单 / 原地合并 / 帧数换算 / 图片帧缓存）
 │   ├── art-overrides.data.js 永久覆盖表（默认空，工作台导出的 data.js 覆盖它）
@@ -177,12 +185,14 @@ xiaoyaoxing/
 │   ├── skills.js time.js    道行树、昼夜时辰
 │   ├── village.js           青云集：建筑、NPC、店铺、对话
 │   ├── dungeon.js           青云古洞：生成器、地形绘制、宝箱火盆
-│   ├── devtest.js           无头回归测试（148 条断言；模块版 11 套合计 740 PASS / 0 FAIL）
+│   ├── devtest.js           无头回归测试（148 条断言；模块版 12 套合计 863 PASS / 0 FAIL）
 │   ├── build.js             按依赖序打 IIFE 单文件
 │   ├── tools/               shot.js（CDP 截图）/ touch.js（触屏回归）/ weapons.js（兵器专项）/
 │   │                        arts.js（招式）/ mantras.js（心法）/ story.js（剧情）/ play.js /
 │   │                        art-workbench.js（工作台自检）/ art-overrides.js（覆盖层自检）/
 │   │                        art-unique.js（80 招零重复体检）/
+│   │                        art-motion.js（逐招演出送审页自检）/
+│   │                        cine-frames.js（演武帧连拍）/ gen-cine-catalog.js（生成演武目录）/
 │   │                        gen-artworkbench.js（从 arts.js 重新内联工作台基线）
 │   ├── lib/three.module.js  本地化 three.js r160（离线可玩）
 │   └── CHAPTER-1.md         第一章交付文档 / ECOSYSTEM-PLAN.md 生态升级计划
@@ -258,6 +268,13 @@ node tools/shot.js                # CDP 截图（SHOT_W/SHOT_H/MOBILE/DPR/WAIT �
         线上零重复体检 `ok=true`）。见 `CHAPTER-1-EXPANSION.md` §9.9 / `ARTS-DESIGN.md` §11
   - [x] P12-E 文档回填（2026-11-12）：README / §9.9 / 第十一章 / 工作台说明四处补齐，
         仓库口径统一到 10 兵器 · 80 招 · 49 节点 · 18 任务 · 7 巢穴 · 16 营地
+  - [x] CINE 演武层接入（2026-11-14）：`cine-catalog.js` + `cine-tuning.js` + `cine-vfx.js`
+        三件套接管 80 招出招表现，26/30/34 帧分镜逐帧出图元，`build.js` 按
+        catalog → tuning → vfx 顺序注入。旧 `artSwingFx` 降为 `enabled:false` 兜底，
+        两套路径各有自检（`arts.js` 172→178 条，新增 §5.1 演武接管 6 条；
+        `art-overrides.js` 保持 29 条）。模块版 12 套 **863 PASS / 0 FAIL**，
+        单文件版 `arts` 178 + `art-overrides` 29 全绿，打包产物 `online` 通过。
+        设计层另见 `VFX-DESIGN-80.md`（80 招时间轴表，`art-overrides.vfx80.json` 待启用）
 
 ## 边界
 

@@ -1,4 +1,12 @@
 import * as THREE from './lib/three.module.js';
+// CINE 演武层：空导入只为执行模块（它们把数据 / API 挂到 globalThis）。
+// 必须写成带 from 的形式，build.js 才能替换成经典脚本语句；纯副作用式导入
+// 在打包版里会残留关键字，直接报错。
+// 顺序不能换：目录 → 单招覆盖层 → 演武渲染器。少了前两个，cine-vfx.js 的
+// specOf() 会返回 null，游戏里就只剩一层空背景（表现为「招式没特效」）。
+import {} from './cine-catalog.js';
+import {} from './cine-tuning.js';
+import {} from './cine-vfx.js';
 import { AUDIO, sndVariant } from './audio.js';
 import { C, spriteCanvas, outlined, mirror, hexRgb, rgba } from './pixel.js';
 import {
@@ -1546,6 +1554,14 @@ const pShadow = quad(SHADOW_TEX, 13, 4.5);
 pShadow.visible = false;
 let enemies = [], drops = [], projectiles = [], dmgNums = [], messages = [];
 let particles = [], sparks = [], ghosts = [], slashGhosts = [], bolts = [];
+// CINE 演武层：80 招全部挂演出。目录里有就走演武层；
+// cine-tuning.js 里写 enabled:false 可让单招退回游戏原本的刀光。
+// 存的是「招式开始后经过的秒数」，绘制时换算成 30fps 帧号。
+let cinePlay = null;
+// 出招方向直接传 DIRA[player.dir]，入口不翻符号。
+// 四方向由 cine-vfx.js 的 gamePrims 正交变换处理：R 恒等 / D +90° /
+// L x 镜像 / U -90°。早期在这里取负角，把 D/U 落点对调了；而刚性 180°
+// 旋转还会把朝左的「从上往下劈」翻成「从下往上挑」。
 // 招式留下的地面区域（火雨 / 地裂 / 定军 / 千刃 / 铁蒺藜）。
 // 跟首领的 hazards 分开：hazards 是敌人放的，zones 是玩家放的，结算与配色都不同。
 let zones = [];
@@ -3370,7 +3386,14 @@ function isPlantPose(mode) {
   return !!(sp && sp.k === 'plant');
 }
 
+// 演武层接管这一招时，旧的 3px 细弧 / 序列帧 ghost 全部跳过，避免两套刀光叠成一团。
+// 15 个 fx 分支都调这个函数，守卫放这一处就够；enabled:false 时 cinePlay 为 null，
+// 旧刀光原样执行。旧实现整体留在 artSwingFxRaw，一行逻辑没删。
 function artSwingFx(a, base, reach, arc, ox, oy) {
+  if (cinePlay) return;
+  return artSwingFxRaw(a, base, reach, arc, ox, oy);
+}
+function artSwingFxRaw(a, base, reach, arc, ox, oy) {
   const W = WEAPONS[a.fam];
   const col = artColor(a, W.trail);
   const from = slashGhosts.length;   // 工作台覆盖层要对这一招新加的 ghost 统一后处理
@@ -3630,6 +3653,13 @@ function execArt(a) {
   const base = DIRA[player.dir];
   const aim = base + (a.back ? Math.PI : 0);
   const [fx, fy] = DIRV[player.dir];
+  // CINE 演武层：rot 记下「出招瞬间」的朝向，之后玩家转身不会把刀光拽着转。
+  // DIRA(right)=0 与演武帧基准一致，所以 aim 可以直接当旋转角用。
+  const CV = globalThis.CineVFX;
+  // 全 80 招启用：目录里有就演武；没挂演武的招要主动清掉上一招残留的演出，
+  // 否则连招时旧刀光会飘在新招上。rot 记「出招瞬间」的朝向，之后转身不会把刀光拽着转。
+  if (CV && CV.enabled(a.id)) cinePlay = { id: a.id, t: 0, rot: aim };
+  else cinePlay = null;
   player.lastHitFam = fam;
   // 动作：招式自带 pose 就用它；没写的 56 招退回旧行为（武器定在朝向，一下都不动）。
   // 以前这里是写死的 a0:0 / a1:0 —— 64 招全是"人站着、武器不动"，
@@ -3652,6 +3682,7 @@ function execArt(a) {
     const reach = (a.reach || 40) * (1 + artBuff('reachPct') / 100);
     const arc = a.arc || 1.6;
     const hits = a.hits || 1;
+    // CINE：演武招的旧刀光由 artSwingFx 入口守卫统一跳过（覆盖全部 15 个 fx 分支）
     artSwingFx(a, aim, reach, arc);
     // 候选只筛一次，多段判定都吃同一份名单 —— 免得同一只怪被算两遍位置
     const cand = [];
@@ -6352,7 +6383,7 @@ function resetWorld() {
   for (const s of sparks) scene.remove(s.mesh);
   for (const g of ghosts) scene.remove(g.mesh);
   enemies = []; drops = []; projectiles = []; particles = []; sparks = []; ghosts = [];
-  dmgNums = []; messages = []; slashGhosts = []; bolts = [];
+  dmgNums = []; messages = []; slashGhosts = []; bolts = []; cinePlay = null;
   clearHazards();   // 地面危险区不属于上面任何一类，忘了清就会跨局残留
   clearArts();      // 飞剑环绕的 mesh 也不属于上面任何一类
   mantraResetCombat();   // 追命连击 / 藏锋层数 / 铁衣层数：跨局残留会让玩家一出生就带着 +40%
@@ -6897,6 +6928,13 @@ function tickSwing(dt) {
 function update(dt) {
   time += dt;
   if (state !== 'play') return;
+  // CINE：推进演武时间轴，34 帧 / 30fps 播完就自己收摊
+  if (cinePlay) {
+    const CV = globalThis.CineVFX;
+    cinePlay.t += dt;
+    // 每招帧数不同（克制 26 / 标准 30 / 爆发 34），不能再拿写死的 34 算寿命
+    if (!CV || cinePlay.t >= CV.total(cinePlay.id) / CV.FPS) cinePlay = null;
+  }
   // 剧情播放时整个世界暂停。读碑的时候被山魈咬死，是这游戏最不该发生的事；
   // 而且剧情里有"回头看了一眼来路"这种叙述，人还在走就对不上了。
   if (storyPlaying()) return;
@@ -8179,6 +8217,27 @@ function drawOverlay(camX, camY) {
   // ---- 时辰光罩（压在世界之上、HUD 之下：HUD 永远是亮的，能看清数值）----
   if (state === 'play' || state === 'clear') drawDayNight(camX, camY);
 
+  // ---- CINE 演武层 ----
+  // 画在光罩之后才不会被夜色压暗（刀光本就是发光体），画在 HUD 之前才不挡数值。
+  // 只取 fx 组：角色、地形、UI 都由游戏自己画，这里不重复画一个小人。
+  if (cinePlay && state === 'play') {
+    const CV = globalThis.CineVFX;
+    if (CV) {
+      const len = CV.total(cinePlay.id);
+      const cf = Math.min(len - 1, Math.floor(cinePlay.t * CV.FPS));
+      // game:true → 关掉演武层自己的角色前冲、收窄构图抖动，并把整招缩到
+      // 16×18 真人的尺度、把「演武的手」对齐到「游戏的手」；rot → 跟着出招方向转。
+      // 这三项缺一个就会出现「人物和招式分离」或「永远往右飞」。
+      const fr = CV.frame(cinePlay.id, cf, 'cine', { game: true, rot: cinePlay.rot });
+      // pMesh 前冲时真人会往前挪，刀光也必须跟着挪，否则又是一层横向错位。
+      const lunge = player.atkT > 0 ? (player.atkT / 0.24) * (player.lunge || 0) : 0;
+      const [lfx, lfy] = DIRV[player.dir];
+      CV.renderCanvas(octx, fr.prims,
+        (player.x - camX + lfx * lunge) - CV.CX,
+        (player.y - camY + lfy * lunge) - CV.CY + CV.GAME_Y_OFF, 1, ['fx']);
+    }
+  }
+
   // ---- HUD ----
   const hpr = player.hp / Math.max(1, s.hp);
   if (hpr < 0.35) {
@@ -8750,6 +8809,18 @@ window.__game = {
   get bolts() { return bolts; },
   get slashGhosts() { return slashGhosts; },
   get swing() { return player.swing; },
+  // CINE 演武层调试钩子：headless 下可直接试放，不用先砍怪解锁专精
+  get cineFrame() { return cinePlay ? Math.floor(cinePlay.t * 30) : -1; },
+  get cineRot() { return cinePlay ? cinePlay.rot : 0; },
+  get cineId() { return cinePlay ? cinePlay.id : null; },
+  cineDemo(id, rot) {
+    const CV = globalThis.CineVFX;
+    if (!CV) return;
+    // 兼容旧调用 cineDemo(rot)：第一个参数是数字就当角度
+    if (typeof id === 'number') { rot = id; id = CV.GAME_CINE_ID; }
+    const aid = (id && CV.enabled(id)) ? id : CV.GAME_CINE_ID;
+    cinePlay = { id: aid, t: 0, rot: (typeof rot === 'number') ? rot : DIRA[player.dir] };
+  },
   debugArc(a0, a1, R) {
     drawArcFx(octx, 240, 135, a0 === undefined ? -2 : a0, a1 === undefined ? 1 : a1, R || 40, [C.red3, C.red2], 1, 1.5);
   },

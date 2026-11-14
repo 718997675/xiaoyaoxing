@@ -23,6 +23,11 @@ const ROOT = __dirname;
 const ORDER = [
   { id: 'three', file: 'lib/three.module.js' },
   { id: 'pixel', file: 'pixel.js' },
+  // 演武层三件套必须先于 game.js，且内部顺序固定：目录 → 覆盖层 → 渲染器。
+  // 它们是经典脚本（挂 globalThis），漏一个不会报 depId 错，只会在游戏里静默白特效。
+  { id: 'cinecatalog', file: 'cine-catalog.js' },
+  { id: 'cinetuning', file: 'cine-tuning.js' },
+  { id: 'cinevfx', file: 'cine-vfx.js' },
   { id: 'audio', file: 'audio.js' },
   { id: 'art', file: 'art.js' },
   { id: 'monsters', file: 'monsters.js' },
@@ -63,15 +68,23 @@ function verifyOrder() {
 
 function depId(src) {
   const base = path.basename(src).replace(/\.js$/, '');
-  return base === 'three.module' ? 'three' : base;
+  if (base === 'three.module') return 'three';
+  // ORDER 的 id 里不能有连字符（会生成 __M.cine-vfx 这种减法表达式），
+  // 但文件名保留连字符更好读，所以在这里做一次映射。
+  if (base === 'cine-catalog') return 'cinecatalog';
+  if (base === 'cine-tuning') return 'cinetuning';
+  if (base === 'cine-vfx') return 'cinevfx';
+  return base;
 }
 
 // ESM → 纯语句：import 换成解构，export 记录下来并去掉关键字
 function transform(src) {
   const out = new Set();
 
-  // import 语句（可能跨多行）
-  src = src.replace(/import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"];?/g, (m, spec, from) => {
+  // import 语句（可能跨多行）。必须锚定「行首」：注释里出现 `import './x.js'`
+  // 这类说明文字时，跨行的 [\s\S]*? 会从注释一路吃到下一个真实 from，
+  // 把注释与代码搅成一句非法语句（P12 演武层接入时就踩过一次）。
+  src = src.replace(/^[ \t]*import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"];?/gm, (m, spec, from) => {
     const id = depId(from);
     spec = spec.trim();
     const ns = spec.match(/^\*\s+as\s+([\w$]+)$/);

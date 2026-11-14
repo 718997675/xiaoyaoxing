@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "arts": {
+    "sword_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 1,
+        "fxLen": 7
+      }
+    },
+    "blade_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 2,
+        "fxLen": 7
+      }
+    },
+    "spear_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 1,
+        "fxLen": 6
+      }
+    },
+    "staff_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 9
+      }
+    },
+    "dual_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 2,
+        "fxLen": 8
+      }
+    },
+    "hammer_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 9
+      }
+    },
+    "mage_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 1,
+        "fxLen": 7
+      }
+    },
+    "dart_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 1,
+        "fxLen": 6
+      }
+    },
+    "chain_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 11
+      }
+    },
+    "fan_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 10
+      }
+    }
+  }
+}

@@ -46,6 +46,26 @@
     return Math.ceil((dur + 1.6) / 0.016) + 24;
   }
 
+  // CINE 演武层（2026-11-14）接管了全部 80 招的出招表现：`game.js` 的
+  // `artSwingFx()` 在 `cinePlay` 非空时直接 return，刀光改由 `cine-catalog`
+  // 逐帧生成。旧的 `artSwingFx` 没删，它是 `enabled:false` 时的兜底路径。
+  //
+  // 下面几条「刀光几何必须随参数变化」的断言量的是**兜底路径**（它仍随包发布，
+  // 单招关掉演武就靠它），所以量之前要把 80 招临时 enabled:false，量完原样还原。
+  // 接管路径另有正面断言（§5.1），两条路径都卡住，不靠"关掉新东西"蒙混。
+  //
+  // 注意：`CINE_TUNING.arts` 只写了手调过的招（73 条），没写的那几招 `enabled()`
+  // 会走 `!!specOf(id)` 默认开。所以这里必须按 `ART_IDS` 铺满 80 条，
+  // 只改表里已有的键会漏掉 7 招（首轮就是这么漏的：回旋锤 / 地裂 等）。
+  function withLegacyFx(fn) {
+    const tu = globalThis.CINE_TUNING;
+    if (!tu || !tu.arts) return fn();
+    const bak = tu.arts, off = {};
+    for (const id of g.ART_IDS) off[id] = Object.assign({}, bak[id] || {}, { enabled: false });
+    tu.arts = off;
+    try { return fn(); } finally { tu.arts = bak; }
+  }
+
   // ---------- 1. 数据完整性 ----------
   try {
   {
@@ -315,8 +335,8 @@
           x.line ? x.line.len : 0, x.line ? x.line.w : 0].join('/')).join(',');
       };
       try {
-        a.shv = 1; const m1 = geom();
-        a.shv = 6; const m2 = geom();
+        let m1, m2;
+        withLegacyFx(() => { a.shv = 1; m1 = geom(); a.shv = 6; m2 = geom(); });
         T('shv 变体在刀光几何上真实生效', !!m1 && m1 !== m2, m1 + ' → ' + m2);
       } finally { a.shv = bak; }
     }
@@ -412,7 +432,7 @@
           x.line ? x.line.len : 0, x.line ? x.line.w : 0,
           x.a0 === undefined ? '' : x.a0, x.a1 === undefined ? '' : x.a1].join('/')).join(',');
       };
-      const m1 = geomOf(list[0]), m2 = geomOf(list[1]);
+      const [m1, m2] = withLegacyFx(() => [geomOf(list[0]), geomOf(list[1])]);
       if (!m1 || m1 === m2) sameGeom.push(k + '(' + list[0].id + '≈' + list[1].id + ')');
     }
     T('同一画法原子的不同参数，刀光几何都不同', sameGeom.length === 0,
@@ -634,7 +654,8 @@
         g.setLoadout([a.id]);
         g.slashGhosts.length = 0;
         let ok = false;
-        try { ok = g.castArt(0) === true; } catch (err) { bad.push(a.name + ':' + err.message); }
+        // 关掉演武层再放：这一节验的是旧刀光兜底路径真的会画东西（见 withLegacyFx）。
+        try { ok = withLegacyFx(() => g.castArt(0)) === true; } catch (err) { bad.push(a.name + ':' + err.message); }
         if (!ok) bad.push(a.name + ':放不出');
         // P11：形状签名必须真的落到 2D 覆盖层上，不能只写在 arts.js 里
         if (g.slashGhosts.length === 0) noFx.push(a.name);
@@ -662,6 +683,32 @@
       noFx.length === 0, noFx.join('/') || 'OK');
     T('所有伤害招都真的打到了木桩', noHit.length === 0, noHit.join('/') || 'OK');
     T('所有增益招都真的挂上了增益', noBuff.length === 0, noBuff.join('/') || 'OK');
+  }
+
+  // ---------- 5.1 CINE 演武层接管（2026-11-14）----------
+  // 上面几条验的是兜底路径。玩家实际看到的是演武层，所以这里正面卡住接管路径：
+  // 目录要覆盖全 80 招、出招后时间轴要真的挂上、取帧要真能取出图元。
+  // 只验「旧刀光还在」= 玩家看到的那套没人管；只验「演武目录有 80 条」= 没验它接没接上。
+  {
+    const CV = globalThis.CineVFX;
+    T('演武层已加载', !!CV, CV ? 'CineVFX ok' : 'globalThis.CineVFX 未挂上');
+    const miss = CV ? g.ART_IDS.filter(id => !CV.enabled(id)) : g.ART_IDS.slice();
+    T('演武层接管全部 80 招', miss.length === 0, miss.join(',') || 'OK · 80/80');
+
+    arena(14);
+    g.equipFam('sword');
+    g.player.qi = 999;
+    g.setLoadout(['sword_1']);
+    g.castArt(0);
+    T('出招后演武时间轴确实挂在那一招上', g.cineId === 'sword_1', String(g.cineId));
+    T('演武时间轴从第 0 帧起步', g.cineFrame === 0, g.cineFrame);
+    const fr = CV && CV.frame('sword_1', 6, 'cine', { game: true, rot: 0 });
+    T('演武帧能取出非空图元', !!(fr && fr.prims && fr.prims.length > 0),
+      fr && fr.prims ? fr.prims.length + ' 图元' : '空');
+    // 收招：每招帧数不同（克制 26 / 标准 30 / 爆发 34），播完要自己收摊，
+    // 不然旧刀光会一直飘在人物身上。按目录里的真实帧数算步数，别写死 60 步。
+    step(Math.ceil(CV.total('sword_1') / CV.FPS / 0.016) + 20);
+    T('演武播完会自己收摊', g.cineId === null, String(g.cineId));
   }
 
   // ---------- 6. 四种新原语专项 ----------

@@ -1,6 +1,6 @@
 # 交接说明（换账号 / 换机器 从这里开始）
 
-> 最后更新：2026-11-12（P12-E 文档章节回填）
+> 最后更新：2026-11-14（CINE 演武层接入游戏本体）
 > 这份文档的唯一目的：**任何人（包括一周后的你自己）打开这个仓库，能在五分钟内知道
 > 现在做到哪了、下一步做什么、怎么验证没写坏。**
 
@@ -36,10 +36,11 @@ node tools/run.js eval tools/map.js       # 大地图连通性与地貌，当前
 node tools/run.js eval tools/camps.js     # 营地生态（巡逻/吹哨/食物链/作息），当前 17 pass / 0 fail
 node tools/run.js eval tools/bosses.js    # 首领（招式表/三阶段换兵器/巢穴/危险区/首杀专属），当前 38 pass / 0 fail
 node tools/run.js eval tools/quests.js    # 任务（18 条全通/交付对话逐句播放/三物门禁/存档），当前 43 pass / 0 fail
-node tools/run.js eval tools/arts.js      # 招式（80 招/十四种原语/专精/装配拖拽/签名查重/全表零重复/平衡/存档），当前 172 pass / 0 fail
+node tools/run.js eval tools/arts.js      # 招式（80 招/十四种原语/专精/装配拖拽/签名查重/全表零重复/演武接管/平衡/存档），当前 178 pass / 0 fail
 node tools/run.js eval tools/mantras.js   # 心法（22 条/互斥/12 个机制/200 组 DPS 分布），当前 75 pass / 0 fail
 STORY=1 QS=x=1 node tools/run.js eval tools/story.js   # 剧情（49 节点/七种触发/两次终章选择/旧事页/存档），当前 113 pass / 0 fail
 PAGE=art-workbench.html node tools/run.js eval tools/art-workbench.js   # 工作台页，当前 43 pass / 0 fail
+PAGE=art-motion-preview.html node tools/run.js eval tools/art-motion.js  # 逐招演出送审页，当前 117 pass / 0 fail
 node tools/run.js eval tools/art-unique.js  # 全表 80 招零重复体检报告（ok=true 才算过），当前 ok=true
 node tools/run.js eval tools/art-overrides.js                            # 游戏侧覆盖层，当前 29 pass / 0 fail
 node tools/run.js shot out.png 1440 900   # 截图
@@ -137,6 +138,26 @@ for(let i=0;i<25;i++)g.tick(0.016)" \
 | **P12 前置 ②**：无面剑客三阶段换兵器（剑 / 枪 / 双刃，招式取 `arts.js` 色彩签名） | ✅ 2026-11-11 |
 | **P12 前置 ③**：洞内火把会灭（油量 / 穿堂风 / 火鸦扇灭 / E 借火 / 灭后视距收窄） | ✅ 2026-11-11 |
 | **P12-A 第二章地图南扩**：`MAPH` 104→144（南疆 / 江岸）、江水渡桥、4 营地 + 2 野外 NPC、第一章指纹不变 | ✅ 2026-11-11 |
+| **CINE 演武层接入游戏**：`cine-catalog.js`（80 招演出目录）+ `cine-tuning.js`（单招开关）+ `cine-vfx.js`（渲染器）三件套接管 `execArt` / `drawOverlay`，旧 `artSwingFx` 降为 `enabled:false` 兜底 | ✅ 2026-11-14 |
+
+### CINE 演武层（2026-11-14）
+
+**为什么要有这一层**：P12-E 把 80 招的 `shape` / `pose` / `color` / `snd` 四个字段做成
+字面零重复，但那是"参数不撞车"，不是"每招有自己的演出"。演武层把每一招摊成 26/30/34 帧
+（30fps）的分镜，逐帧出图元，替代原来"一次画一道弧"的做法。
+
+- **三件套的加载顺序不能换**：`cine-catalog` → `cine-tuning` → `cine-vfx`。
+  它们是经典脚本（挂 `globalThis`），`build.js` 的 `ORDER` 里少写一个不会报错，
+  只会表现为"游戏里招式没特效"。`game.js` 顶部那三个空导入就是为 `build.js` 服务的。
+- **旧刀光没删**：`artSwingFx()` 在 `cinePlay` 非空时直接 `return`，原实现留在
+  `artSwingFxRaw`。单招在 `cine-tuning.js` 写 `{"enabled": false}` 就退回旧刀光，
+  不用改代码 —— 这是出问题时的第一道降级手段。
+- **`cine-tuning.js` 只列了 73 招**，没列的招 `enabled()` 走 `!!specOf(id)` 默认开。
+  自检里要关演武层时**必须按 `ART_IDS` 铺满 80 条**，只遍历表里已有的键会漏掉 7 招
+  （回旋锤 / 地裂 / 血战八方 等），表现为"这几招莫名其妙没有刀光"。
+- **自检分两条路验**：`tools/arts.js` §5 与 `tools/art-overrides.js` 量的是**旧刀光兜底路径**
+  （用 `withLegacyFx()` 临时 `enabled:false`），`tools/arts.js` §5.1 量的是**演武接管路径**
+  （目录覆盖 80/80、出招挂时间轴、取帧非空、播完收摊）。只验一边都会留下盲区。
 
 ### 招式工作台（2026-11-11）
 

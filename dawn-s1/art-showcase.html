@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>逍遥行 · 80 招演武工作台</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0E1219;color:#E8DFC8;font:13px/1.65 "PingFang SC","Microsoft YaHei",SimSun,monospace}
+.wrap{max-width:1300px;margin:0 auto;padding:22px 18px 60px}
+h1{font-size:21px;font-weight:600;margin:0 0 4px;color:#F2D089;letter-spacing:2px}
+.sub{color:#9BD4CC;font-size:12px;margin:0 0 16px}
+.hint{color:#8A8268;font-size:12px;margin:0 0 16px}
+.hint b{color:#D9A441;font-weight:500}
+.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 11px;background:#161C26;border:1px solid #3A352A;margin-bottom:12px}
+button,select{font:12px SimSun,monospace;background:#222A36;color:#E8DFC8;border:1px solid #4A5568;padding:5px 10px;cursor:pointer}
+button:hover{background:#2F6E6A;border-color:#5FA8A0}
+button.hot{background:#8A6520;border-color:#D9A441;color:#FFF3D4}
+button.warn{border-color:#8A4A42;color:#E8A099}
+select#selArt{min-width:270px;max-width:420px}
+.sep{width:1px;height:20px;background:#3A352A;margin:0 3px}
+.fr{margin-left:auto;font:13px monospace;color:#F2D089}
+.meta{margin-left:auto;font:11px monospace;color:#9BD4CC;text-align:right}
+.meta i{font-style:normal;color:#8A8268}
+.tune{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px 14px;padding:11px;background:#161C26;border:1px solid #3A352A;margin-bottom:12px}
+.trow{display:flex;align-items:center;gap:6px;font-size:11px;color:#8A8268}
+.trow span{width:80px;flex:none}
+.trow select,.trow input[type=range]{flex:1;min-width:0}
+.trow output{width:38px;text-align:right;color:#F2D089;font:11px monospace;flex:none}
+.trow.check span{width:auto}
+.trow.check input{accent-color:#D9A441}
+.tune .acts{grid-column:1/-1;display:flex;gap:8px;border-top:1px solid #2A3140;padding-top:9px;margin-top:2px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.col{background:#161C26;border:1px solid #3A352A;padding:9px}
+.col.old{border-color:#4A4536}
+.col.new{border-color:#2F6E6A}
+.tt{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:13px}
+.tt span{font-size:11px;color:#8A8268;font-weight:400}
+.col.old .tt b{color:#C9BFA3}
+.col.new .tt b{color:#9BD4CC}
+canvas{display:block;width:100%;height:auto;image-rendering:pixelated;image-rendering:crisp-edges;background:#12161F;border:1px solid #3A352A}
+.stages{display:flex;gap:2px;margin:12px 0 6px}
+.stg{flex:1;padding:6px 4px;text-align:center;font-size:11px;background:#1D2430;border:1px solid #3A352A;color:#8A8268;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stg:hover{border-color:#5FA8A0}
+.stg.on{background:#2F6E6A;border-color:#9BD4CC;color:#FFF3D4}
+.stg i{display:block;font-style:normal;font-size:10px;opacity:.7}
+.notes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 16px;font-size:11px;color:#8A8268}
+.notes div{padding:6px 9px;background:#161C26;border-left:2px solid #3A352A}
+.notes div.on{border-left-color:#5FA8A0;color:#9BD4CC}
+.tl{display:flex;align-items:center;gap:10px;padding:9px 11px;background:#161C26;border:1px solid #3A352A;margin-bottom:16px}
+input[type=range]{flex:1;min-width:120px;accent-color:#D9A441}
+.dirs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:6px}
+.dirs>div{background:#161C26;border:1px solid #3A352A;padding:6px;text-align:center}
+.dirs b{display:block;color:#F2D089;font-size:12px;margin-bottom:4px}
+.dirs canvas{width:100%;height:auto}
+.zoom{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px}
+.zoom .col{padding:8px}
+.zoom canvas{image-rendering:pixelated}
+h2{font-size:15px;font-weight:600;margin:26px 0 10px;color:#F2D089;letter-spacing:1px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid #2A3140;vertical-align:top}
+th{color:#9BD4CC;font-weight:500;background:#161C26}
+td:first-child{color:#E8806F;white-space:nowrap;width:110px}
+td:nth-child(2){color:#8A8268;width:36%}
+td:nth-child(3){color:#E8DFC8}
+.kv{font:11px monospace;color:#8A8268;margin-top:10px}
+.kv b{color:#F2D089;font-weight:500}
+textarea{width:100%;background:#12161F;color:#9BD4CC;border:1px solid #3A352A;font:11px/1.5 monospace;padding:9px;resize:vertical;margin-bottom:8px}
+@media(max-width:820px){.cols,.zoom,.notes{grid-template-columns:1fr}.dirs{grid-template-columns:repeat(2,1fr)}.meta{width:100%;text-align:left}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>逍遥行 · 80 招演武工作台</h1>
+  <p class="sub">任选一招、逐帧看演出、即时调参、导出单招覆盖层。左侧是这一招原本的样子，右侧是演武层之后的样子。</p>
+  <p class="hint">用 <b>Safari 直接双击本文件</b> 即可打开（纯静态、不依赖服务器与 Chrome）。下方「游戏内四方向」是与 <b>game.js 完全同一条调用链</b>的合成画面，改完参数立刻能看到四个方向。</p>
+
+  <div class="bar">
+    <span>招式</span>
+    <select id="selArt"></select>
+    <button id="btnPrevArt" title="上一招">◀</button>
+    <button id="btnNextArt" title="下一招">▶</button>
+    <span class="meta" id="meta"></span>
+  </div>
+
+  <div class="tune" id="tune"></div>
+
+  <div class="bar">
+    <button id="btnPlay" class="hot">暂停</button>
+    <button id="btnPrev">◀ 上一帧</button>
+    <button id="btnNext">下一帧 ▶</button>
+    <button id="btnReset">↺ 重播</button>
+    <span class="sep"></span>
+    <span>速度</span>
+    <select id="selSpeed"><option value="0.35">0.35×</option><option value="0.6">0.6×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option></select>
+    <span class="sep"></span>
+    <button data-f="3">F03 起手</button>
+    <button data-f="8">F08 蓄势</button>
+    <button data-f="12">F12 命中</button>
+    <button data-f="17">F17 追击</button>
+    <button data-f="27">F27 收势</button>
+    <span class="fr" id="fr">第 0 帧</span>
+  </div>
+
+  <div class="cols">
+    <div class="col old">
+      <div class="tt"><b>原本刀光</b><span>一道弧 / 7 帧淡出 / 静态剪影</span></div>
+      <canvas id="cvOld" width="320" height="180"></canvas>
+    </div>
+    <div class="col new">
+      <div class="tt"><b>演武版</b><span id="ttNew">五段节奏 / 亮芯 / 残影与地裂</span></div>
+      <canvas id="cvNew" width="320" height="180"></canvas>
+    </div>
+  </div>
+
+  <div class="stages" id="stages"></div>
+  <div class="notes" id="notes"></div>
+
+  <div class="tl">
+    <span>时间轴</span>
+    <input type="range" id="slider" min="0" max="33" value="0">
+    <span id="phase" style="min-width:190px;color:#9BD4CC"></span>
+  </div>
+
+  <h2>游戏内四方向 · 实际合成</h2>
+  <div class="dirs">
+    <div><b>R 朝右</b><canvas id="dirR" width="240" height="150"></canvas></div>
+    <div><b>D 朝下</b><canvas id="dirD" width="240" height="150"></canvas></div>
+    <div><b>L 朝左</b><canvas id="dirL" width="240" height="150"></canvas></div>
+    <div><b>U 朝上</b><canvas id="dirU" width="240" height="150"></canvas></div>
+  </div>
+  <p class="kv" id="dirInfo">只画 fx 组 + 人物站位圈（游戏真人由 game.js 自己画），跟随时间轴逐帧变化。</p>
+
+  <h2>动作特写 · 4× 放大（看姿态 / 披风 / 三重残影）</h2>
+  <div class="zoom">
+    <div class="col old"><div class="tt"><b>原本</b><span>全程同一个姿势</span></div><canvas id="zvOld" width="480" height="248"></canvas></div>
+    <div class="col new"><div class="tt"><b>演武版</b><span>沉肩 → 后仰 → 前倾突进 → 归位</span></div><canvas id="zvNew" width="480" height="248"></canvas></div>
+  </div>
+  <p class="kv">角色在游戏里只有约 <b>20px 高</b>，这是像素风的固有限制；动作靠轮廓姿态 + 位移 + 披风 + 残影表达，特写用来验收设计本身。</p>
+
+  <h2>单招覆盖层 · 导出</h2>
+  <textarea id="export" rows="7" readonly></textarea>
+  <button id="btnCopy">复制 JSON</button>
+  <button id="btnResetArt" class="warn">重置本招</button>
+  <p class="kv" id="copyHint">把上面 JSON 里的 <b>arts</b> 内容贴进 <b>cine-tuning.js</b> 的 <b>TUNING.arts</b>，刷新即可生效；生成器不会覆盖这个文件。</p>
+
+  <h2>四个痛点 · 逐条对照</h2>
+  <table><thead><tr><th>痛点</th><th>原本</th><th>演武版</th></tr></thead><tbody id="diff"></tbody></table>
+
+  <h2>怎么接进游戏</h2>
+  <p class="kv" id="howto"></p>
+</div>
+
+<!-- v2 演武层是「数据 + 覆盖层 + 渲染器」三件套，顺序不能换。
+     少了前两个，specOf() 取不到目录，整页会变成两张空背景。 -->
+<script src="cine-catalog.js"></script>
+<script src="cine-tuning.js"></script>
+<script src="cine-vfx.js"></script>
+<script>
+(function(){
+  var V = window.CineVFX, T = window.CINE_TUNING;
+  var $ = function(id){ return document.getElementById(id); };
+  if(!V || !T){
+    document.body.insertAdjacentHTML('afterbegin','<p style="color:#E8806F">三件套没加载成功，请确认 cine-catalog.js / cine-tuning.js / cine-vfx.js 和本页在同一目录</p>');
+    return;
+  }
+  var ARTS = V.list();
+  var DIRS = [['R',0],['D',Math.PI/2],['L',Math.PI],['U',-Math.PI/2]];
+  var ART = V.DEFAULT_ART, frame = 0, playing = true, speed = 1, last = 0, acc = 0;
+  var cells = { legacy: [], cine: [] }, N = 0, STG = [], REC = 0;
+
+  // ---- 招式下拉：按兵器家族分组 ----
+  var sel = $('selArt'), fams = {};
+  ARTS.forEach(function(a){ (fams[a.fam] = fams[a.fam] || []).push(a); });
+  Object.keys(fams).forEach(function(f){
+    var og = document.createElement('optgroup');
+    og.label = (V.FAMILY[f] && V.FAMILY[f].sub) ? (f + ' · ' + V.FAMILY[f].sub) : f;
+    fams[f].forEach(function(a){
+      var o = document.createElement('option');
+      o.value = a.id;
+      o.textContent = a.id + ' · ' + (a.name || '') + ' · ' + a.tier + '/' + a.skeleton;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+  sel.value = ART;
+
+  // ---- 可调参数 ----
+  var FIELDS = [
+    { k:'tier',      label:'档位',     type:'enum', opts:['calm','standard','burst'] },
+    { k:'skeleton',  label:'骨架',     type:'enum', opts:['slash','pierce','step','aura'] },
+    { k:'palette',   label:'配色',     type:'enum', opts:['auto'].concat(Object.keys(V.PALETTES || {})) },
+    { k:'len',       label:'帧数',     type:'num',  min:12, max:60, step:1,    def:34 },
+    { k:'glow',      label:'亮度',     type:'num',  min:0.2, max:1.4, step:0.05, def:1 },
+    { k:'trails',    label:'残影',     type:'num',  min:0, max:8, step:1,    def:3 },
+    { k:'arcs',      label:'弧数',     type:'num',  min:0, max:6, step:1,    def:2 },
+    { k:'ghostLen',  label:'残影长',   type:'num',  min:0, max:8, step:1,    def:3 },
+    { k:'gameScale', label:'游戏内缩放',type:'num', min:0.25, max:1, step:0.01, def:V.GAME_SCALE },
+    { k:'gameRay',   label:'速度线保留',type:'num', min:0.2, max:1, step:0.01, def:V.GAME_RAY_KEEP },
+  ];
+  function cur(){ return T.arts[ART] || (T.arts[ART] = {}); }
+  function now(k, def){
+    var ov = T.arts[ART] || {}, s = V.specOf(ART) || {};
+    var v = (ov[k] !== undefined) ? ov[k] : (s[k] !== undefined ? s[k] : def);
+    if (k === 'len') v = V.total(ART);
+    if (k === 'palette' && !v) v = 'auto';
+    return v;
+  }
+  function setTune(k, v){
+    if (k === 'palette' && v === 'auto') { delete cur().palette; }
+    else cur()[k] = v;
+    V.invalidate(); rebuild();
+  }
+  var tune = $('tune');
+  FIELDS.forEach(function(f){
+    var row = document.createElement('div'); row.className = 'trow';
+    var lab = document.createElement('span'); lab.textContent = f.label; row.appendChild(lab);
+    if (f.type === 'enum') {
+      var s = document.createElement('select');
+      f.opts.forEach(function(o){ var op = document.createElement('option'); op.value = o; op.textContent = o; s.appendChild(op); });
+      s.value = now(f.k, f.opts[0]);
+      s.onchange = function(){ setTune(f.k, this.value); };
+      row.appendChild(s); f.el = s;
+    } else {
+      var r = document.createElement('input');
+      r.type = 'range'; r.min = f.min; r.max = f.max; r.step = f.step; r.value = now(f.k, f.def);
+      var out = document.createElement('output'); out.textContent = r.value;
+      r.oninput = function(){ out.textContent = this.value; setTune(f.k, Number(this.value)); };
+      row.appendChild(r); row.appendChild(out); f.el = r; f.out = out;
+    }
+    tune.appendChild(row);
+  });
+  // 单招开关：关掉就退回游戏原本的刀光
+  var chkRow = document.createElement('div'); chkRow.className = 'trow check';
+  var chk = document.createElement('input'); chk.type = 'checkbox'; chk.id = 'chkEnabled';
+  var chkLab = document.createElement('span'); chkLab.textContent = '游戏内启用演武（关掉＝退回原本刀光）';
+  chkRow.appendChild(chk); chkRow.appendChild(chkLab); tune.appendChild(chkRow);
+  chk.onchange = function(){ if (this.checked) delete cur().enabled; else cur().enabled = false; V.invalidate(); rebuild(); };
+  var acts = document.createElement('div'); acts.className = 'acts';
+  acts.innerHTML = '<span class="kv" style="margin:0">改任意参数会立刻重烤当前招式的全部帧；' +
+                   '「重置本招」只删这一招的覆盖，不影响其它 79 招。</span>';
+  tune.appendChild(acts);
+
+  function syncControls(){
+    FIELDS.forEach(function(f){
+      var v = now(f.k, f.def);
+      f.el.value = v;
+      if (f.out) f.out.textContent = v;
+    });
+    chk.checked = V.enabled(ART);
+  }
+  function exportJSON(){
+    var out = { version: 1, arts: {} };
+    Object.keys(T.arts).forEach(function(id){
+      var o = T.arts[id];
+      if (o && Object.keys(o).length) out.arts[id] = o;
+    });
+    return JSON.stringify(out, null, 2);
+  }
+
+  // ---- 预烤帧 ----
+  function bake(mode, f){
+    var buf = new V.PixBuf(V.W, V.H, V.PAL.ink1);
+    V.rasterize(buf, V.frame(ART, f, mode).prims);
+    var cv = document.createElement('canvas'); cv.width = V.W; cv.height = V.H;
+    var g = cv.getContext('2d'), im = g.createImageData(V.W, V.H);
+    im.data.set(buf.d); g.putImageData(im, 0, 0);
+    return cv;
+  }
+  var cvOld=$('cvOld'), cvNew=$('cvNew'), zvOld=$('zvOld'), zvNew=$('zvNew');
+  var ZX=58, ZY=84, ZW=120, ZH=62;
+  function zoom(cv, cell){
+    var g=cv.getContext('2d'); g.imageSmoothingEnabled=false;
+    g.clearRect(0,0,cv.width,cv.height);
+    g.drawImage(cell, ZX,ZY,ZW,ZH, 0,0,cv.width,cv.height);
+  }
+  function paintDirs(){
+    DIRS.forEach(function(d){
+      var name = d[0], rot = d[1], cv = $('dir'+name), g = cv.getContext('2d');
+      g.setTransform(1,0,0,1,0,0);
+      g.fillStyle = V.PAL.ink1; g.fillRect(0,0,cv.width,cv.height);
+      g.save();
+      g.translate(cv.width/2 - V.CX*2, cv.height/2 - V.CY*2);
+      g.scale(2,2);
+      // 与 game.js drawOverlay 完全相同的调用：game:true + 原始 aim
+      V.renderCanvas(g, V.frame(ART, frame, 'cine', { game:true, rot:rot }).prims, 0, 0, 1, ['fx']);
+      g.restore();
+      g.strokeStyle = '#F2D089'; g.lineWidth = 1;
+      g.beginPath(); g.arc(cv.width/2, cv.height/2, 10, 0, Math.PI*2); g.stroke();
+      g.strokeStyle = '#3A352A';
+      g.beginPath(); g.moveTo(0, cv.height/2+2); g.lineTo(cv.width, cv.height/2+2); g.stroke();
+    });
+    $('dirInfo').textContent = '第 ' + frame + ' 帧 · 只画 fx 组 + 人物站位圈（游戏真人由 game.js 自己画）。' +
+      '四方向由 cine-vfx.js 的 DIR_XFORM 变换：R 恒等 / D +90° / L 镜像 / U -90°。';
+  }
+  function paint(){
+    var fr = V.frame(ART, frame, 'cine');
+    cvOld.getContext('2d').drawImage(cells.legacy[frame],0,0);
+    cvNew.getContext('2d').drawImage(cells.cine[frame],0,0);
+    zoom(zvOld, cells.legacy[frame]); zoom(zvNew, cells.cine[frame]);
+    $('fr').textContent = '第 ' + frame + ' / ' + (N-1) + ' 帧';
+    $('slider').value = frame;
+    var st = fr.stage;
+    $('phase').textContent = st.name + ' · ' + st.note + (frame>=REC ? ' [可续招]' : '');
+    var ns = $('stages').children;
+    for(var i=0;i<ns.length;i++) ns[i].className = 'stg' + (STG[i].id===st.id?' on':'');
+    var nn = $('notes').children;
+    for(var j=0;j<nn.length;j++) nn[j].className = (j===0 && st.id==='slash') || (j===1 && frame>=REC) ? 'on' : '';
+    paintDirs();
+  }
+  function rebuild(){
+    N = V.total(ART); STG = V.stages(ART); REC = STG[4].s;
+    frame = Math.min(frame, N-1);
+    cells = { legacy: [], cine: [] };
+    for(var f=0; f<N; f++){ cells.legacy.push(bake('legacy',f)); cells.cine.push(bake('cine',f)); }
+    $('slider').max = N - 1;
+    var s = V.specOf(ART);
+    $('meta').innerHTML = '<i>档位</i> ' + s.tier + ' · <i>骨架</i> ' + s.skeleton +
+      ' · <i>帧数</i> ' + N + ' · <i>形状</i> ' + (s.shape || '-') +
+      ' · <i>类型</i> ' + (s.fx || '-') + ' · <i>熟练</i> ' + s.prof +
+      ' · <i>游戏内</i> ' + (V.enabled(ART) ? '启用' : '<span style="color:#E8806F">退回原本刀光</span>');
+    var stEl = $('stages'); stEl.innerHTML = '';
+    STG.forEach(function(st){
+      var d=document.createElement('div'); d.className='stg';
+      d.innerHTML = st.name + ' <i>' + st.s + '–' + st.e + ' 帧</i>';
+      d.title = st.note;
+      d.onclick=function(){ frame=st.s; playing=false; $('btnPlay').textContent='播放'; paint(); };
+      stEl.appendChild(d);
+    });
+    syncControls();
+    $('export').value = exportJSON();
+    paint();
+  }
+
+  // ---- 静态说明 ----
+  $('notes').innerHTML = '<div>命中定帧：白芯主刃 + 破甲十字 + 冲击波</div>' +
+                         '<div>收势段起可取消窗口：能直接接下一招</div>';
+  V.DIFF.forEach(function(d){
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td>'+d.pain+'</td><td>'+d.old+'</td><td>'+d.now+'</td>';
+    $('diff').appendChild(tr);
+  });
+  $('howto').innerHTML =
+    '这一页和游戏里用的是 <b>同一份帧数据</b>（cine-vfx.js），不是另画的一张演示图。' +
+    '<b>80 招已全部接入游戏</b>：execArt 里目录中有该招就走演武层，artSwingFx 入口统一跳过原本刀光。' +
+    '某一招觉得不好，在这里调完导出 JSON 贴进 <b>cine-tuning.js</b>；' +
+    '想整招回退就在覆盖层写 <b>enabled:false</b>。改模板规则才需要动 cine-vfx.js，' +
+    '重跑 <b>node tools/cine-frames.js</b> 重出验收图与全量自检。arts.js 一个字节都不用改。';
+
+  // ---- 交互 ----
+  sel.onchange = function(){ ART = this.value; frame = 0; V.invalidate(); rebuild(); };
+  $('btnPrevArt').onclick = function(){
+    var i = ARTS.findIndex(function(a){ return a.id === ART; });
+    ART = ARTS[(i - 1 + ARTS.length) % ARTS.length].id; sel.value = ART; frame = 0; V.invalidate(); rebuild();
+  };
+  $('btnNextArt').onclick = function(){
+    var i = ARTS.findIndex(function(a){ return a.id === ART; });
+    ART = ARTS[(i + 1) % ARTS.length].id; sel.value = ART; frame = 0; V.invalidate(); rebuild();
+  };
+  $('btnResetArt').onclick = function(){ delete T.arts[ART]; V.invalidate(); rebuild(); };
+  $('btnCopy').onclick = function(){
+    var ta = $('export'); ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch(e) {}
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).catch(function(){});
+    $('copyHint').innerHTML = ok ? '<b style="color:#9BD4CC">已复制到剪贴板</b>，贴进 cine-tuning.js 即可。'
+                                  : '若复制被浏览器拦下，请手动全选上面文本框复制。';
+  };
+  $('btnPlay').onclick=function(){ playing=!playing; this.textContent=playing?'暂停':'播放'; };
+  $('btnPrev').onclick=function(){ frame=(frame-1+N)%N; playing=false; $('btnPlay').textContent='播放'; paint(); };
+  $('btnNext').onclick=function(){ frame=(frame+1)%N; playing=false; $('btnPlay').textContent='播放'; paint(); };
+  $('btnReset').onclick=function(){ frame=0; paint(); };
+  $('selSpeed').onchange=function(){ speed=Number(this.value)||1; };
+  $('slider').oninput=function(){ frame=Number(this.value); playing=false; $('btnPlay').textContent='播放'; paint(); };
+  Array.prototype.forEach.call(document.querySelectorAll('button[data-f]'),function(b){
+    b.onclick=function(){ frame=Math.min(N-1,Number(b.dataset.f)); playing=false; $('btnPlay').textContent='播放'; paint(); };
+  });
+  function loop(ts){
+    if(playing){
+      if(!last) last=ts;
+      acc += (ts-last)/1000*V.FPS*speed; last=ts;
+      if(acc>=1){ var st=Math.floor(acc); acc-=st; frame=(frame+st)%N; paint(); }
+    } else last=0;
+    requestAnimationFrame(loop);
+  }
+  rebuild(); requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

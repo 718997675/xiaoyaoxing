@@ -1,0 +1,565 @@
+{
+  "version": 1,
+  "arts": {
+    "sword_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 1,
+        "fxLen": 7
+      }
+    },
+    "sword_2": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 2,
+        "fxLen": 9
+      }
+    },
+    "sword_3": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 2,
+        "fxLen": 9
+      }
+    },
+    "sword_4": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 11
+      }
+    },
+    "sword_5": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 1,
+        "fxLen": 4
+      }
+    },
+    "sword_6": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 9
+      }
+    },
+    "sword_7": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 8,
+        "fxLen": 22
+      }
+    },
+    "sword_8": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 9
+      }
+    },
+    "blade_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 2,
+        "fxLen": 7
+      }
+    },
+    "blade_2": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 9
+      }
+    },
+    "blade_3": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 10
+      }
+    },
+    "blade_4": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 12
+      }
+    },
+    "blade_5": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 2,
+        "fxLen": 4
+      }
+    },
+    "blade_6": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 9
+      }
+    },
+    "blade_7": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 8,
+        "fxLen": 22
+      }
+    },
+    "blade_8": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 10
+      }
+    },
+    "spear_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 1,
+        "fxLen": 6
+      }
+    },
+    "spear_2": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 2,
+        "fxLen": 8
+      }
+    },
+    "spear_3": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 2,
+        "fxLen": 9
+      }
+    },
+    "spear_4": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 11
+      }
+    },
+    "spear_5": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 1,
+        "fxLen": 4
+      }
+    },
+    "spear_6": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 8
+      }
+    },
+    "spear_7": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 8,
+        "fxLen": 22
+      }
+    },
+    "spear_8": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 9
+      }
+    },
+    "staff_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 9
+      }
+    },
+    "staff_2": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 11
+      }
+    },
+    "staff_3": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 13
+      }
+    },
+    "staff_4": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 5,
+        "fxLen": 15
+      }
+    },
+    "staff_5": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 5
+      }
+    },
+    "staff_6": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 5,
+        "fxLen": 12
+      }
+    },
+    "staff_7": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 8,
+        "fxLen": 22
+      }
+    },
+    "staff_8": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 5,
+        "fxLen": 13
+      }
+    },
+    "dual_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 2,
+        "fxLen": 8
+      }
+    },
+    "dual_2": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 10
+      }
+    },
+    "dual_3": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 11
+      }
+    },
+    "dual_4": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 13
+      }
+    },
+    "dual_5": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 2,
+        "fxLen": 4
+      }
+    },
+    "dual_6": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 10
+      }
+    },
+    "dual_7": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 8,
+        "fxLen": 22
+      }
+    },
+    "dual_8": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 11
+      }
+    },
+    "hammer_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 9
+      }
+    },
+    "hammer_2": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 11
+      }
+    },
+    "hammer_3": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 12
+      }
+    },
+    "hammer_4": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 5,
+        "fxLen": 14
+      }
+    },
+    "hammer_5": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 5
+      }
+    },
+    "hammer_6": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 5,
+        "fxLen": 11
+      }
+    },
+    "hammer_7": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 8,
+        "fxLen": 22
+      }
+    },
+    "hammer_8": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 5,
+        "fxLen": 12
+      }
+    },
+    "mage_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 1,
+        "fxLen": 7
+      }
+    },
+    "mage_2": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 2,
+        "fxLen": 9
+      }
+    },
+    "mage_3": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 2,
+        "fxLen": 10
+      }
+    },
+    "mage_4": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 12
+      }
+    },
+    "mage_5": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 1,
+        "fxLen": 4
+      }
+    },
+    "mage_6": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 9
+      }
+    },
+    "mage_7": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 8,
+        "fxLen": 22
+      }
+    },
+    "mage_8": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 10
+      }
+    },
+    "dart_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 1,
+        "fxLen": 6
+      }
+    },
+    "dart_2": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 2,
+        "fxLen": 8
+      }
+    },
+    "dart_3": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 2,
+        "fxLen": 8
+      }
+    },
+    "dart_4": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 10
+      }
+    },
+    "dart_5": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 1,
+        "fxLen": 4
+      }
+    },
+    "dart_6": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 8
+      }
+    },
+    "dart_7": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 8,
+        "fxLen": 22
+      }
+    },
+    "dart_8": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 8
+      }
+    },
+    "chain_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 11
+      }
+    },
+    "chain_2": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 5,
+        "fxLen": 13
+      }
+    },
+    "chain_3": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 5,
+        "fxLen": 15
+      }
+    },
+    "chain_4": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 6,
+        "fxLen": 17
+      }
+    },
+    "chain_5": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 6
+      }
+    },
+    "chain_6": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 6,
+        "fxLen": 14
+      }
+    },
+    "chain_7": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 8,
+        "fxLen": 22
+      }
+    },
+    "chain_8": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 6,
+        "fxLen": 15
+      }
+    },
+    "fan_1": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 10
+      }
+    },
+    "fan_2": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 12
+      }
+    },
+    "fan_3": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 4,
+        "fxLen": 13
+      }
+    },
+    "fan_4": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 5,
+        "fxLen": 15
+      }
+    },
+    "fan_5": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 3,
+        "fxLen": 5
+      }
+    },
+    "fan_6": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 5,
+        "fxLen": 12
+      }
+    },
+    "fan_7": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 8,
+        "fxLen": 22
+      }
+    },
+    "fan_8": {
+      "timeline": {
+        "fps": 30,
+        "fxStart": 5,
+        "fxLen": 13
+      }
+    }
+  }
+}
