@@ -19,142 +19,142 @@
     "dnaTweak": 3
   },
   "sword_2": {
-    "dnaTweak": 10
+    "dnaTweak": 1
   },
   "sword_3": {
-    "dnaTweak": 10
+    "dnaTweak": 5
   },
   "sword_4": {
     "dnaTweak": 6
   },
   "sword_5": {
-    "dnaTweak": 5
+    "dnaTweak": 6
   },
   "sword_6": {
-    "dnaTweak": 1
+    "dnaTweak": 7
   },
   "sword_7": {
-    "dnaTweak": 9
+    "dnaTweak": 2
   },
   "sword_8": {
-    "dnaTweak": 10
+    "dnaTweak": 9
   },
   "blade_1": {
-    "dnaTweak": 8
+    "dnaTweak": 3
   },
   "blade_2": {
     "dnaTweak": 7
   },
   "blade_3": {
-    "dnaTweak": 7
+    "dnaTweak": 9
   },
   "blade_4": {
-    "dnaTweak": 8
+    "dnaTweak": 10
   },
   "blade_6": {
-    "dnaTweak": 2
+    "dnaTweak": 5
   },
   "blade_7": {
-    "dnaTweak": 1
+    "dnaTweak": 9
+  },
+  "blade_8": {
+    "dnaTweak": 8
   },
   "spear_1": {
     "dnaTweak": 3
   },
   "spear_2": {
-    "dnaTweak": 8
-  },
-  "spear_3": {
-    "dnaTweak": 11
+    "dnaTweak": 9
   },
   "spear_4": {
-    "dnaTweak": 7
+    "dnaTweak": 8
   },
   "spear_5": {
     "dnaTweak": 7
   },
   "spear_6": {
-    "dnaTweak": 5
+    "dnaTweak": 7
   },
   "spear_7": {
     "dnaTweak": 1
   },
   "spear_8": {
-    "dnaTweak": 2
+    "dnaTweak": 9
+  },
+  "staff_1": {
+    "dnaTweak": 8
   },
   "staff_2": {
-    "dnaTweak": 11
+    "dnaTweak": 3
   },
   "staff_3": {
-    "dnaTweak": 9
+    "dnaTweak": 2
   },
   "staff_4": {
     "dnaTweak": 2
-  },
-  "staff_5": {
-    "dnaTweak": 8
   },
   "staff_6": {
     "dnaTweak": 1
   },
   "staff_7": {
-    "dnaTweak": 9
+    "dnaTweak": 6
   },
   "staff_8": {
-    "dnaTweak": 5
+    "dnaTweak": 11
   },
   "dual_1": {
     "dnaTweak": 3
   },
   "dual_2": {
-    "dnaTweak": 3
+    "dnaTweak": 8
   },
   "dual_3": {
-    "dnaTweak": 7
+    "dnaTweak": 6
   },
   "dual_4": {
+    "dnaTweak": 6
+  },
+  "dual_5": {
     "dnaTweak": 2
   },
   "dual_6": {
-    "dnaTweak": 3
+    "dnaTweak": 9
   },
   "dual_7": {
-    "dnaTweak": 2
+    "dnaTweak": 5
   },
   "dual_8": {
     "dnaTweak": 5
   },
   "hammer_1": {
-    "dnaTweak": 4
+    "dnaTweak": 10
   },
   "hammer_3": {
-    "dnaTweak": 5
+    "dnaTweak": 7
   },
-  "hammer_5": {
-    "dnaTweak": 2
-  },
-  "hammer_6": {
+  "hammer_4": {
     "dnaTweak": 6
   },
-  "hammer_7": {
-    "dnaTweak": 1
+  "hammer_5": {
+    "dnaTweak": 7
   },
-  "hammer_8": {
-    "dnaTweak": 5
+  "hammer_7": {
+    "dnaTweak": 10
   },
   "mage_1": {
     "dnaTweak": 4
   },
   "mage_2": {
-    "dnaTweak": 5
+    "dnaTweak": 9
   },
   "mage_3": {
-    "dnaTweak": 5
+    "dnaTweak": 9
   },
   "mage_4": {
-    "dnaTweak": 7
+    "dnaTweak": 5
   },
   "mage_5": {
-    "dnaTweak": 9
+    "dnaTweak": 3
   },
   "mage_6": {
     "dnaTweak": 3
@@ -163,34 +163,34 @@
     "dnaTweak": 3
   },
   "mage_8": {
-    "dnaTweak": 10
+    "dnaTweak": 8
   },
   "dart_1": {
     "dnaTweak": 1
   },
   "dart_2": {
-    "dnaTweak": 8
+    "dnaTweak": 6
   },
   "dart_3": {
-    "dnaTweak": 3
+    "dnaTweak": 1
   },
   "dart_4": {
-    "dnaTweak": 3
+    "dnaTweak": 7
   },
   "dart_5": {
-    "dnaTweak": 8
+    "dnaTweak": 3
   },
   "dart_6": {
-    "dnaTweak": 9
+    "dnaTweak": 10
   },
   "dart_7": {
-    "dnaTweak": 5
+    "dnaTweak": 2
   },
   "dart_8": {
-    "dnaTweak": 4
+    "dnaTweak": 9
   },
   "chain_2": {
-    "dnaTweak": 9
+    "dnaTweak": 1
   },
   "chain_3": {
     "dnaTweak": 7
@@ -201,38 +201,35 @@
   "chain_5": {
     "dnaTweak": 3
   },
-  "chain_6": {
-    "dnaTweak": 3
-  },
   "chain_7": {
-    "dnaTweak": 3
+    "dnaTweak": 11
   },
   "chain_8": {
-    "dnaTweak": 7
+    "dnaTweak": 3
   },
   "fan_1": {
-    "dnaTweak": 11
+    "dnaTweak": 9
   },
   "fan_2": {
     "dnaTweak": 5
   },
   "fan_3": {
-    "dnaTweak": 9
+    "dnaTweak": 8
   },
   "fan_4": {
-    "dnaTweak": 3
+    "dnaTweak": 8
   },
   "fan_5": {
-    "dnaTweak": 5
-  },
-  "fan_6": {
     "dnaTweak": 7
   },
+  "fan_6": {
+    "dnaTweak": 3
+  },
   "fan_7": {
-    "dnaTweak": 6
+    "dnaTweak": 11
   },
   "fan_8": {
-    "dnaTweak": 3
+    "dnaTweak": 11
   }
 } };
   if (typeof globalThis !== 'undefined') globalThis.CINE_TUNING = TUNING;

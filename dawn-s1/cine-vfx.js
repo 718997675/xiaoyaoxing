@@ -567,7 +567,7 @@
     var tw = (s.dnaTweak | 0) & 15;
     var sd = (s.seed ^ Math.imul(tw + 1, 0x9E3779B9)) >>> 0;
     var H = function (i, salt) { return h32(i, salt, sd); };
-    var d = {}, i, w = [], tw = 0, v;
+    var d = {}, i, w = [], wsum = 0, v;
     var A = (assignOf() || {})[s.id];
     d.path = A ? A.path : Math.floor(H(0, 11) * PATH_N);
     d.segN = 4 + Math.floor(H(1, 13) * 3);
@@ -579,6 +579,10 @@
     d.twinA = 0.24 + H(8, 41) * 0.46;
     d.hookBack = 0.45 + H(9, 43) * 0.5;
     d.glyph = A ? A.glyph : Math.floor(H(10, 47) * GLYPH_N);
+    // morph：主刃次级拓扑变形轴，由 tweak 派生（gcd 保证 0..11 各不相同）。
+    // path 由全局唯一分配固定不能动，同 path 家族靠 morph 把主刃轨迹岔开——
+    // 否则 mage_2/mage_7 这类同族招式主刃骨架天生相似，tweak 改 body/primacy 也救不了。
+    d.morph = tw;
     d.gArms = 3 + Math.floor(H(11, 53) * 7);
     d.gSpin = H(12, 59) * Math.PI * 2;
     d.gR = 14 + H(13, 61) * 16;
@@ -595,8 +599,8 @@
     var A0 = A ? A.rank : 0, a8 = A0 % 8, b8 = Math.floor(A0 / 8) % 10;
     d.segs = [a8, b8, (a8 * 3 + b8 * 5 + 1) % 10,
               (a8 * 7 + b8 * 3 + 2) % 10, (a8 * 2 + b8 * 11 + 4) % 10];
-    d.body = (A0 * 5 + 3) % 12;              // 12 种互斥骨架，避免动作剪影扎堆
-    d.primacy = (A0 + tw * 3) % 6;           // 6 种主导图元类型，命中帧的主体不再全是线
+    d.body = (A0 * 5 + 3 + tw * 7) % 12;             // 12 种互斥骨架，tweak 可再错开（gcd(7,12)=1）
+    d.primacy = (A0 + tw * 5) % 6;                   // 6 种主导图元类型，gcd(5,6)=1 保证 tweak 能遍历全部
     // 演武台站位错开：同骨架的两招也不能叠在同一处（游戏内 hero 不画，不影响锚点）
     d.heroShift = (H(95, 173) - 0.5) * 34;
     // 构图偏移：即便两招的段编排撞上，整体位置/尺度/每段起手点也错开，
@@ -609,8 +613,8 @@
       seg: [0, 1, 2, 3, 4].map(function (k2) { return (H(94 + k2, 167) - 0.5) * 16; }),
     };
     d.rhythm = [];
-    for (i = 0; i < 5; i++) { v = 0.65 + H(30 + i, 107) * 0.9; w.push(v); tw += v; }
-    for (i = 0; i < 5; i++) d.rhythm.push(w[i] / tw);
+    for (i = 0; i < 5; i++) { v = 0.65 + H(30 + i, 107) * 0.9; w.push(v); wsum += v; }
+    for (i = 0; i < 5; i++) d.rhythm.push(w[i] / wsum);
     // 五段姿态各自独立：不再是「所有招共用一条 lunge 曲线」
     d.pose = [];
     for (i = 0; i < 5; i++) d.pose.push({
@@ -643,6 +647,15 @@
         case 10: dirs.push(Math.sin(u * Math.PI * 3) * d.waveAmp / 20); break;   // 波浪
         default: dirs.push(u < 0.62 ? 0 : d.hookBack * Math.PI);                // 回旋镖
       }
+    }
+    // morph 次级变形：同一 path 家族靠它岔开主刃轨迹。
+    //  bit0 反转段序、bit1 曲率取反、bit2 相位平移；作用完仍从手出发、仍受四方向变换。
+    var mf = d.morph | 0;
+    if (mf & 2) for (i = 0; i < N; i++) dirs[i] = -dirs[i];          // 镜像曲率
+    if (mf & 1) dirs.reverse();                                       // 反转段序
+    if (mf & 4) {                                                     // 相位平移
+      var sh = 0.5 + ((mf >> 2) & 3) * 0.35;
+      dirs = dirs.map(function (v, idx) { return v + Math.sin((idx + sh) * 1.7) * 0.28; });
     }
     for (i = 0; i < N; i++) {
       var a = ang + dirs[i], q = step * (1 + b * 0.12);

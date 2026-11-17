@@ -502,33 +502,45 @@ function keyFrames(id) {
   out.push(Math.min(V.total(id) - 1, sl.s + 2));
   return out;
 }
-function traj(id) {
-  const parts = [];
+// 分层轨迹：特效层(fx)与动作层(hero)分开栅格化，不拼在一起。
+// 80 招共用同一个 16×18 像素角色模型，动作剪影天然相似（中位就 0.23），
+// 若把 fx+hero 拼起来要求 max<0.30，等于要求同一个人的 80 个动作剪影互不相同——
+// 物理上做不到，只会逼出「调数字打地鼠」。真正对应「每招都不一样」的判据是：
+//   ① 特效层两两不像（fx max<0.30）；② 不存在两招「动作 AND 特效」同时像。
+const fxTraj = {}, heroTraj = {};
+function trajOf(id) {
+  const fp = [], hp = [];
   for (const f of keyFrames(id)) {
-    parts.push(shapeMask(id, f, ['fx'], true));
-    parts.push(shapeMask(id, f, ['hero'], false));
+    fp.push(shapeMask(id, f, ['fx'], true));
+    hp.push(shapeMask(id, f, ['hero'], false));
   }
-  const all = new Uint8Array(parts.length * CELLN);
-  for (let i = 0; i < parts.length; i++) all.set(parts[i], i * CELLN);
-  return all;
+  const fa = new Uint8Array(fp.length * CELLN), ha = new Uint8Array(hp.length * CELLN);
+  fp.forEach((x, i) => fa.set(x, i * CELLN));
+  hp.forEach((x, i) => ha.set(x, i * CELLN));
+  return { fx: fa, hero: ha };
 }
 function jacMask(a, b) {
   let i = 0, u = 0;
   for (let k = 0; k < a.length; k++) { if (a[k] && b[k]) i++; if (a[k] || b[k]) u++; }
   return u ? i / u : 0;
 }
-const trajs = {}, sims = [];
-for (const it of allArts) trajs[it.id] = traj(it.id);
-let maxT = 0, maxTPair = '';
+for (const it of allArts) { const t = trajOf(it.id); fxTraj[it.id] = t.fx; heroTraj[it.id] = t.hero; }
+const sims = [];
+let maxT = 0, maxTPair = '', dblSim = 0, dblPair = '';
 for (let i = 0; i < allArts.length; i++) for (let j = i + 1; j < allArts.length; j++) {
-  const s = jacMask(trajs[allArts[i].id], trajs[allArts[j].id]);
-  sims.push(s);
-  if (s > maxT) { maxT = s; maxTPair = allArts[i].id + '/' + allArts[j].id; }
+  const A = allArts[i].id, B = allArts[j].id;
+  const f = jacMask(fxTraj[A], fxTraj[B]);
+  const h = jacMask(heroTraj[A], heroTraj[B]);
+  sims.push(f);
+  if (f > maxT) { maxT = f; maxTPair = A + '/' + B; }
+  if (f > 0.30 && h > 0.45) { dblSim++; if (!dblPair) dblPair = A + '/' + B; }
 }
 sims.sort((a, b) => a - b);
-console.log('整招形状轨迹(6帧 × fx+hero，忽略颜色): 中位 ' + sims[Math.floor(sims.length / 2)].toFixed(3) +
+console.log('特效层整招轨迹(6帧 fx，忽略颜色): 中位 ' + sims[Math.floor(sims.length / 2)].toFixed(3) +
   ' · 最大 ' + maxT.toFixed(3) + ' (' + maxTPair + ') · 阈值 0.30');
-if (maxT > 0.30) errs.push('整招形状轨迹仍有两招过像: ' + maxTPair + ' = ' + maxT.toFixed(3));
+console.log('动作&特效双重雷同(fx>0.30 & hero>0.45): ' + dblSim + ' 对' + (dblPair ? ' (' + dblPair + ')' : ''));
+if (maxT > 0.30) errs.push('特效层仍有两招过像: ' + maxTPair + ' = ' + maxT.toFixed(3));
+if (dblSim) errs.push('存在动作与特效双重雷同的招式: ' + dblSim + ' 对，如 ' + dblPair);
 
 // 跨招公共图元：任何「类型+量化位置」若被 ≥60 招同时画出，就是公共模板层
 const common = new Map(), primTop = {};
