@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>传奇式技能演出重构方案 · 研究版（待拍板）</title>
+<style>
+:root{
+  --bg:#f5f4ef; --card:#fffefa; --ink:#20242b; --dim:#6b7280; --line:#e2e0d7;
+  --red:#b3382c; --gold:#9a6b18; --jade:#2f6e6a; --pur:#5d4a8a;
+  --warnbg:#fff4e8; --warnline:#e3b573; --okbg:#eef6f0; --badbg:#fdeeee;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:32px 24px 80px}
+header{border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:28px}
+h1{font-size:28px;margin:0 0 8px;letter-spacing:.02em}
+h2{font-size:19px;margin:38px 0 14px;padding-left:10px;border-left:4px solid var(--gold)}
+h3{font-size:15px;margin:20px 0 8px}
+p{margin:8px 0}
+a{color:var(--jade)}
+.lead{font-size:16px;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--red);
+  padding:16px 18px;border-radius:6px;line-height:1.9}
+.lead b{color:var(--red)}
+.grid{display:grid;gap:14px}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:760px){.g3,.g2{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px 18px}
+.card.war{border-top:4px solid var(--red)}
+.card.mag{border-top:4px solid var(--pur)}
+.card.tao{border-top:4px solid var(--jade)}
+.card h4{margin:0 0 6px;font-size:17px}
+.card .tag{display:inline-block;font-size:11px;color:var(--dim);border:1px solid var(--line);
+  border-radius:10px;padding:0 8px;margin-left:6px;vertical-align:2px}
+ul{margin:6px 0 0;padding-left:20px}
+li{margin:4px 0}
+table{border-collapse:collapse;width:100%;background:var(--card);font-size:13px}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:#efede5;font-weight:600}
+td.num{text-align:center;font-variant-numeric:tabular-nums}
+.bad{color:var(--red);font-weight:600}
+.good{color:var(--jade);font-weight:600}
+code{background:#eeeae0;padding:1px 5px;border-radius:3px;font:12px ui-monospace,Consolas,monospace}
+.note{background:var(--warnbg);border:1px solid var(--warnline);border-radius:6px;padding:12px 16px;margin:14px 0}
+.note.ok{background:var(--okbg);border-color:#a8c9b2}
+.sw{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:-1px;margin-right:4px;border:1px solid rgba(0,0,0,.15)}
+.swatch{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:6px 0}
+.decide{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin:12px 0}
+.decide .q{font-weight:600;font-size:15px;margin-bottom:6px}
+.decide .opt{font-size:13px;color:var(--dim);padding-left:16px}
+.decide .rec{color:var(--jade);font-weight:600}
+.src{font-size:12px;color:var(--dim);margin-top:6px}
+footer{margin-top:48px;border-top:1px solid var(--line);padding-top:14px;color:var(--dim);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>传奇式技能演出重构方案</h1>
+  <div>研究版 · 2026-11-18 · <b>口径已拍板：四视觉族 / 玩法零重复不变 / 先出样片</b></div>
+</header>
+
+<div class="card" style="border-left:5px solid var(--jade)">
+  <h3 style="margin-top:0">2026-11-18 拍板结果（下面三族方案以此为准）</h3>
+  <ul>
+    <li><b>四个视觉族</b>：战士 = 剑 / 刀 / 枪 / 锤；法师 = 法杖 / 扇（法器意象）；道士 = 棍杖（令旗 / 魂幡意象）；刺客 = 暗器 / 双刃 / 锁链。</li>
+    <li><b>10 兵器 ID、技能表、数值全不变</b> —— 法器 / 令旗 / 魂幡只做演出道具，刺客是第 4 个视觉族，不是玩法职业。</li>
+    <li><b>玩法字段零重复保留</b>（<code>art-unique.js</code> 继续卡全表），演出层允许同族共用语法，差异放进形状参数 / 入射角 / 节奏 / 命中帧。</li>
+    <li><b>先做 4 招样片</b>：<code>sword_1</code> 破锋式 / <code>mage_1</code> 灵珠 / <code>staff_6</code> 缠棍 / <code>dart_1</code> 飞蝗 ——
+      见 <code>legend-vfx-sample.html</code>（旧版 CINE vs 新语法逐帧对比）。</li>
+  </ul>
+</div>
+
+<div class="lead">
+一句话结论：<b>传奇的技能好看，不是粒子多，而是每招只做三件事——一个由判定决定的空间形状、一个主色、一个命中爆点。</b><br>
+我们现在把「80 招互不重复」做成了「每招多叠几层」，所以 80 招各不相同，但画面一样乱。
+重构方向不是继续加特效，而是<b>给演出立一套克制的语法</b>，把差异放进形状参数和节奏里，不再放进层数里。
+</div>
+
+<h2>零之前、路线可行性实测（2026-11-18 下午）</h2>
+<p class="lead">「能不能直接拿传奇素材做帧动画 / 或者仿照传奇自己做帧动画」—— 两条路都<b>实际跑了一遍</b>，不是纸上推演。</p>
+
+<table>
+  <tr><th style="width:150px">路线</th><th>实测做了什么</th><th>结论</th></tr>
+  <tr><td><b>A 直接拿传奇素材</b></td>
+      <td>黑键 GIF → 亮度键 + flood fill 抠透明 → PNG 序列 → 预加载 Image → 逐帧 <code>drawImage</code>，接进样片页跑通（8/10/16 帧全部加载并渲染）。</td>
+      <td><b>技术可行，但素材不能直接用</b>：① 传奇 GIF 是「<b>角色 + 特效 + 背景</b>」合体录像 —— 抠出来带角色、带召唤物、带别的元素（绿法阵那帧抠出来是「金翅凤凰 + 远处一个小金阵」），要干净就得逐帧人工修图；② 尺寸是给 <b>800×600 俯视场景</b>画的，我们是 320×180 横版侧视，等比缩小会糊、放大就糊满屏（已实测）；③ 授权不明。<b>拿来做描摹参考极有价值，直接贴进来不行。</b></td></tr>
+  <tr><td><b>B 80 招各做一套帧动画</b></td>
+      <td>产能估算：80 招 × 14 帧 ≈ 1120 帧，且不能复制（否则又是「复制效应」）。</td>
+      <td><b>不可行</b>，而且<b>这不是传奇的做法</b> —— 传奇自己只有十几套基础形状，靠组合出所有技能。</td></tr>
+  <tr><td><b>C 基础形状 sprite 库 + 程序化组合</b></td>
+      <td>实测：<b>2 张</b>手绘/AI 位图（一小弯 + 一大弯月牙），靠缩放 / 位移 / 交叉淡入 / 旋转程序化补出 14 帧动画，跑进同一套渲染管线。</td>
+      <td><b>推荐</b>。质感和层次<b>碾压</b>纯矢量；产能账是 24 套基础形状 × 8~12 帧 ≈ <b>240 帧</b>覆盖全部 80 招，不是 1120 帧。</td></tr>
+</table>
+
+<h3>技术接入点（已核实）</h3>
+<ul>
+  <li>游戏内特效走的是 <code>drawOverlay → CV.renderCanvas(octx, fr.prims, ...)</code>，<b>不是</b>软件光栅化 <code>rasterize</code> —— 所以接位图只需在 <code>renderCanvas</code> 加一个 <code>k:'img'</code> 分支（drawImage），<b>&lt;20 行</b>，不用动像素缓冲那套。</li>
+  <li>配套需要：帧索引表（每个 sprite 记帧数 / 锚点 / 缩放）、Image 异步预加载、<b>加载失败自动回退到矢量图元</b>（否则素材没到位那一招就是空的）。</li>
+  <li>两个必须遵守的坑：素材尺寸要<b>按我们 320×180 的画布重新定</b>；素材是异步的，<b>就绪后必须触发一次重绘</b>（否则暂停状态下首帧是空的）。</li>
+  <li>AI 生成可用但要人工收尾：实测能直接出「白热核心 + 橙红外焰 + 飞溅 + 辉光」的高质量月牙，但<b>带背景色和右下角水印</b>，需要 flood fill 抠背景 + 裁掉水印。</li>
+</ul>
+
+<div class="warn" style="margin:14px 0">
+<b>结论</b>：想「借鉴传奇」，最该借鉴的不是它的像素素材，而是它的<b>做法</b> —— 一套基础形状库 + 程序化组合。
+路线 C 可以在不动玩法数值、不动技能表的前提下，把演出从「173 图元 / 12 色」换成「一个厚实主体 + 十余张手绘帧」。
+</div>
+
+<h2>零、实证：40+ 个真实 GIF 的逐帧观察（2026-11-18 补做）</h2>
+<p class="lead">上一版是靠百度百科词条推演出来的，<b>没看过图就下结论，所以偏了</b>。这一版直接抓了 40+ 个真实技能特效 GIF（关键词「热血传奇 + 职业 + 技能名 + 特效 gif」），逐帧拆开看，下面每一条都有对应帧。</p>
+
+<div class="grid g3">
+  <div class="card war">
+    <h4>战士 <span class="tag">厚弧 / 直线</span></h4>
+    <ul>
+      <li><b>半月弯刀</b>（8 帧）：f0~f2 <b>只有角色举刀，画面全空</b>；f4 一道<b>蓝色月牙刀光</b>从身侧长出（两道弧叠成新月，很厚）；f5 变大变亮；f7 <b>直接消失</b>，没有余韵。</li>
+      <li><b>烈火</b>（8 帧）：f1 红橙拖尾 → f4 <b>一大团火焰爆发</b>（多层火舌，红→橙→黄）→ f7 余烬散开。</li>
+      <li><b>刺杀</b>（38 帧）：蓝色月牙一次性挥出 → 消失 → 只剩红色数字 <b>-268</b> 浮在怪物上方；<b>怪物身上没有白闪</b>。</li>
+      <li>游戏实拍：一道<b>巨大的橙红火焰弧</b>横扫，占满画面一半，弧的边缘才有火星。</li>
+    </ul>
+  </div>
+  <div class="card mag">
+    <h4>法师 <span class="tag">弹道 / 落柱</span></h4>
+    <ul>
+      <li><b>雷电术</b>（20 帧）：f7 一道<b>垂直蓝色光柱</b>从天上劈下，f11 消失 —— <b>瞬发瞬灭</b>。</li>
+      <li><b>火球</b>（12 帧）：f2 一个橙红火球 → f4 变大 → f6 缩小 → f8 <b>碎成碎片散开</b> → f11 余烬飘散。</li>
+      <li><b>火焰弹道</b>（7 帧）：一条橙红紫的<b>细长火焰条</b>从左飞到右。</li>
+      <li>范围招（冰咆哮）：<b>多根同形落柱</b>依次砸下 + 地面法阵，不是不同形状各来一套。</li>
+    </ul>
+  </div>
+  <div class="card tao">
+    <h4>道士 <span class="tag">法阵 / 实体</span></h4>
+    <ul>
+      <li><b>施毒 / 法阵</b>（75 帧）：f29 地面浮起<b>绿色圆形法阵</b>（中心有纹样）→ f44 变亮变实 → f74 收走。</li>
+      <li><b>旋风</b>（19 帧）：一个<b>蓝白色旋转锥体</b>持续旋转，白色碎片飞溅。</li>
+      <li><b>召唤神兽</b>（6 帧）：一只<b>蓝色冰龙实体</b>，有行走 / 呼吸的循环动画 —— 是<b>实体素材</b>，不是粒子特效。</li>
+      <li><b>大招法阵</b>（94 帧）：地面染色 → 天空落下<b>多根金色光柱</b> + 中心旋涡 + 地面涟漪 → 全部消失。</li>
+    </ul>
+  </div>
+</div>
+
+<h3>从这些帧里归纳出的六条铁律（改成可测数字）</h3>
+<table>
+  <tr><th style="width:130px">铁律</th><th>实拍里长什么样</th><th>翻译成本项目的硬指标</th></tr>
+  <tr><td><b>① 一招一形</b></td><td>月牙就是一道月牙，火球就是一颗球，冰咆哮就是几根同形落柱</td><td>形状由 <code>reach / arc / zone</code> 决定；同族共用一套形状语法，不叠第二形状</td></tr>
+  <tr><td><b>② 一招一色相</b></td><td>火焰是<b>红→橙→黄同色相明度渐变</b>；雷是深蓝+白；毒是绿+白</td><td>1 个主色相 + 1 个白高光；整帧 ≤6 色（含人物与兵器）</td></tr>
+  <tr><td><b>③ 主体要厚</b></td><td>月牙刀光厚 20px+ 带白芯；火焰团占画面 1/4；旋风是带纹理的锥体</td><td>刀光/火焰/柱子必须是<b>实心带体积</b>的形状，≥8px 厚；<b>元素少但单个必须大</b></td></tr>
+  <tr><td><b>④ 三段节奏</b></td><td>前 1/3 帧画面大面积留空 → 主体一帧到全盛 → 消散（碎 8~14 粒或直接没）</td><td>起手留白 ≥2 帧；碎屑 ≤14 且只在主体边缘；末帧必须干净</td></tr>
+  <tr><td><b>⑤ 数字不压特效</b></td><td>命中后特效消失，只剩数字浮在怪物上方，周围是空的</td><td>伤害数字周围留空，不叠在特效上；受击不用全身白闪</td></tr>
+  <tr><td><b>⑥ 一招很短</b></td><td>实测 6~30 帧，主流 8~14 帧（0.4~0.8s）</td><td>演出 10~18 帧（<b>现在的 90~120 帧慢了一倍还不止</b>）</td></tr>
+</table>
+
+<div class="warn" style="margin:14px 0">
+<b>和上一版推断的四处出入</b>（上一版是看词条猜的，这版是看帧得到的）：<br>
+① 「传奇特效素」—— <b>错</b>。传奇的单个元素<b>又厚又大</b>，「素」指的是<b>元素数量少</b>，不是尺寸小。<br>
+② 「一招一色」—— <b>方向对但不精确</b>，是 1 色相 + 白高光的<b>明度渐变</b>，不是多色并列。<br>
+③ 上一版<b>完全没提时长</b> —— 我们现在的 3~5s 比传奇慢一倍还不止，这是「乱」之外的第二个病。<br>
+④ 上一版<b>没抓到范围招的招牌手法</b>（多根同形落柱 + 地面法阵），也没抓到<b>召唤物是实体素材</b>。
+</div>
+
+<h2>一、先研究：传奇三职业到底怎么做的</h2>
+<p>查了百度百科技能词条与腾讯官方传奇站的技能说明。下面只提与「视觉实现」有关的事实，机制数值用来解释为什么那样画。</p>
+
+<div class="grid g3">
+  <div class="card war">
+    <h4>战士 <span class="tag">武器即特效</span></h4>
+    <ul>
+      <li><b>刺杀剑术</b>：面前两格直线剑气，1 格与 2 格伤害相同，130% —— 画一条<b>直</b>线，不画弧。</li>
+      <li><b>半月弯刀</b>：身前环形半弧打全怪，70% / 3MP —— 画一道<b>半</b>弧，范围就是半圆。</li>
+      <li><b>烈火剑法</b>：火附刀 10 秒，蓄力释放、后摇长，3 级 2.6 倍，可「双烈火」 —— <b>亮在刀上</b>，不在天上；蓄力期有明确光晕，命中一瞬给白点。</li>
+      <li>独立起手音 / 命中音，靠声音区分阶段，不靠多画粒子。</li>
+    </ul>
+    <div class="src">来源：百度百科「刺杀剑术」「半月弯刀」「烈火剑法」词条</div>
+  </div>
+  <div class="card mag">
+    <h4>法师 <span class="tag">起手 → 飞行 → 爆点</span></h4>
+    <ul>
+      <li><b>雷电术</b>：从天而降的雷电，命中僵直，130% / 20MP，施法间隔 1.2 秒 —— <b>一道光柱 + 一个白点</b>，三段清楚。</li>
+      <li><b>冰咆哮</b>：3×3 范围、110% / 45MP、施法快、100% 命中、连续命中递增 —— 范围用<b>明确的格子</b>，不用满屏飞雪。</li>
+      <li><b>流星火雨</b>：连续三波火球砸 4×4 地面 —— 一波一爆点，次数即节奏。</li>
+      <li>元素各占一色：雷蓝白、冰冷白、火赤金；一招只一种元素。</li>
+    </ul>
+    <div class="src">来源：百度百科「雷电术」「冰咆哮」「流星火雨」词条</div>
+  </div>
+  <div class="card tao">
+    <h4>道士 <span class="tag">小投射物 + 状态标记</span></h4>
+    <ul>
+      <li><b>灵魂火符</b>：单体符咒，为道士主攻 —— <b>一张符飞过去</b>，不是一团火。</li>
+      <li><b>施毒术</b>：降防 + 持续掉血 —— 视觉只在目标身上留<b>一个小状态</b>，不持续放烟花。</li>
+      <li><b>召唤神兽</b>：召唤实体随从，白 / 绿 / 淡蓝按等级 —— 强效果做成<b>一个看得见的伙伴</b>，不是一层特效。</li>
+      <li>官方站明确把施毒、治愈、召唤列为道士核心 —— 辅助走「状态可读」，不走「画面热闹」。</li>
+    </ul>
+    <div class="src">来源：百度百科「召唤神兽」、腾讯传奇官方站道士技能说明</div>
+  </div>
+</div>
+
+<h3>词条推演版的三条（<b style="color:#c98">已被上面的实拍版推翻，保留做对照</b>）</h3>
+<table>
+  <tr><th style="width:120px">铁律</th><th>传奇怎么做的</th><th>实拍推翻的地方</th></tr>
+  <tr><td><b>一招一形</b></td><td>刺杀是直线、半月是半弧、冰咆哮是 3×3</td><td>✅ 对，但没看出「<b>厚</b>」和「同形多根」这两点</td></tr>
+  <tr><td><b>一招一色</b></td><td>雷蓝白、冰冷白、火赤金</td><td>⚠️ 是<b>同色相明度渐变</b>，不是「一个颜色」；而且特效之外人物/兵器还有自己的色</td></tr>
+  <tr><td><b>一招一爆点</b></td><td>命中白点 + 僵直 + 伤害数字</td><td>⚠️ 漏了<b>整招只有 8~14 帧</b>这条 —— 这才是「不乱」的大头</td></tr>
+</table>
+
+<h2>二、诊断：我们现在为什么乱</h2>
+<p>不是凭感觉，是把 <code>cine-vfx.js</code> 的 80 招逐帧跑出来数了：</p>
+<table>
+  <tr><th>指标</th><th class="num">克制 calm</th><th class="num">标准 standard</th><th class="num">爆发 burst</th><th>问题</th></tr>
+  <tr><td>平均图元 / 帧</td><td class="num">170.7</td><td class="num">173.3</td><td class="num">173.3</td><td class="bad">三档几乎一样 —— 分档形同虚设</td></tr>
+  <tr><td>平均颜色数（整招）</td><td class="num">12.0</td><td class="num">12.3</td><td class="num">12.7</td><td class="bad">爆发只多 0.7 色，看不出高潮</td></tr>
+  <tr><td>每帧颜色中位数</td><td class="num" colspan="3">10 ~ 12（含背景网格）</td><td class="bad">传奇一招通常 1 主色 + 白</td></tr>
+  <tr><td>≤2px 碎屑方块 / 帧</td><td class="num" colspan="3">50 ~ 66</td><td class="bad">一半以上图元是飞舞的小像素点</td></tr>
+  <tr><td>特效占帧</td><td class="num" colspan="3">26 ~ 34 帧「全程无空档」</td><td class="bad">从头动到尾，眼睛没有休息点</td></tr>
+</table>
+
+<div class="note">
+<b>根因不是「各不相同」，是「每招都在堆层，而档位没真正拉开差异」。</b><br>
+具体四处：① <code>STAGE_RATIO</code> 要求 26~34 帧每帧都有东西；② 每招固定叠 <code>skeleton + family + 专属 shapeSpec</code> 三层；
+③ <code>TIER</code> 的 layers/ghost/dust/trails/sparks 三档只差几个（8/11/14 火花），摊到 170 图元里看不出来；
+④ <code>DIFF</code> 明写「五阶亮芯、最厚 13px + 光晕、26~34 帧无空档」——当初为解决「效果不明显」加过头了。<br>
+另外两套色规在打架：<code>cine-vfx.js</code> 的 FAMILY（剑 = jade2+gold3）和 <code>VFX-DESIGN-80.md</code>（剑 = jade3+paper3）对不上。
+</div>
+
+<h2>三、重构方案：把 10 兵器收进「战 / 法 / 道」三种视觉族</h2>
+<p><b>这不是改职业玩法</b>——游戏里本来没有职业系统，只有 10 种兵器。这里只做「视觉族」归类：同族共用一套克制的语法，招式之间靠形状参数、方向和节奏区分。装备、数值、存档全不动。</p>
+<div class="grid g3">
+  <div class="card war">
+    <h4>战士族 <span class="tag">近战 · 4 兵器</span></h4>
+    <p>剑 · 刀 · 枪 · 锤</p>
+    <div class="swatch"><i class="sw" style="background:#E8DFC8"></i>米白刀光 <i class="sw" style="background:#C8453B"></i>赤血 <i class="sw" style="background:#D9A441"></i>暗金</div>
+    <ul>
+      <li>只画：<b>一道直 / 一道弧 / 一个下砸白环</b></li>
+      <li>不画：碎屑星点、法阵、飘带、符文</li>
+      <li>命中白芯 2 帧，其余帧无白</li>
+    </ul>
+  </div>
+  <div class="card mag">
+    <h4>法师族 <span class="tag">远程元素 · 3 兵器</span></h4>
+    <p>法杖 · 棍杖 · 扇</p>
+    <div class="swatch"><i class="sw" style="background:#8A6FC4"></i>雷紫 <i class="sw" style="background:#9BD4CC"></i>冰青 <i class="sw" style="background:#D9A441"></i>符金</div>
+    <ul>
+      <li>只画：<b>一道飞行弹 / 一道落雷 / 一个贴地范围圈</b></li>
+      <li>三段分明：起手 → 飞行 → 爆点，中间不留碎屑</li>
+      <li>一招只一种元素，不混色</li>
+    </ul>
+  </div>
+  <div class="card tao">
+    <h4>道士族 <span class="tag">符咒诡道 · 3 兵器</span></h4>
+    <p>暗器 · 双刃 · 锁链</p>
+    <div class="swatch"><i class="sw" style="background:#C9BFA3"></i>符纸 <i class="sw" style="background:#5FA8A0"></i>毒青 <i class="sw" style="background:#4A5568"></i>墨影</div>
+    <ul>
+      <li>只画：<b>一枚符 / 一道影 / 一条链</b></li>
+      <li>状态只在目标身上留一个小标记，不放持续特效</li>
+      <li>召唤类做成实体，不做成一层光</li>
+    </ul>
+  </div>
+</div>
+
+<h3>重写硬指标（先把「克制」变成可测的数字）</h3>
+<table>
+  <tr><th>指标</th><th class="num">现在</th><th class="num">目标上限</th><th>为什么</th></tr>
+  <tr><td>每帧图元</td><td class="num bad">135 ~ 175</td><td class="num good">≤ 60</td><td>超过 60 个图元在 320×180 舞台上必然显碎</td></tr>
+  <tr><td>≤2px 碎屑 / 帧</td><td class="num bad">50 ~ 66</td><td class="num good">≤ 12</td><td>碎屑只留给命中爆点那一帧</td></tr>
+  <tr><td>每帧颜色（含背景）</td><td class="num bad">10 ~ 12</td><td class="num good">≤ 5</td><td>1 主色 + 1 暗部 + 白心 + 背景</td></tr>
+  <tr><td>特效占帧</td><td class="num bad">26 ~ 34 全程</td><td class="num good">克制 ≤10 / 压轴 ≤20</td><td>留出起手前和收势后的空档</td></tr>
+  <tr><td>一招视觉元素</td><td class="num bad">3 层叠加</td><td class="num good">1 形 + 1 爆点</td><td>状态招最多 1 形 + 1 小标记</td></tr>
+  <tr><td>三档差异</td><td class="num bad">170 / 173 / 173</td><td class="num good">6 / 10 / 16 帧清晰分级</td><td>让压轴招真的「不一样」</td></tr>
+</table>
+
+<h2>四、动手前要你拍板的三件事</h2>
+
+<div class="decide">
+  <div class="q">① 三族映射认不认？</div>
+  <div class="opt">战士 = 剑刀枪锤（4） · 法师 = 法杖棍杖扇（3） · 道士 = 暗器双刃锁链（3）。</div>
+  <div class="opt">只统一视觉语法，<b>不动装备、数值、职业玩法</b>。如果哪个兵器你觉得归错族，直接说。</div>
+</div>
+
+<div class="decide">
+  <div class="q">② 「80 招零重复」这把尺子怎么处理？——这是最关键的一条</div>
+  <div class="opt"><span class="rec">建议 A（推荐）</span>：保留<b>玩法字段</b>的零重复（shape / pose / color / snd / hitSnd 全表互不相同，<code>art-unique.js</code> 继续卡），但<b>演出层允许同族共用语法</b>，差异改放在形状参数、入射角、节奏、命中帧上。</div>
+  <div class="opt">B：演出层也继续要求两两不同 —— 那就还是「每招多叠一个元素」，乱的问题会回来。</div>
+  <div class="opt">C：连玩法字段的零重复也放松 —— 会动到 553 条回归基线，不建议。</div>
+</div>
+
+<div class="decide">
+  <div class="q">③ 重构范围</div>
+  <div class="opt"><span class="rec">建议 A（推荐）</span>：先动<b>游戏本体的 CINE 演武层</b>（80 招），抽检台 20 招先冻结，避免两边同时返工。</div>
+  <div class="opt">B：游戏本体 + 抽检台两条线一起改。</div>
+  <div class="opt">C：先拿 4 招做样片给你看效果，再铺开 —— 更慢但风险最低。</div>
+</div>
+
+<div class="note ok">
+拍板后我会先交<b>逐招规范表</b>（80 招 × 传奇原型 / 空间形状 / 主色 / 元素上限 / 命中帧 / 数值锚点），按你之前定的规矩：你逐招确认后才写代码。
+</div>
+
+<footer>
+研究来源：百度百科「刺杀剑术」「半月弯刀」「烈火剑法」「雷电术」「冰咆哮」「流星火雨」「召唤神兽」词条；腾讯传奇官方站道士技能说明。<br>
+诊断数据：本地对 <code>cine-vfx.js</code> 80 招逐帧取图元统计（<code>CineVFX.frame(id,f)</code>），未改动任何产品文件。
+</footer>
+</div>
+</body>
+</html>

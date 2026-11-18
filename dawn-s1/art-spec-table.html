@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>技能演出规范表 · 剩余 64 招（逐招拍板）</title>
+<style>
+:root{
+  --bg:#f7f6f4; --card:#ffffff; --ink:#232229; --dim:#6d6b76; --hint:#918f9a;
+  --line:rgba(0,0,0,.12); --line2:rgba(0,0,0,.22); --soft:#f1f0ee;
+  --pur:#534ab7; --purBg:#eeedfe; --tea:#0f6e56; --teaBg:#e1f5ee;
+  --cor:#993c1d; --corBg:#faece7; --red:#a32d2d; --redBg:#fcebeb;
+  --amber:#854f0b; --amberBg:#faeeda; --blue:#185fa5; --blueBg:#e6f1fb;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#16161a; --card:#202027; --ink:#efeff3; --dim:#a5a3ae; --hint:#85838e;
+    --line:rgba(255,255,255,.14); --line2:rgba(255,255,255,.28); --soft:#282830;
+    --pur:#afa9ec; --purBg:#2c2850; --tea:#5dcaa5; --teaBg:#123a30;
+    --cor:#f0997b; --corBg:#43251a; --red:#f09595; --redBg:#3d1c1c;
+    --amber:#efc775; --amberBg:#3b2c12; --blue:#85b7ea; --blueBg:#182c40;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{max-width:1220px;margin:0 auto;padding:26px 18px 80px}
+h1{font-size:22px;font-weight:600;margin:0 0 6px}
+h2{font-size:16px;font-weight:600;margin:0}
+.sub{color:var(--dim);margin:0 0 14px;font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.top{position:sticky;top:0;z-index:20;background:var(--bg);padding:10px 0 12px;
+  border-bottom:1px solid var(--line);margin-bottom:18px}
+.topRow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;
+  background:var(--soft);color:var(--dim);border:1px solid var(--line)}
+.pill b{color:var(--ink)}
+.pill.ok{background:var(--teaBg);color:var(--tea);border-color:transparent}
+.pill.rev{background:var(--amberBg);color:var(--amber);border-color:transparent}
+button{font-family:inherit}
+.btn{padding:7px 14px;border-radius:8px;border:1px solid var(--line2);
+  background:var(--card);color:var(--ink);cursor:pointer;font-size:12.5px}
+.btn:hover{border-color:var(--ink)}
+.btn.on{background:var(--purBg);color:var(--pur);border-color:var(--pur)}
+.btn.primary{background:var(--pur);color:#fff;border-color:var(--pur)}
+.famHead{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:30px 0 4px;
+  padding-bottom:8px;border-bottom:1px solid var(--line);scroll-margin-top:104px}
+.famNav{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.famNav button{padding:5px 11px;border-radius:999px;border:1px solid var(--line);
+  background:var(--soft);color:var(--dim);cursor:pointer;font-size:12px}
+.famNav button:hover{border-color:var(--ink);color:var(--ink)}
+.famNav button b{color:var(--ink);font-weight:600}
+.famHead .tone{font-size:12.5px;color:var(--dim)}
+.famHead .prog{margin-left:auto;font:11.5px/1.6 ui-monospace,Menlo,Consolas,monospace;color:var(--hint)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(560px,1fr));gap:14px;margin-top:14px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}}
+.art{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:0;overflow:hidden;
+  transition:border-color .15s,box-shadow .15s}
+.art.ok{border-color:var(--tea);box-shadow:0 0 0 1px var(--tea) inset}
+.art.rev{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber) inset}
+.art.hide{display:none}
+.ahead{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:12px 14px 10px;
+  border-bottom:1px solid var(--line);background:var(--soft)}
+.ahead .nm{font-size:15px;font-weight:600}
+.ahead .id{font:11.5px/1.6 ui-monospace,Menlo,Consolas,monospace;color:var(--hint)}
+.tag{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+.tag.dmg{background:var(--redBg);color:var(--red);border-color:transparent}
+.tag.aoe{background:var(--corBg);color:var(--cor);border-color:transparent}
+.tag.move{background:var(--blueBg);color:var(--blue);border-color:transparent}
+.tag.ctrl{background:var(--purBg);color:var(--pur);border-color:transparent}
+.tag.buff{background:var(--teaBg);color:var(--tea);border-color:transparent}
+.tag.special{background:var(--amberBg);color:var(--amber);border-color:transparent}
+.nums{margin-left:auto;font:11.5px/1.7 ui-monospace,Menlo,Consolas,monospace;color:var(--dim);text-align:right}
+.spec{padding:2px 14px 0}
+.row{display:grid;grid-template-columns:74px 1fr;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line)}
+.row:last-of-type{border-bottom:0}
+.row .k{font-size:12px;color:var(--hint);padding-top:1px}
+.row .v{font-size:13px;line-height:1.65}
+.row .v em{font-style:normal;color:var(--dim)}
+.minor{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px 12px;
+  padding:10px 14px 12px;font-size:11.5px;color:var(--dim);border-top:1px solid var(--line);
+  background:var(--soft);line-height:1.55;align-items:start}
+@media(max-width:640px){.minor{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.minor b{font-weight:500;color:var(--hint);display:block;margin-bottom:1px}
+.act{display:flex;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}
+.act .btn{padding:5px 12px;font-size:12px}
+.act .sp{flex:1}
+.note{width:100%;margin:0 14px 12px;padding:8px 10px;border-radius:8px;border:1px solid var(--line2);
+  background:var(--bg);color:var(--ink);font:12.5px/1.6 inherit;resize:vertical;min-height:52px;display:none}
+.note.show{display:block}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--dim);margin:14px 0 0}
+.legend i{font-style:normal;display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px}
+.gbox{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:26px}
+.gbox textarea{width:100%;min-height:90px;margin-top:10px;padding:10px;border-radius:8px;
+  border:1px solid var(--line2);background:var(--bg);color:var(--ink);font:13px/1.7 inherit;resize:vertical}
+.hintline{font-size:12px;color:var(--hint);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>技能演出规范表 · 剩余 64 招</h1>
+<p class="sub">
+  左边是 <code>arts.js</code> 里的真实数值（只读，我不会改），右边是我建议的<b>演出规格</b>。
+  每招点「✓ 就这样」或「✎ 要改」并写一句话，我按你拍板的口径一次做完，不再做完再返工。
+</p>
+
+<div class="top">
+  <div class="topRow">
+    <span class="pill">进度 <b id="pOk">0</b> / 64 已通过</span>
+    <span class="pill rev" id="pRevBox">要改 <b id="pRev">0</b></span>
+    <span class="sp" style="flex:1"></span>
+    <button class="btn" data-f="all">全部</button>
+    <button class="btn" data-f="todo">未定</button>
+    <button class="btn" data-f="rev">要改</button>
+    <button class="btn primary" id="exp">导出确认结果</button>
+    <button class="btn" id="copy">复制 JSON</button>
+    <button class="btn" id="rst">清空</button>
+  </div>
+  <div class="famNav" id="famNav"></div>
+  <div class="legend">
+    <span><i style="background:var(--tea)"></i>已通过</span>
+    <span><i style="background:var(--amber)"></i>要改（写了备注）</span>
+    <span><i style="background:var(--line2)"></i>未定</span>
+  </div>
+</div>
+
+<div id="app"></div>
+
+<div class="gbox">
+  <h2>整体口径备注</h2>
+  <p class="hintline">写在这一栏的话我当全局规则处理（例如「所有 buff 招都要 3.4s」「位移招统一不许超过 70px」）。</p>
+  <textarea id="gNote" placeholder="例：① 所有远程招的弹道都要看得见飞行过程，不许一帧到达；② 锤族统一双手，不要单手重锤；③ …"></textarea>
+</div>
+
+<div class="gbox" id="dumpBox" style="display:none">
+  <h2>确认结果 JSON</h2>
+  <p class="hintline" id="dumpTip">已展开，全选复制后贴给 AI 即可。</p>
+  <textarea id="dump" readonly style="min-height:180px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px"></textarea>
+</div>
+
+</div>
+
+<script>
+/* ============================================================
+   规格数据：sp 空间语言 / g 持械 / mv 位移 / an 判定锚点
+            vs 与相邻招差异 / lk 画面语言
+            pl 平面 / gh 遮挡残影 / st 顿帧 / du 时长
+   ============================================================ */
+const FAMS = [
+{ id:'sword', name:'剑 · 中庸 / 精准 / 连击', tone:'单手直刃，轻、快、走直线。剑是「刺、点、引」，不是「砍」。', done:1,
+  arts:[
+  {a:'sword_2',n:'连环刺',s:'dmg',p:2,cd:3,c:3.6,mul:'×1.45 · 3 段',nums:'reach 38 / arc 1.0 / kb 5',
+   sp:'正面 · 同一条水平线上三次递进（三次落点在同一直线上，x 各 +12px）',
+   g:'单手 · 手可见 · 剑尖始终朝前',
+   mv:'站定 · 每次判定前压 6px，累计 +18px，收招退回',
+   an:'怪物躯干同一点 · 三次叠在同一条线上（靠加深不靠换位）',
+   vs:'破锋式是一次横扫弧；枪阵是三个离散落点横移 52px —— 这招是「一条线捅三下」',
+   lk:'剑尖在同一条直线上往前顶三下，一下比一下沉（ramp 0.10）',
+   pl:'竖直（不贴地）',gh:'每次收剑留 1 段剑尖余像，共 3 段',st:'每次 1 帧，共 3 帧',du:'3.2s'},
+
+  {a:'sword_3',n:'剑气斩',s:'aoe',p:3,cd:6,c:7.2,mul:'×7.2 · 贯穿 3',nums:'speed 330 / pierce 3',
+   sp:'正面 · 剑气离刃后水平直线飞行（离地 40px，不贴地）',
+   g:'单手 · 挥到终点才脱刃（剑气起点钉在剑尖）',
+   mv:'站定 · 挥剑时前压 12px',
+   an:'剑气末端 · 抵达怪物才结算，沿途贯穿 3 人',
+   vs:'飞蝗是脱手小镖 + 自旋；这招是刃形光带 + 贯穿三人',
+   lk:'一剑横挥，刃光脱手飞出去，沿途切开三个人',
+   pl:'水平飞行（离地 40px）',gh:'0 残影，剑气本体拖 3 段尾',st:'命中每个目标各 1 帧',du:'3.4s'},
+
+  {a:'sword_4',n:'剑雨',s:'aoe',p:5,cd:10,c:12,mul:'×1.4 · 8 道',nums:'radius 26 / range 170',
+   sp:'上方 · 8 道剑光从天上斜插下来，各落各的点（分散 8 个落点）',
+   g:'单手 · 举剑引落（剑指天）',
+   mv:'站定 · 0 位移',
+   an:'每道落地瞬间各自结算，8 个落点不重叠',
+   vs:'天雷引是折线链式逐跳；这招是 8 条独立直线各找各的目标',
+   lk:'举剑一指，八道剑光错开时间从云里扎下来',
+   pl:'竖直下落（不是贴地）',gh:'每道留 1 段下落残线',st:'8 道错开，每道 1 帧',du:'4.2s'},
+
+  {a:'sword_5',n:'御剑突进',s:'move',p:6,cd:8,c:9.6,mul:'×3.6 · 路径',nums:'dash face 60 / iframe 0.3',
+   sp:'正面 · 人物本体前冲 60px，剑留在脚下当滑板',
+   g:'单手 · 剑在脚底（脱手悬空，但脚下有剑）',
+   mv:'突进 60px · 路径留伤（位移招）',
+   an:'路径扫过（不是终点）· 冲过去时人身上才结算',
+   vs:'疾风步是瞬移 46px + 挥刀；这招是踩着剑滑 60px，剑在脚下不在手里',
+   lk:'踏剑前冲，剑光在脚下一路犁过去',
+   pl:'贴地（剑在脚下 y=地面）',gh:'3 段人物残影 + 1 条地面剑痕',st:'冲到位后 2 帧',du:'3.0s'},
+
+  {a:'sword_6',n:'定身剑',s:'ctrl',p:8,cd:12,c:14.4,mul:'×5.4',nums:'reach 40 / stun 1.5s',
+   sp:'正面 · 直线点刺，剑尖停在怪物身上不动',
+   g:'单手 · 剑尖抵住不放',
+   mv:'站定 + 前压 8px，定住后不回位',
+   an:'剑尖触点（怪物胸口）· 点中即定',
+   vs:'扇·点穴也是点，但扇是合扇敲、剑是剑尖刺入；这招额外留 1.5s 定身',
+   lk:'一剑点出去，剑尖钉在人身上，对方僵住不动',
+   pl:'竖直',gh:'0',st:'点中 3 帧长顿',du:'3.6s'},
+
+  {a:'sword_7',n:'剑心通明',s:'buff',p:10,cd:20,c:24,mul:'无伤害 · power 10',nums:'8s · 会心 +25 / 会伤 +30',
+   sp:'身前 · 剑竖立在面前，光从剑脊往上走（不是绕身）',
+   g:'单手 · 剑竖、另一手扶剑脊',
+   mv:'0 位移',
+   an:'无伤害 → hitEvents: []，走 statusEvents 8s 会心',
+   vs:'狂怒是血色爆气绕身；这招是「剑身透亮、四周静下来」',
+   lk:'竖剑入定，剑脊上一道光慢慢爬满，周围声音暗下去',
+   pl:'竖直',gh:'0',st:'无',du:'3.4s'},
+
+  {a:'sword_8',n:'万剑归宗',s:'special',p:4,cd:30,c:36,mul:'×1.9 · 12 把',nums:'dur 6s / radius 34',
+   sp:'全周 · 12 把剑围成一圈悬在人物四周，逐把飞出去追敌',
+   g:'单手 · 手里留 1 把，其余 11 把悬空',
+   mv:'0 位移',
+   an:'每把飞出的瞬间各自结算（12 次独立）',
+   vs:'万链归墟是链（软、摆）；这招是剑（直、悬）',
+   lk:'剑阵起，十二把剑绕身一转，然后一把把射出去',
+   pl:'悬空（离地 30~60px 分层）',gh:'每把 1 段飞行残线',st:'每把 1 帧',du:'5.0s（上限）'},
+]},
+
+{ id:'spear', name:'枪 · 一寸长一寸强', tone:'双手一杆枪，枪身不压扁。走直线、走长度，靠枪尖说话。', done:4,
+  arts:[
+  {a:'spear_5',n:'游龙步',s:'move',p:6,cd:10,c:12,mul:'×4.5',nums:'dash side 70 / radius 26',
+   sp:'侧面 · 人物横向侧滑 70px（枪族唯一侧向位移）',
+   g:'双手 · 枪横拖在身后',
+   mv:'侧移 70px，枪尾拖地划痕',
+   an:'侧滑路径扫过（怪物在侧后方才吃）',
+   vs:'疾风步是正面瞬移、缩地是后撤 70px —— 这招是横向侧滑，枪在身后拖着',
+   lk:'人往旁边一滑，枪在身后拖着划出一道地痕',
+   pl:'贴地（枪尾拖地）',gh:'4 段侧向残影',st:'到位 2 帧',du:'3.0s'},
+
+  {a:'spear_6',n:'定军',s:'ctrl',p:8,cd:14,c:16.8,mul:'×0.8 · 持续',nums:'zone / slow',
+   sp:'贴地 · 枪尖插进地里，地面起一圈压制圈（半径 60px）',
+   g:'双手 · 枪垂直插地、双手扶杆',
+   mv:'0 位移',
+   an:'圈内持续结算（zone tick），不是单次判定',
+   vs:'引风是风圈旋转卷人；这招是枪钉在地上、地裂往外扩',
+   lk:'一枪插地，地面塌出一圈，圈里的人越走越慢',
+   pl:'贴地椭圆 fy 0.32',gh:'0',st:'插地 3 帧',du:'4.0s'},
+
+  {a:'spear_7',n:'枪势',s:'buff',p:10,cd:18,c:21.6,mul:'无伤害 · power 10',nums:'buff',
+   sp:'身前 · 枪水平前指，气从枪尾贯到枪尖（纵向推进）',
+   g:'双手 · 一前一后',
+   mv:'0 位移',
+   an:'无伤害 → statusEvents（枪势 8s）',
+   vs:'剑心通明是竖剑光上行；狂怒是绕身爆气 —— 这招是「沿杆纵向推」',
+   lk:'枪尖前指不动，一道气沿着枪杆从后手推到枪尖',
+   pl:'水平',gh:'0',st:'无',du:'3.4s'},
+
+  {a:'spear_8',n:'挑飞',s:'special',p:4,cd:8,c:9.6,mul:'×5.6',nums:'reach 44 / arc 1.6 / kb 4',
+   sp:'正面 · 由下往上撩，枪尖从地面刮到头顶（垂直弧）',
+   g:'双手 · 一杆',
+   mv:'前压 14px 跟上去',
+   an:'撩到最低点（怪物脚下）才起判定，把人整只撩起来',
+   vs:'枪阵末记是「三连点刺里的末记小挑 38px」；这招整招就是一记撩挑，撩到 55px、落得慢',
+   lk:'枪尖先点地拖一下，再整个人往上一撩，怪被撩到半空',
+   pl:'竖直弧（不是贴地）',gh:'3 段枪尖上行残影',st:'撩中 3 帧',du:'3.8s'},
+]},
+
+{ id:'staff', name:'棍 · 钝击 / 长杆双头', tone:'无刃，靠棍头和棍尾。扫得开、崩得远，动作比枪更「抡」。', done:0,
+  arts:[
+  {a:'staff_1',n:'扫棍',s:'dmg',p:1,cd:3,c:3.6,mul:'×5.6',nums:'reach 42 / arc 3.4 / kb 9',
+   sp:'正面 · 195° 大扇面横扫，棍头刮地',
+   g:'双手 · 一前一后',
+   mv:'站定 + 转体，前压 10px',
+   an:'扇面扫过的所有目标（arc 3.4 = 195°）',
+   vs:'横扫千军是单手 360° 贴地整圈；这招是双手 195° 扇面 + 棍头刮地起尘',
+   lk:'双手一抡，棍头贴着地扫出半圈，尘土跟着走',
+   pl:'贴地（棍头 y=地面）',gh:'4 段棍身残影',st:'扫中 2 帧',du:'3.2s'},
+
+  {a:'staff_2',n:'崩棍',s:'dmg',p:2,cd:5,c:6,mul:'×8.0',nums:'reach 40 / arc 1.3 / kb 18',
+   sp:'正面 · 直线崩出（arc 1.3 很窄），用棍尾顶出去',
+   g:'双手 · 后手握尾',
+   mv:'前压 22px（整个人崩出去）',
+   an:'棍尾端点（不是棍身）',
+   vs:'捅棍是棍尖捅出气柱（远程）；这招是棍尾硬顶、把人崩飞最远（kb 18）',
+   lk:'双手把棍往前一崩，棍尾顶在人身上，人直接飞出去',
+   pl:'水平',gh:'2 段棍身拉长残影',st:'崩中 4 帧（最重）',du:'3.2s'},
+
+  {a:'staff_3',n:'捅棍',s:'aoe',p:3,cd:4,c:4.8,mul:'×4.8',nums:'proj 1 道',
+   sp:'正面 · 棍尖捅出一道气柱（远程直线）',
+   g:'双手 · 棍尖前指',
+   mv:'前压 14px',
+   an:'气柱末端',
+   vs:'剑气斩是刃形光带；这招是棍捅出的钝气柱（圆柱、不锋利）',
+   lk:'一棍捅出，棍尖前面顶出一根粗气柱，把前面的人顶退',
+   pl:'水平',gh:'气柱 2 段余像',st:'命中 2 帧',du:'3.4s'},
+
+  {a:'staff_4',n:'跃棍',s:'aoe',p:5,cd:9,c:10.8,mul:'×8.2',nums:'radius 56 / kb 12',
+   sp:'贴地 · 人跳起来砸下去，落地起 56px 冲击环',
+   g:'双手 · 举棍过顶',
+   mv:'原地跃起（y 上下 40px，x 不变）',
+   an:'落地点（人物脚下）',
+   vs:'扇风是站着双手前推的气浪；这招是人真的跳起来砸',
+   lk:'跳起来，双手举棍，落地砸出一圈冲击环',
+   pl:'贴地环 fy 0.32',gh:'2 段下落残影',st:'落地 4 帧',du:'3.6s'},
+
+  {a:'staff_5',n:'疾风棍',s:'move',p:6,cd:8,c:9.6,mul:'×3.6',nums:'dash face 58 / radius 26',
+   sp:'正面 · 突进 58px，一路连扫',
+   g:'双手 · 棍横身前',
+   mv:'突进 58px',
+   an:'路径扫过',
+   vs:'御剑突进是踩剑滑；这招是边冲边把棍抡成一片',
+   lk:'一边往前冲一边把棍抡成一片，人裹在棍影里',
+   pl:'水平',gh:'5 段棍影',st:'到位 2 帧',du:'3.2s'},
+
+  {a:'staff_6',n:'缠棍',s:'ctrl',p:8,cd:12,c:14.4,mul:'×5.4',nums:'radius 80 / pull',
+   sp:'正面 · 棍探出去缠住人，往回拉 80px',
+   g:'双手 · 前手送杆',
+   mv:'拉到身前时后退 10px',
+   an:'棍身缠住的点 → 拉回人物身前',
+   vs:'缚龙是软链套住拖；这招是硬杆别住往回带',
+   lk:'棍伸出去别住对方的腿，往回一带，人就被拖过来',
+   pl:'水平',gh:'1 段棍身延长线',st:'缠住 3 帧',du:'3.6s'},
+
+  {a:'staff_7',n:'铁布衫',s:'buff',p:10,cd:20,c:24,mul:'无伤害',nums:'buff · 减伤',
+   sp:'身前 · 棍横在胸前当盾，两头垂下',
+   g:'双手 · 横握',
+   mv:'0 位移',
+   an:'无伤害 → statusEvents（铁布衫减伤）',
+   vs:'铁壁是锤竖着杵地；这招是棍横在胸前',
+   lk:'棍横在胸前，两头往下垂，身体周围起一层薄壳',
+   pl:'水平',gh:'0',st:'无',du:'3.4s'},
+
+  {a:'staff_8',n:'舞棍',s:'special',p:4,cd:10,c:12,mul:'×1.5 · 多圈',nums:'radius 44 / spin',
+   sp:'全周 · 棍绕身连转，棍影围成一圈',
+   g:'双手 · 中途换手转',
+   mv:'0 位移',
+   an:'绕身一圈内所有目标，逐圈结算',
+   vs:'旋风斩是刀（薄、快）；这招是棍，棍影更长更钝',
+   lk:'棍在身前转成一片，人站在棍影中间',
+   pl:'水平（腰高转）',gh:'6 段棍影',st:'每圈 1 帧',du:'4.2s'},
+]},
+
+{ id:'hammer', name:'锤 · 重 / 慢 / 破坏', tone:'全表最重的一族。动作要「笨」，靠停顿和尘土读重量，不能快。', done:0,
+  arts:[
+  {a:'hammer_1',n:'碎骨锤',s:'dmg',p:1,cd:6,c:7.2,mul:'×8.4',nums:'reach 34 / arc 0.55 / kb 16',
+   sp:'正面 · 极窄角（31°）垂直短促下砸',
+   g:'单手（重锤）· 手可见',
+   mv:'前压 8px',
+   an:'锤头正面（怪物肩背）',
+   vs:'力劈是刀、arc 1.8 大角劈；这招 arc 0.55 极小角、只砸一个点',
+   lk:'锤从肩上一翻就下来了，只砸一个点，砸完地上一坑',
+   pl:'竖直',gh:'0',st:'砸中 4 帧',du:'3.0s'},
+
+  {a:'hammer_2',n:'回旋锤',s:'dmg',p:2,cd:5,c:6,mul:'×8.0',nums:'boomerang / kb 14',
+   sp:'正面 · 锤脱手飞出去，转一圈再飞回来',
+   g:'单手 · 脱手（手里空一下，回来再接住）',
+   mv:'站定',
+   an:'去程 + 回程各结算一次',
+   vs:'回旋索是链；这招是锤，去回都砸，回来要接住',
+   lk:'把锤抡圆了甩出去，锤飞出去转一圈又回到手里',
+   pl:'水平（腰高飞）',gh:'锤 4 段飞行残影',st:'去 2 帧 / 回 2 帧',du:'3.8s'},
+
+  {a:'hammer_3',n:'震地',s:'aoe',p:3,cd:8,c:9.6,mul:'×9.6',nums:'radius 84 / kb 18',
+   sp:'贴地 · 砸地起 84px 冲击环（全表最大）',
+   g:'双手 · 举锤过顶',
+   mv:'0 位移',
+   an:'落点（脚下）',
+   vs:'跃棍是跳起来砸 56px；这招不跳、站着砸 84px',
+   lk:'双手举锤站着砸下去，一圈冲击波推到画布边',
+   pl:'贴地环 fy 0.32',gh:'0',st:'落地 5 帧（最重）',du:'3.6s'},
+
+  {a:'hammer_4',n:'地裂',s:'aoe',p:5,cd:12,c:14.4,mul:'×1.65 · 持续',nums:'zone / burn',
+   sp:'贴地 · 砸出裂缝，裂缝往外爬，缝里冒火',
+   g:'双手',
+   mv:'0 位移',
+   an:'裂缝区持续（zone tick）',
+   vs:'火雨是从天落；这招是从地里往上冒',
+   lk:'砸下去地面裂开几道缝，缝里红起来，站在上面一直烧',
+   pl:'贴地 fy 0.32',gh:'0',st:'砸地 3 帧',du:'4.0s'},
+
+  {a:'hammer_5',n:'冲锋锤',s:'move',p:6,cd:9,c:10.8,mul:'×4.05',nums:'charge / kb 16',
+   sp:'正面 · 连人带锤撞过去',
+   g:'双手 · 锤扛肩上',
+   mv:'冲锋 64px',
+   an:'撞上的第一个目标（不是路径）',
+   vs:'疾风步是轻快瞬移；这招是笨重冲锋，起步慢、撞上就停',
+   lk:'锤扛在肩上闷头往前撞，撞到人整个人一顿',
+   pl:'水平',gh:'3 段沉重残影',st:'撞上 4 帧',du:'3.4s'},
+
+  {a:'hammer_6',n:'眩晕击',s:'ctrl',p:8,cd:16,c:19.2,mul:'×7.2',nums:'reach 36 / arc 1.0 / stun',
+   sp:'正面 · 横着抡一记，砸在太阳穴',
+   g:'单手',
+   mv:'前压 10px',
+   an:'锤头侧面（怪物头部）',
+   vs:'定身剑是点刺定住；这招是横砸晕，人晃两下站不稳',
+   lk:'横着抡过来，砸在人脑袋侧面，人晃两下站不稳',
+   pl:'水平',gh:'1 段锤头残影',st:'砸中 3 帧',du:'3.4s'},
+
+  {a:'hammer_7',n:'铁壁',s:'buff',p:10,cd:20,c:24,mul:'无伤害',nums:'buff · 减伤',
+   sp:'身前 · 锤竖着杵在地上当盾',
+   g:'双手 · 扶着锤柄',
+   mv:'0 位移',
+   an:'无伤害 → statusEvents（铁壁减伤）',
+   vs:'铁布衫是棍横在胸前；这招是锤竖着杵地，人躲在锤后面',
+   lk:'把锤往地上一杵，双手扶着，人躲在锤后面',
+   pl:'竖直',gh:'0',st:'无',du:'3.4s'},
+
+  {a:'hammer_8',n:'开天辟地',s:'special',p:4,cd:32,c:38.4,mul:'×22.8（全表最高）',nums:'cleave / kb 24',
+   sp:'正面 · 从头顶劈到地面，一整条竖线',
+   g:'双手 · 举到最高',
+   mv:'前压 16px',
+   an:'竖线沿途（从头顶到地面）',
+   vs:'力劈是刀 8.0 倍；这招 22.8 倍、锤更重、一路劈到底',
+   lk:'锤举到天上停一拍，然后整个人压下去，锤从头顶砸到地面',
+   pl:'竖直',gh:'3 段锤身下落残影',st:'劈到底 6 帧',du:'4.8s'},
+]},
+
+{ id:'dual', name:'双刃 · 快 / 密 / 连击', tone:'两手各一把，动作最碎。靠「两把刀在不同方向同时动」区别于单手兵器。', done:0,
+  arts:[
+  {a:'dual_1',n:'双牙',s:'dmg',p:1,cd:2.5,c:3,mul:'×2.5 · 2 段',nums:'reach 32 / arc 1.8 / kb 4',
+   sp:'正面 · 左右各一下，两个方向（不是同一个方向连打）',
+   g:'双手各一把 · 两只手都要画出来',
+   mv:'站定 + 前压 6px',
+   an:'左刃落怪物左侧 / 右刃落右侧',
+   vs:'连环刺是同一把剑同一条线；这招是两把刀两个方向',
+   lk:'左手先切一下，右手紧跟着从另一边切回来',
+   pl:'水平',gh:'每刀 1 段，共 2 段',st:'每刀 1 帧',du:'3.0s'},
+
+  {a:'dual_2',n:'十字斩',s:'dmg',p:2,cd:5,c:6,mul:'×4.0 · 2 段',nums:'reach 34 / arc 2.2 / kb 5',
+   sp:'正面 · 两刀交叉成十字（一横一竖）',
+   g:'双手各一把',
+   mv:'前压 8px',
+   an:'十字交点（怪物胸口）',
+   vs:'双牙是两个反方向平切；这招一横一竖成十字',
+   lk:'一刀横着划、一刀竖着劈，两道光在怪身上交叉',
+   pl:'水平 + 竖直',gh:'十字形 2 段残光',st:'交点 2 帧',du:'3.2s'},
+
+  {a:'dual_3',n:'乱舞',s:'aoe',p:3,cd:10,c:12,mul:'×2.0 · 6 段',nums:'reach 56 / arc 6.28 / kb 4',
+   sp:'全周 · 六下乱砍，砍向六个不同方向',
+   g:'双手各一把 · 交替',
+   mv:'小幅转体，位移 0',
+   an:'六个方向各一个落点，绕身一圈',
+   vs:'舞棍是棍绕身转圈；这招是六记独立乱砍、方向不匀',
+   lk:'两把刀在身前身后乱砍六下，人几乎没动',
+   pl:'水平',gh:'6 段乱向残影',st:'每下 1 帧',du:'4.0s'},
+
+  {a:'dual_4',n:'千刃',s:'aoe',p:5,cd:30,c:36,mul:'×3.3 · 持续',nums:'zone',
+   sp:'贴地 · 地上插满刀，形成一片刃阵',
+   g:'双手 · 甩出',
+   mv:'0 位移',
+   an:'刃阵区持续（zone tick）',
+   vs:'地裂是从地冒火；这招是地上立满刀',
+   lk:'手一甩，一圈刀从地上立起来，站在里面一直在挨割',
+   pl:'贴地 fy 0.32',gh:'0',st:'起阵 2 帧',du:'4.6s'},
+
+  {a:'dual_5',n:'影袭',s:'move',p:6,cd:8,c:9.6,mul:'×3.6',nums:'dash target 48 / radius 26',
+   sp:'目标背后 · 闪到怪物身后（不是往前冲）',
+   g:'双手各一把',
+   mv:'位移到目标背后 48px',
+   an:'到位后从背后一刀',
+   vs:'回马枪是背身反刺自己身后；这招是主动闪到敌人背后',
+   lk:'人影一闪没了，出现在怪背后，两把刀已经交叉架在脖子上',
+   pl:'水平',gh:'起点留 3 段虚影',st:'现身 2 帧',du:'3.2s'},
+
+  {a:'dual_6',n:'割喉',s:'ctrl',p:8,cd:12,c:14.4,mul:'×5.4',nums:'reach 32 / arc 1.0 / slow',
+   sp:'贴身 · 极近距离从下往上抹',
+   g:'双手各一把 · 只用一把',
+   mv:'贴身 +10px',
+   an:'喉咙位置（怪物颈部）',
+   vs:'定身剑是远点刺；这招必须贴上去，远了够不着',
+   lk:'贴到人身上，一把刀从下颌往上抹过去',
+   pl:'竖直',gh:'0',st:'抹过 3 帧',du:'3.4s'},
+
+  {a:'dual_7',n:'杀意',s:'buff',p:10,cd:22,c:26.4,mul:'无伤害',nums:'buff',
+   sp:'绕身 · 两把刀垂在身侧，杀气往外溢成一层红雾',
+   g:'双手各一把 · 自然下垂',
+   mv:'0 位移',
+   an:'无伤害 → statusEvents（杀意）',
+   vs:'狂怒是刀族爆气冲天；这招是双刃低垂、红雾贴地漫开',
+   lk:'两把刀垂着不动，脚下红雾一圈圈漫开',
+   pl:'贴地雾',gh:'0',st:'无',du:'3.4s'},
+
+  {a:'dual_8',n:'疾影',s:'special',p:4,cd:9,c:10.8,mul:'×3.5',nums:'blink / radius 26',
+   sp:'全周 · 连续三次瞬移，每次留一个残影分身',
+   g:'双手各一把',
+   mv:'三次短闪（每次 26px）',
+   an:'每次落点',
+   vs:'影袭是一次闪到背后；这招是三次连环闪，场上同时有三个「我」',
+   lk:'人变成三个影，同时在不同位置出刀',
+   pl:'水平',gh:'3 个分身残影（这招的主读点）',st:'每次 1 帧',du:'3.8s'},
+]},
+
+{ id:'chain', name:'链 · 软 / 摆 / 拖拽', tone:'软兵器。所有动作都要有「链节下垂、甩出波浪」的物理感，这是跟枪/棍的硬杆最大的区别。', done:0,
+  arts:[
+  {a:'chain_1',n:'锁喉',s:'dmg',p:1,cd:4,c:4.8,mul:'×6.2',nums:'reach 46 / arc 1.0 / kb 8',
+   sp:'正面 · 链直线甩出去，链头锁住',
+   g:'单手 · 手握着链尾',
+   mv:'前压 8px',
+   an:'链头端点',
+   vs:'崩棍是硬杆顶；这招是软链甩，链节会甩出波浪',
+   lk:'手一甩，链子像蛇一样窜出去，链头咬住人',
+   pl:'水平（胸高）',gh:'链节 5 段波状残影',st:'咬住 2 帧',du:'3.2s'},
+
+  {a:'chain_2',n:'缠身',s:'dmg',p:2,cd:3,c:3.6,mul:'×2.0 · 3 段',nums:'reach 42 / arc 1.4 / kb 5',
+   sp:'正面 · 链绕人缠两圈，然后收紧',
+   g:'单手',
+   mv:'站定',
+   an:'缠绕点（怪物身上），三次收紧',
+   vs:'锁喉是直线甩；这招是绕圈缠，缠完才收',
+   lk:'链子甩出去绕着人转两圈，一收，人就被勒住',
+   pl:'水平',gh:'链圈 3 层残影',st:'每次收 1 帧',du:'3.6s'},
+
+  {a:'chain_3',n:'扫链',s:'aoe',p:3,cd:6,c:7.2,mul:'×7.0',nums:'reach 50 / arc 6.28 / kb 10',
+   sp:'全周 · 链绕身转一圈扫出去（贴地）',
+   g:'单手 · 抓着链尾转',
+   mv:'转体，位移 0',
+   an:'链扫过的整圈',
+   vs:'横扫千军是刀贴地整圈；这招是链，链会甩出去一截、尾巴甩得比刀远',
+   lk:'抓着链尾原地转一圈，链子甩成一个大圆贴着地扫',
+   pl:'贴地 fy 0.32',gh:'链圈 6 段残影',st:'扫中 2 帧',du:'3.6s'},
+
+  {a:'chain_4',n:'回旋索',s:'aoe',p:5,cd:5,c:6,mul:'×7.6',nums:'boomerang / kb 12',
+   sp:'正面 · 链头甩出去绕一圈回来',
+   g:'单手',
+   mv:'0 位移',
+   an:'去程末端 + 回程各一次',
+   vs:'回旋锤是锤飞出去；这招是链，回程是拖回来的、不是自己飞回来',
+   lk:'链头飞出去绕个大圈，再被拽回来',
+   pl:'水平',gh:'链 8 段飞行残影',st:'去 2 帧',du:'3.8s'},
+
+  {a:'chain_5',n:'曳影',s:'move',p:6,cd:8,c:9.6,mul:'×3.8',nums:'dash target 56 / radius 26',
+   sp:'目标方向 · 链头先钉住目标，把人拽过去',
+   g:'单手',
+   mv:'位移到目标 56px',
+   an:'到达后贴身一下',
+   vs:'影袭是「闪」过去；这招是被链子「拽」过去，要有牵引的加速感',
+   lk:'链头先钉在远处，人顺着链子被拽过去',
+   pl:'水平',gh:'4 段拖影',st:'到位 2 帧',du:'3.2s'},
+
+  {a:'chain_6',n:'缚龙',s:'ctrl',p:8,cd:14,c:16.8,mul:'×5.2',nums:'radius 88 / pull / stun',
+   sp:'正面 · 链甩出去套住，往回拖 88px',
+   g:'单手 · 拖链',
+   mv:'拖的时候后撤 12px',
+   an:'套住的点 → 拖到身前',
+   vs:'缠棍是硬杆别腿；这招是软链套脖子拖，拖完还定住',
+   lk:'链子套住脖子，人往后一坐，把对方拖到脚边',
+   pl:'水平',gh:'链 6 段拉伸残影',st:'套住 3 帧',du:'3.8s'},
+
+  {a:'chain_7',n:'链势',s:'buff',p:10,cd:20,c:24,mul:'无伤害',nums:'buff',
+   sp:'绕身 · 链垂在脚边，然后自己盘起来',
+   g:'单手',
+   mv:'0 位移',
+   an:'无伤害 → statusEvents（链势）',
+   vs:'枪势是沿杆纵向推气；这招是链自己盘起来悬在半空',
+   lk:'链子垂在脚边不动，然后自己一圈圈盘起来悬在半空',
+   pl:'贴地 → 悬空',gh:'0',st:'无',du:'3.4s'},
+
+  {a:'chain_8',n:'万链归墟',s:'special',p:4,cd:30,c:36,mul:'×1.7 · 10 条',nums:'radius 36 / orbit',
+   sp:'全周 · 十条链围成一圈，逐条抽出去',
+   g:'单手 · 手里 1 条',
+   mv:'0 位移',
+   an:'每条抽出的瞬间',
+   vs:'万剑归宗是剑悬空直射；这招是链，抽出去全是弯的',
+   lk:'十条链在四周悬着，然后一条条抽出去，链身全是弯的',
+   pl:'悬空',gh:'每条 1 段弯曲残影',st:'每条 1 帧',du:'5.0s'},
+]},
+
+{ id:'dart', name:'暗器 · 脱手 / 小 / 多', tone:'靠「出手 ≠ 判定」读远程：手先动，镖后到。手里必须有东西，脱手后才空。', done:1,
+  arts:[
+  {a:'dart_2',n:'三叠浪',s:'dmg',p:2,cd:4,c:4.8,mul:'×1.6 · 3 枚',nums:'proj 3',
+   sp:'正面 · 三枚依次出手，沿同一条线（间隔 6 帧）',
+   g:'单手 · 指间夹三枚',
+   mv:'站定，微后撤 3px',
+   an:'三枚各自抵达（不是同帧）',
+   vs:'飞蝗是一枚单发；这招是三枚连发、同一条线上排队',
+   lk:'指缝里连甩三下，三枚镖排着队飞出去',
+   pl:'水平 · 同一条线',gh:'每枚 1 段直线拖尾',st:'每枚 1 帧',du:'3.2s'},
+
+  {a:'dart_3',n:'满天花雨',s:'aoe',p:3,cd:10,c:12,mul:'×0.75 · 12 枚',nums:'proj 12 / 扇形',
+   sp:'正面 · 12 枚扇形散开（±35°）',
+   g:'单手 · 一把抓',
+   mv:'站定',
+   an:'12 个落点分散（扇形）',
+   vs:'三叠浪是同一条线；这招是一把撒开成扇',
+   lk:'手一扬，十二枚镖成扇形铺开，像撒了一把花',
+   pl:'水平（扇形展开）',gh:'每枚短拖尾',st:'每枚 1 帧',du:'3.6s'},
+
+  {a:'dart_4',n:'万箭穿心',s:'aoe',p:5,cd:30,c:36,mul:'×1.0 · 24 枚',nums:'proj 24 / ring',
+   sp:'全周 · 24 枚绕身一圈同时射出',
+   g:'单手 · 袖中甩出',
+   mv:'0 位移',
+   an:'24 个方向',
+   vs:'满天花雨是正面扇形；这招是 360° 全周',
+   lk:'整个人转一圈，袖口甩出二十四枚，四面八方都是',
+   pl:'水平 · 360° 环射',gh:'环形拖尾',st:'每枚 1 帧',du:'4.8s'},
+
+  {a:'dart_5',n:'缩地',s:'move',p:6,cd:12,c:14.4,mul:'×4.05',nums:'dash back 70 / radius 24',
+   sp:'身后 · 向后撤 70px（全表唯一的后撤位移）',
+   g:'单手 · 撤的时候反手甩一枚',
+   mv:'后撤 70px',
+   an:'后撤路径 + 反手那枚',
+   vs:'游龙步是侧滑；这招是笔直往后撤，退的同时还在打',
+   lk:'人往后一弹，退开七步，退的同时反手甩出一枚',
+   pl:'水平 · 沿后撤方向',gh:'3 段后撤残影',st:'落地 2 帧',du:'3.0s'},
+
+  {a:'dart_6',n:'铁蒺藜',s:'ctrl',p:8,cd:8,c:9.6,mul:'×0.54 · 持续',nums:'zone / stun',
+   sp:'贴地 · 往地上撒一片蒺藜',
+   g:'单手 · 撒手',
+   mv:'0 位移',
+   an:'蒺藜区（踩到才定身）',
+   vs:'千刃是立刀阵；这招是地上撒小刺，看不见但踩上就定',
+   lk:'手一撒，地上一片小黑刺，谁踩上去谁定住',
+   pl:'贴地 fy 0.32',gh:'0',st:'撒下 2 帧',du:'4.0s'},
+
+  {a:'dart_7',n:'淬毒',s:'buff',p:10,cd:20,c:24,mul:'无伤害',nums:'buff',
+   sp:'手边 · 低头给镖尖抹毒，毒液反光',
+   g:'单手 · 捏一枚',
+   mv:'0 位移',
+   an:'无伤害 → statusEvents（淬毒 8s）',
+   vs:'杀意是红雾绕身；这招是低头抹毒，很小很静，几乎没有特效',
+   lk:'低头把镖尖在指间抹一下，镖尖亮一下绿',
+   pl:'水平',gh:'0',st:'无',du:'3.4s'},
+
+  {a:'dart_8',n:'毒镖',s:'special',p:4,cd:5,c:6,mul:'×4.2',nums:'proj / poison',
+   sp:'正面 · 一枚毒镖飞出，命中后毒液扩散',
+   g:'单手 · 脱手',
+   mv:'0 位移',
+   an:'命中点 + 毒扩散',
+   vs:'飞蝗是纯物理；这招命中后从伤口往外渗绿',
+   lk:'一枚镖飞出去扎上，扎上的地方慢慢渗出一圈绿',
+   pl:'水平 · 弹道略下垂',gh:'1 段绿色拖尾',st:'命中 2 帧',du:'3.6s'},
+]},
+
+{ id:'mage', name:'法杖 · 施法 / 符文 / 悬空', tone:'杖是法器不是武器，人基本不贴身。所有东西从杖头出来，不靠身体发力。', done:1,
+  arts:[
+  {a:'mage_1',n:'灵珠',s:'dmg',p:1,cd:2,c:2.4,mul:'×4.0',nums:'proj 1',
+   sp:'正面 · 杖头聚一颗珠，慢慢推出去',
+   g:'单手 · 杖斜举',
+   mv:'站定',
+   an:'珠子抵达（不是出手帧）',
+   vs:'飞蝗是镖（快、小）；这招是慢速大珠，看得清飞',
+   lk:'杖头亮起一颗珠子，慢慢飘出去，撞上就炸',
+   pl:'悬空（离地 40px）',gh:'珠 3 段余像',st:'命中 2 帧',du:'3.4s'},
+
+  {a:'mage_2',n:'三珠连爆',s:'dmg',p:2,cd:5,c:6,mul:'×2.0 · 3 颗',nums:'proj 3 / splash',
+   sp:'正面 · 三颗依次飞，每颗命中后小范围溅射',
+   g:'单手',
+   mv:'0 位移',
+   an:'三个落点 + 各自溅射圈',
+   vs:'灵珠是一颗；这招三颗 + 溅射，第三颗落点会偏',
+   lk:'三颗珠子前后脚飞出去，一颗炸开溅到旁边',
+   pl:'悬空',gh:'3 条弹道',st:'每颗 1 帧',du:'3.6s'},
+
+  {a:'mage_3',n:'火雨',s:'aoe',p:3,cd:12,c:14.4,mul:'×1.08 · 持续',nums:'zone / burn',
+   sp:'上方 · 天上落火，地上烧一片',
+   g:'单手 · 杖指天',
+   mv:'0 位移',
+   an:'火区持续',
+   vs:'剑雨是 8 道剑扎下来；这招是持续落火 + 地面燃烧，落得慢',
+   lk:'杖一指天，云里开始往下掉火点，地上烧成一片',
+   pl:'贴地火区',gh:'0',st:'起手 2 帧',du:'4.2s'},
+
+  {a:'mage_4',n:'雷链',s:'aoe',p:5,cd:10,c:12,mul:'×2.75 · 3 跳',nums:'bolt 3 / radius 26',
+   sp:'正面 · 雷从杖尖射出，打到人身上再跳到下一个',
+   g:'单手',
+   mv:'0 位移',
+   an:'三次落点（逐跳衰减）',
+   vs:'天雷引是 5 段大雷；这招 3 跳、更快更轻，跳的瞬间要看得见折线',
+   lk:'一道雷打出去，打到人身上又跳到旁边那个人',
+   pl:'水平（折线）',gh:'折线残光',st:'每次跳 1 帧',du:'3.6s'},
+
+  {a:'mage_5',n:'瞬闪',s:'move',p:6,cd:8,c:9.6,mul:'×2.7',nums:'dash face 90 / radius 24',
+   sp:'正面 · 整个人化成光点消失，前方 90px 出现',
+   g:'单手 · 杖一撑',
+   mv:'瞬移 90px（全表最远）',
+   an:'出现点周围',
+   vs:'御剑突进是滑 60px；这招是消失再出现，中间没有过程',
+   lk:'人散成一把光点，前方重新聚起来',
+   pl:'水平',gh:'起点留 4 段渐隐',st:'出现 2 帧',du:'3.0s'},
+
+  {a:'mage_6',n:'冰封',s:'ctrl',p:8,cd:10,c:12,mul:'×3.4',nums:'reach 44 / arc 1.6 / freeze',
+   sp:'正面 · 一片寒气扫过去，扫到的全冻住',
+   g:'单手',
+   mv:'0 位移',
+   an:'寒气扇面内所有目标（不是单点）',
+   vs:'定身剑是点一个；这招是扇面全冻，地上要结霜',
+   lk:'杖一扫，前面一片白气，扫到的地方结霜',
+   pl:'水平扇面',gh:'寒气 4 段',st:'冻结 3 帧',du:'3.6s'},
+
+  {a:'mage_7',n:'灵护',s:'buff',p:10,cd:18,c:21.6,mul:'无伤害',nums:'buff · 护盾',
+   sp:'绕身 · 一层薄壳从脚下升起包住全身',
+   g:'单手 · 杖点地',
+   mv:'0 位移',
+   an:'无伤害 → statusEvents（灵护护盾）',
+   vs:'铁壁是锤挡在前面；这招是全身包一层壳',
+   lk:'杖往地上一顿，一圈薄壳从脚底升起来把整个人包住',
+   pl:'贴地起',gh:'0',st:'无',du:'3.4s'},
+]},
+
+{ id:'fan', name:'扇 · 开合 / 风 / 袖', tone:'扇是「推」不是「砍」。力从扇面出来，袖口和风是它的语言。', done:1,
+  arts:[
+  {a:'fan_1',n:'点穴',s:'dmg',p:1,cd:3,c:3.6,mul:'×5.6',nums:'reach 32 / arc 0.9 / kb 5',
+   sp:'正面 · 合扇往前一点（距离极短，必须贴身）',
+   g:'单手 · 合扇当短棍',
+   mv:'前压 8px',
+   an:'扇头端点（怪物穴位）',
+   vs:'定身剑是剑尖远刺；这招是合扇近点，点完不带走',
+   lk:'扇子合起来，往前一戳，戳在人身上',
+   pl:'水平',gh:'0',st:'点中 2 帧',du:'3.0s'},
+
+  {a:'fan_2',n:'折影',s:'dmg',p:2,cd:5,c:6,mul:'×2.6 · 2 段',nums:'reach 34 / arc 1.6 / kb 5',
+   sp:'正面 · 扇面开合两次，两刀不同角度',
+   g:'单手',
+   mv:'前压 6px',
+   an:'两个落点（开扇 / 合扇各一下）',
+   vs:'双牙是两把刀；这招是一把扇开合两次，开和合各切一刀',
+   lk:'扇子一开一合，开了切一刀，合了再切一刀',
+   pl:'水平',gh:'扇面 2 段残影',st:'每下 1 帧',du:'3.2s'},
+
+  {a:'fan_4',n:'落符',s:'aoe',p:5,cd:10,c:12,mul:'×1.2 · 6 张',nums:'bolt 6 / radius 24',
+   sp:'上方 · 六张符从天上飘落，落地炸开',
+   g:'单手 · 撒符',
+   mv:'0 位移',
+   an:'六张符落地各自炸',
+   vs:'剑雨是剑扎下来（快、直）；这招是符纸慢慢飘（慢、晃）',
+   lk:'手一扬，六张符慢悠悠飘下来，落地炸开',
+   pl:'竖直下落（慢飘）',gh:'符纸飘落残影',st:'每张 1 帧',du:'4.0s'},
+
+  {a:'fan_5',n:'随风',s:'move',p:6,cd:8,c:9.6,mul:'×3.2',nums:'dash side 62 / radius 24',
+   sp:'侧面 · 人被风带着横飘 62px',
+   g:'单手 · 扇开挡在身侧',
+   mv:'侧移 62px，脚几乎离地',
+   an:'飘过路径',
+   vs:'游龙步是侧滑、脚踩地拖枪；这招是被风托着飘，脚是虚的',
+   lk:'扇一开，人被风托起来往旁边飘，脚几乎离地',
+   pl:'水平（略离地）',gh:'4 段飘影',st:'落地 2 帧',du:'3.0s'},
+
+  {a:'fan_6',n:'引风',s:'ctrl',p:8,cd:12,c:14.4,mul:'×0.9 · 持续',nums:'zone / slow',
+   sp:'贴地 · 扇面扫出一圈风，风圈里打转',
+   g:'单手',
+   mv:'0 位移',
+   an:'风圈区持续',
+   vs:'扇风是双手前推的冲击波（一次性）；这招是原地转圈起风、持续拖慢',
+   lk:'扇子绕身转一圈，脚下一圈风卷起来，圈里的人被拖慢',
+   pl:'贴地 fy 0.32',gh:'风圈 5 段',st:'起风 2 帧',du:'4.0s'},
+
+  {a:'fan_7',n:'凝神',s:'buff',p:10,cd:20,c:24,mul:'无伤害',nums:'buff',
+   sp:'身前 · 扇合在胸前，闭眼',
+   g:'单手',
+   mv:'0 位移',
+   an:'无伤害 → statusEvents（凝神）',
+   vs:'剑心通明是竖剑、光上行；这招是合扇抵胸、几乎不动',
+   lk:'扇子合起来抵在胸口，闭眼，扇骨上一道纹亮起来',
+   pl:'竖直',gh:'0',st:'无',du:'3.4s'},
+
+  {a:'fan_8',n:'风雷引',s:'special',p:4,cd:30,c:36,mul:'×14.0',nums:'cleave / kb 14',
+   sp:'正面 · 扇一扇，风雷从扇面推出，一整条直线',
+   g:'单手 · 扇开到最大',
+   mv:'前压 12px',
+   an:'直线沿途',
+   vs:'扇风是 72px 冲击环（全周）；这招是直线风雷、单点极痛（14 倍）',
+   lk:'扇子全开，往前一送，风裹着雷从扇面推出',
+   pl:'水平',gh:'风雷 5 段',st:'推满 4 帧',du:'4.6s'},
+]},
+];
+
+const SLOT = {dmg:'输出', aoe:'清场', move:'位移', ctrl:'控制', buff:'增益', special:'特色'};
+
+/* ---------- 状态 ---------- */
+const KEY = 'xyx-art-spec-v1';
+let ST = {};
+try { ST = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e){ ST = {}; }
+let FILTER = 'all';
+
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(ST)); }catch(e){} }
+
+/* ---------- 渲染 ---------- */
+const app = document.getElementById('app');
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function card(fam, x){
+  const st = ST[x.a] || {};
+  const cls = st.v === 'ok' ? ' ok' : st.v === 'rev' ? ' rev' : '';
+  return `<div class="art${cls}" data-id="${x.a}">
+  <div class="ahead">
+    <span class="nm">${esc(x.n)}</span>
+    <span class="id">${x.a}</span>
+    <span class="tag ${x.s}">${SLOT[x.s]}</span>
+    <span class="nums">CD ${x.cd}s · 真气 ${x.c} · ${esc(x.mul)}<br>${esc(x.nums)}</span>
+  </div>
+  <div class="spec">
+    <div class="row"><div class="k">空间语言</div><div class="v">${esc(x.sp)}</div></div>
+    <div class="row"><div class="k">持械</div><div class="v">${esc(x.g)}</div></div>
+    <div class="row"><div class="k">人物位移</div><div class="v">${esc(x.mv)}</div></div>
+    <div class="row"><div class="k">判定锚点</div><div class="v">${esc(x.an)}</div></div>
+    <div class="row"><div class="k">与相邻招差异</div><div class="v">${esc(x.vs)}</div></div>
+    <div class="row"><div class="k">画面语言</div><div class="v"><em>${esc(x.lk)}</em></div></div>
+  </div>
+  <div class="minor">
+    <span><b>平面</b> ${esc(x.pl)}</span>
+    <span><b>残影</b> ${esc(x.gh)}</span>
+    <span><b>顿帧</b> ${esc(x.st)}</span>
+    <span><b>时长</b> ${esc(x.du)}</span>
+  </div>
+  <div class="act">
+    <button class="btn" data-act="ok" data-id="${x.a}">✓ 就这样</button>
+    <button class="btn" data-act="rev" data-id="${x.a}">✎ 要改</button>
+    <span class="sp"></span>
+    <span class="id" data-state="${x.a}">${st.v === 'ok' ? '已通过' : st.v === 'rev' ? '待改' : '未定'}</span>
+  </div>
+  <textarea class="note${st.v === 'rev' ? ' show' : ''}" data-note="${x.a}"
+    placeholder="要改哪里？一句话就够（例：位移改成 30px、不要贴地、判定改到落地那帧）">${esc(st.n || '')}</textarea>
+</div>`;
+}
+
+function render(){
+  app.innerHTML = FAMS.map(f => {
+    const todo = f.arts.filter(x => !(ST[x.a] && ST[x.a].v)).length;
+    return `<div class="famHead">
+      <h2>${esc(f.name)}</h2>
+      <span class="tone">${esc(f.tone)}</span>
+      <span class="prog">已审 ${f.done} / 8 · 本表剩 ${f.arts.length} 招 · 未定 ${todo}</span>
+    </div>
+    <div class="grid">${f.arts.map(x => card(f, x)).join('')}</div>`;
+  }).join('');
+  document.getElementById('famNav').innerHTML = FAMS.map((f, i) =>
+    `<button data-jump="${i}"><b>${esc(f.name.split(' · ')[0])}</b> ${f.arts.length}</button>`).join('');
+  applyFilter();
+  count();
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-jump]');
+  if (!b) return;
+  const hs = document.querySelectorAll('.famHead');
+  const t = hs[+b.dataset.jump];
+  if (t) t.scrollIntoView({ behavior:'smooth', block:'start' });
+});
+
+function count(){
+  let ok = 0, rev = 0;
+  for (const k in ST){ if (ST[k].v === 'ok') ok++; else if (ST[k].v === 'rev') rev++; }
+  document.getElementById('pOk').textContent = ok;
+  document.getElementById('pRev').textContent = rev;
+}
+
+function applyFilter(){
+  document.querySelectorAll('.art').forEach(el => {
+    const s = ST[el.dataset.id] || {};
+    let show = true;
+    if (FILTER === 'todo') show = !s.v;
+    else if (FILTER === 'rev') show = s.v === 'rev';
+    el.classList.toggle('hide', !show);
+  });
+}
+
+app.addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  const id = b.dataset.id, act = b.dataset.act;
+  ST[id] = ST[id] || {};
+  ST[id].v = (ST[id].v === act) ? undefined : act;
+  if (!ST[id].v) delete ST[id].v;
+  save(); render();
+});
+
+app.addEventListener('input', e => {
+  const t = e.target.closest('textarea[data-note]');
+  if (!t) return;
+  const id = t.dataset.note;
+  ST[id] = ST[id] || {};
+  ST[id].n = t.value;
+  if (t.value.trim() && !ST[id].v){ ST[id].v = 'rev'; save(); render(); }
+  else save();
+});
+
+document.querySelectorAll('[data-f]').forEach(b => {
+  b.onclick = () => {
+    FILTER = b.dataset.f;
+    document.querySelectorAll('[data-f]').forEach(o => o.classList.toggle('on', o === b));
+    applyFilter();
+  };
+});
+
+document.getElementById('gNote').value = ST.__global || '';
+document.getElementById('gNote').oninput = e => { ST.__global = e.target.value; save(); };
+
+/* 只导出「有勾选或写了备注」的招，其余算默认走 —— JSON 短，好复制 */
+function buildJSON(){
+  const changed = {}, untouched = [];
+  FAMS.forEach(f => f.arts.forEach(x => {
+    const s = ST[x.a] || {};
+    if (s.v || (s.n && s.n.trim())) {
+      changed[x.a] = { v: s.v || 'rev', note: (s.n || '').trim(), name: x.n, fam: f.id };
+    } else untouched.push(x.a);
+  }));
+  return JSON.stringify({
+    global: ST.__global || '',
+    changedCount: Object.keys(changed).length,
+    untouchedCount: untouched.length,
+    changed: changed,
+  }, null, 2);
+}
+
+document.getElementById('exp').onclick = () => {
+  const blob = new Blob([buildJSON()], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'art-spec-confirm.json';
+  a.click();
+};
+
+document.getElementById('copy').onclick = async () => {
+  const j = buildJSON();
+  const box = document.getElementById('dumpBox');
+  const ta = document.getElementById('dump');
+  const tip = document.getElementById('dumpTip');
+  box.style.display = 'block';
+  ta.value = j;
+  ta.focus(); ta.select();
+  let copied = false;
+  try { await navigator.clipboard.writeText(j); copied = true; } catch(e){}
+  if (!copied) { try { copied = document.execCommand('copy'); } catch(e){} }
+  tip.textContent = copied
+    ? '已复制到剪贴板（' + j.length + ' 字符），直接粘给我就行。'
+    : '剪贴板不可用，已展开在下面，手动全选复制。';
+  box.scrollIntoView({ behavior:'smooth', block:'center' });
+};
+
+document.getElementById('rst').onclick = () => {
+  if (!confirm('清空所有勾选和备注？')) return;
+  ST = {}; save(); render();
+  document.getElementById('gNote').value = '';
+};
+
+render();
+
+/* 给 tools/run.js 的就绪标记 + 自检接口 */
+window.__spec = { fams: FAMS, slot: SLOT, state: () => ST };
+window.__wbReady = true;
+window.__abReady = true;
+</script>
+</body>
+</html>

@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>传奇式演出 · 五招矢量样片 + 三组真实素材帧对照（旧 / 新对比）</title>
+<style>
+:root{--bg:#f5f4ef;--card:#fffefa;--ink:#20242b;--dim:#6b7280;--line:#e2e0d7;
+  --red:#b3382c;--gold:#9a6b18;--jade:#2f6e6a;--pur:#5d4a8a;--steel:#4a5568}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+.wrap{max-width:1120px;margin:0 auto;padding:26px 22px 70px}
+header{border-bottom:2px solid var(--ink);padding-bottom:14px;margin-bottom:20px}
+h1{font-size:25px;margin:0 0 6px}
+h2{font-size:17px;margin:26px 0 10px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 20px}
+.tabs button{font:600 13px inherit;padding:8px 14px;border:1px solid var(--line);background:var(--card);
+  color:var(--ink);border-radius:20px;cursor:pointer}
+.tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px 18px;margin-bottom:16px}
+.proto{background:#eef1f5;border-left:4px solid var(--steel);padding:10px 14px;border-radius:4px;font-size:13px}
+.proto b{color:var(--steel)}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:820px){.compare{grid-template-columns:1fr}}
+.side{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:12px}
+.side.new{border-top:4px solid var(--jade)}
+.side.old{border-top:4px solid var(--red)}
+.side h4{margin:0 0 8px;font-size:14px}
+canvas{display:block;width:100%;height:auto;image-rendering:pixelated;background:#12161F;border-radius:4px}
+.meter{display:flex;gap:12px;flex-wrap:wrap;font:12px ui-monospace,Consolas,monospace;margin-top:8px;color:var(--dim)}
+.meter b{color:var(--ink)}
+.meter .bad{color:var(--red)}
+.meter .good{color:var(--jade)}
+.ctrl{display:flex;gap:8px;align-items:center;margin:10px 0}
+.ctrl button{font:13px inherit;padding:5px 12px;border:1px solid var(--line);background:#fff;border-radius:5px;cursor:pointer}
+input[type=range]{width:220px}
+.phases{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media(max-width:820px){.phases{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.ph{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff}
+.ph .lb{font-size:11px;color:var(--dim);padding:5px 7px;background:#f0eee7}
+.ph .row{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
+.ph canvas{border-radius:0}
+.legend{font-size:12px;color:var(--dim);margin-top:8px}
+.rule{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media(max-width:820px){.rule{grid-template-columns:1fr}}
+.rule div{background:#f0eee7;border-radius:6px;padding:10px 12px;font-size:12px}
+.rule b{display:block;margin-bottom:3px}
+footer{margin-top:40px;border-top:1px solid var(--line);padding-top:12px;color:var(--dim);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>传奇式演出 · 五招矢量样片 + 三组真实素材帧对照</h1>
+  <div>每族一招 · 现在（CINE 演武层） vs 新语法（传奇式克制） · <b>纯演出样片，产品代码零改动</b></div>
+</header>
+
+<div class="tabs" id="tabs"></div>
+
+<div class="card">
+  <div class="proto" id="proto"></div>
+  <div class="ctrl">
+    <button id="play">暂停</button>
+    <input type="range" id="seek" min="0" max="20" value="0">
+    <span id="frameNo" style="font:12px ui-monospace,monospace;color:var(--dim)"></span>
+    <span style="font-size:12px;color:var(--dim);margin-left:auto">30fps · 左=现在 · 右=新语法</span>
+  </div>
+  <div class="compare">
+    <div class="side old"><h4>现在 · CINE 演武层</h4><canvas id="oldCv" width="320" height="180"></canvas>
+      <div class="meter" id="oldMeter"></div></div>
+    <div class="side new"><h4>新语法 · 传奇式克制</h4><canvas id="newCv" width="320" height="180"></canvas>
+      <div class="meter" id="newMeter"></div></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">关键相位对比</h2>
+  <div class="phases" id="phases"></div>
+  <div class="legend">每格上半 = 现在，下半 = 新语法。相位按各招自己的节奏取帧，不按旧版五段套。</div>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">新语法的六条硬规矩 <span style="font-weight:400;color:var(--dim);font-size:12px">—— 全部来自实拍 GIF，不是猜的</span></h2>
+  <div class="rule">
+    <div><b>① 一招一形</b>形状由判定决定：刺杀是直线、火球是一颗珠、冰咆哮是几根同形落柱、暗器是一柄刀。<b>不叠第二形状</b>。</div>
+    <div><b>② 一招一色相</b>1 个主色相 + 1 个白高光。火焰是<b>红→橙→黄同色相明度渐变</b>，不是红橙紫蓝多色并列。整帧 ≤5 色（含人物）。</div>
+    <div><b>③ 主体要厚</b>刀光是 8~13px 的<b>实心锥形</b>带白芯，不是 1px 细线；火焰是多层火舌；旋风是带纹理的锥体。<b>元素少，但单个元素必须大</b>。</div>
+    <div><b>④ 三段节奏</b>蓄势（画面<b>大面积留空</b>，只在人身上）→ 主体一帧到全盛 → 消散（碎成 8~14 粒或直接没）。</div>
+    <div><b>⑤ 碎屑只在主体边缘</b>≤14 个，不铺满画面。伤害数字周围留空，不叠在特效上。</div>
+    <div><b>⑥ 一招 10~18 帧</b>（0.4~0.8s）。传奇没有 90 帧的慢动作 —— 我们现在的 90~120 帧是慢一倍还不止。</div>
+  </div>
+</div>
+
+<footer>样片独立于游戏本体：旧版直接取 <code>CineVFX.frame(id,f)</code>，新版为逐招手写的独立绘制函数，没有共用模板。10 兵器 ID / 技能表 / 数值均不变。</footer>
+</div>
+
+<script>window.__err=[];window.addEventListener('error',function(e){window.__err.push((e.message||'resource')+' @'+(e.filename||'')+':'+(e.lineno||''));window.__wbReady=true;},true);window.__wbReady=true;</script>
+<script src="cine-catalog.js"></script>
+<script src="cine-tuning.js"></script>
+<script src="cine-vfx.js"></script>
+<script>
+'use strict';
+/* ---------- 度量：统计每帧绘制调用数与颜色数 ---------- */
+function Meter(ctx){
+  this.ctx = ctx; this.calls = 0; this.colors = new Set(); this.small = 0;
+}
+Meter.prototype._p = function(c,a){
+  this.calls++; this.colors.add(c);
+  this.ctx.globalAlpha = (a === undefined ? 1 : a);
+};
+Meter.prototype.r = function(x,y,w,h,c,a){
+  this._p(c,a); this.ctx.fillStyle = c; this.ctx.fillRect(x,y,w,h);
+  if (w <= 2 && h <= 2) this.small++;
+};
+Meter.prototype.l = function(x1,y1,x2,y2,w,c,a){
+  this._p(c,a); this.ctx.strokeStyle = c; this.ctx.lineWidth = w;
+  this.ctx.beginPath(); this.ctx.moveTo(x1,y1); this.ctx.lineTo(x2,y2); this.ctx.stroke();
+};
+Meter.prototype.d = function(x,y,r,c,a){
+  this._p(c,a); this.ctx.fillStyle = c;
+  this.ctx.beginPath(); this.ctx.arc(x,y,r,0,Math.PI*2); this.ctx.fill();
+};
+Meter.prototype.o = function(x,y,r,w,c,a){
+  this._p(c,a); this.ctx.strokeStyle = c; this.ctx.lineWidth = w;
+  this.ctx.beginPath(); this.ctx.arc(x,y,r,0,Math.PI*2); this.ctx.stroke();
+};
+Meter.prototype.a = function(x,y,r,a0,a1,w,c,al){
+  this._p(c,al); this.ctx.strokeStyle = c; this.ctx.lineWidth = w;
+  this.ctx.beginPath(); this.ctx.arc(x,y,r,a0,a1); this.ctx.stroke();
+};
+Meter.prototype.txt = function(t,x,y,c,sz,a){
+  this._p(c,a); this.ctx.globalAlpha = (a===undefined?1:a);
+  this.ctx.fillStyle = c; this.ctx.font = 'bold '+(sz||10)+'px ui-monospace,Menlo,monospace';
+  this.ctx.textAlign = 'left'; this.ctx.fillText(t,x,y);
+};
+function clamp(v,a,b){ return v<a?a:v>b?b:v; }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function ease(t){ return 1-Math.pow(1-clamp(t,0,1),3); }
+
+/* ---------- 共用的「渲染原子」：只负责把小人和兵器画出来 ----------
+   每招的动作、武器角度、演出元素各自独立，这里不提供任何特效模板。 */
+function bg(m){
+  m.ctx.clearRect(0,0,320,180);
+  m.r(0,0,320,180,'#12161F',1);
+  m.r(0,138,320,42,'#2A3140',1);
+  m.r(0,137,320,1,'#2A3140',.9);
+  for(var x=32;x<320;x+=32) m.r(x,138,1,42,'#2A3140',.75);
+  for(var y=150;y<180;y+=10) m.r(0,y,320,1,'#2A3140',.6);
+}
+function hero(m, x, y, lean, weapon, ang, col){
+  var c = ctxOf(m);
+  c.save(); c.translate(x,y); c.rotate(-lean*0.12);
+  /* 身 */
+  m.r(-5,-20,10,20,col.body,1);
+  m.r(-6,-14,12,6,col.trim,.85);
+  /* 头 */
+  m.r(-4,-27,8,7,col.body,1);
+  m.r(-3,-26,6,2,col.trim,.7);
+  /* 腿 */
+  m.r(-5,0,4,7,col.body,1); m.r(2,0,4,7,col.body,1);
+  /* 持械的手（朝右） */
+  var hx = 4 + lean, hy = -14;
+  m.r(hx-2,hy-2,4,4,col.trim,1);
+  /* 兵器：一根杆 + 尖，角度由各招自己给 */
+  var len = weapon.len, sx = hx, sy = hy;
+  var ex = sx + Math.cos(ang)*len, ey = sy + Math.sin(ang)*len;
+  m.l(sx,sy,ex,ey,2.2,weapon.shaft,1);
+  if (weapon.tip === 'blade'){
+    c.save(); c.translate(ex,ey); c.rotate(ang+Math.PI/2);
+    c.fillStyle = weapon.edge; c.beginPath(); c.moveTo(0,-6); c.lineTo(3,5); c.lineTo(-3,5); c.closePath(); c.fill();
+    c.restore(); m.calls++; m.colors.add(weapon.edge);
+  } else if (weapon.tip === 'orb'){
+    m.d(ex,ey,3,weapon.edge,1);
+  } else if (weapon.tip === 'flag'){
+    c.save(); c.translate(ex,ey); c.rotate(ang);
+    c.fillStyle = weapon.edge; c.beginPath(); c.moveTo(0,0); c.lineTo(13,-4); c.lineTo(11,6); c.lineTo(0,3); c.closePath(); c.fill();
+    c.restore(); m.calls++; m.colors.add(weapon.edge);
+  } else if (weapon.tip === 'knife'){
+    c.save(); c.translate(ex,ey); c.rotate(ang);
+    c.fillStyle = weapon.edge; c.beginPath(); c.moveTo(7,0); c.lineTo(-4,-3); c.lineTo(-2,0); c.lineTo(-4,3); c.closePath(); c.fill();
+    c.restore(); m.calls++; m.colors.add(weapon.edge);
+  }
+  c.restore();
+  return { hx:x+hx, hy:y+hy, tx:x+ex, ty:y+ey };
+}
+function ctxOf(m){ return m.ctx; }
+function enemy(m, x, y, flash, c){
+  m.r(x-8,y-22,16,22,'#2A3140',1);
+  m.r(x-6,y-29,12,7,'#2A3140',1);
+  m.r(x-10,y-32,20,2,c,.9);
+  if (flash){ m.o(x,y-14,13,1.5,'#FFFFFF',.9); m.d(x,y-14,3,'#FFFFFF',1); }
+}
+function dmg(m, t, x, y, c){
+  m.txt(t,x,y,c,11,1);
+}
+
+/* ================= 传奇式视觉语法 · 五招样片（逐招独立时间轴） =================
+   依据 40+ 个实拍传奇特效 GIF 的归纳（详见 LEGEND-VFX-PLAN.html「实证」章）：
+   ① 一招一个主体形状 —— 弧 / 球 / 贴地法阵 / 落柱 / 实体，没有第二组元素抢戏
+   ② 一招一色相 + 一个白高光 —— 火焰是红→橙→黄同色相明度渐变，不是多色并列
+   ③ 三段节奏 —— 蓄势（画面大面积留空）→ 主体一帧到全盛 → 消散（碎成 8~14 粒）
+   ④ 碎屑只在主体边缘 / 拖尾，不铺满画面
+   ⑤ 伤害数字周围留空，不叠在特效上
+   ⑥ 一招 10~18 帧（0.4~0.8s）—— 传奇没有 90 帧的慢动作
+   族色：战士橙红 / 法师蓝紫 / 道士青绿 / 刺客冷白
+*/
+
+/* ---- 渲染原子：通用画法，不是招式模板 ---- */
+/* 贴地椭圆（法阵 / 范围圈）：传奇是 2.5D 斜视，地面圈画成压扁椭圆 */
+Meter.prototype.ell  = function(x,y,rx,ry,w,c,a){
+  this._p(c,a); this.ctx.strokeStyle = c; this.ctx.lineWidth = w;
+  this.ctx.beginPath(); this.ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2); this.ctx.stroke();
+};
+Meter.prototype.ellF = function(x,y,rx,ry,c,a){
+  this._p(c,a); this.ctx.fillStyle = c;
+  this.ctx.beginPath(); this.ctx.ellipse(x,y,rx,ry,0,0,Math.PI*2); this.ctx.fill();
+};
+function poly(m, pts, c, a){
+  var ctx = ctxOf(m);
+  ctx.save(); ctx.globalAlpha = (a===undefined?1:a);
+  ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
+  for (var i=1;i<pts.length;i++) ctx.lineTo(pts[i][0],pts[i][1]);
+  ctx.closePath(); ctx.fill(); ctx.restore();
+  m.calls++; m.colors.add(c);
+}
+/* 同色相三段火团：暗 → 主 → 亮。只用同一色相的明暗，不叠别的颜色 */
+function flame(m, x, y, r, cDark, cMain, cHot, a){
+  m.o(x,y,r*1.00,r*0.85,cDark,a*0.5);
+  m.o(x,y,r*0.70,r*0.62,cMain,a*0.85);
+  m.o(x,y,r*0.38,r*0.40,cHot,a);
+}
+/* 命中白球：外白环 + 内旋纹 + 白心（实证：warrior2_08 白色旋转球） */
+function hitBall(m, x, y, r, rot, a){
+  m.o(x,y,r,2.2,'#FFFFFF',a);
+  m.d(x,y,r*0.42,'#FFFFFF',a*0.9);
+  var c = ctxOf(m); c.save(); c.globalAlpha = a*0.55; c.strokeStyle='#12161F'; c.lineWidth=1.4;
+  c.beginPath(); c.arc(x,y,r*0.62,rot,rot+2.1); c.stroke();
+  c.beginPath(); c.arc(x,y,r*0.62,rot+Math.PI,rot+Math.PI+2.1); c.stroke();
+  c.restore(); m.calls += 2; m.colors.add('#12161F');
+}
+/* 贴地法阵：外环 + 内环 + 6 道纹样（实证：tao_06 绿阵 / tao_39 金阵） */
+function seal(m, cx, cy, rx, ry, c, a, spokes){
+  m.ell(cx,cy,rx,ry,2.6,c,a);
+  m.ell(cx,cy,rx*0.62,ry*0.62,1.4,c,a*0.7);
+  for (var i=0;i<(spokes||6);i++){
+    var an = i*(Math.PI*2/(spokes||6));
+    m.l(cx+Math.cos(an)*rx*0.62, cy+Math.sin(an)*ry*0.62,
+         cx+Math.cos(an)*rx*0.98, cy+Math.sin(an)*ry*0.98, 1.8, c, a*0.8);
+  }
+}
+
+/* ================= 战士 · 剑 ================= */
+/* 破锋式 sword_1 —— 原型：传奇「刺杀剑术」直线剑气 / 「半月弯刀」月牙。
+   实证要点：剑气是**厚实的锥形**（不是 1px 线），起手 3 帧画面留空，
+   命中是一个白色旋转球，末帧碎成 10 粒。14 帧。 */
+var S_SWORD = { total:14, hit:6, phases:[0,3,6,11] };
+function drawSword(m,f){
+  bg(m);
+  var C_MAIN = '#E0603A', C_HOT = '#FFD9A8';
+  /* 起手 3 帧：后撤蓄力，剑抬起 —— 画面刻意留空 */
+  var wind = f<3 ? ease(f/3) : 1;
+  var lean = f<3 ? -5*wind : lerp(-5, 7, clamp((f-3)/3,0,1));
+  var ang  = f<3 ? lerp(-0.55,-1.35,wind) : lerp(-1.35,-0.12,clamp((f-3)/3,0,1));
+  /* 剑刃并入特效暖白 —— 传奇一剑就蓝+白两种色，人物/兵器/特效不要各自一套色 */
+  var p = hero(m,104,138,lean,{len:26,shaft:'#8A8268',tip:'blade',edge:C_HOT},ang,
+    {body:'#8A8268',trim:'#8A8268'});
+  enemy(m,182,138,f>=6&&f<=7,C_HOT);
+  /* 主体：一道厚锥形剑气（主色 + 白芯），f3 出现 → f4 全盛 → f5 收 */
+  if (f>=3 && f<=6){
+    /* 剑气盖住命中帧：传奇的火焰弧是罩着命中时刻的，不是命中前就收掉 */
+    var q = f===3 ? .55 : f===4 ? 1 : f===5 ? .78 : .4;
+    var x1 = p.hx, y1 = p.hy, x2 = lerp(x1,182,q), y2 = p.hy-3;
+    var nx = (y2-y1), ny = -(x2-x1), nl = Math.sqrt(nx*nx+ny*ny)||1;
+    nx/=nl; ny/=nl;
+    /* 楔形：贴手处几乎是一个点（顺着武器），末端最粗（像传奇那道火焰弧）。
+       之前两端都只用 ±2px，整条只有 1~2px 粗 —— 看着就是一串火星。 */
+    var hw = 7*q;                                    /* 末端总厚 14px */
+    var hw0 = 1.2*q;                                 /* 贴手端 */
+    poly(m, [[x1+nx*hw0,y1+ny*hw0],[x2+nx*hw,y2+ny*hw],
+             [x2-nx*hw,y2-ny*hw],[x1-nx*hw0,y1-ny*hw0]], C_MAIN, .95*q);
+    poly(m, [[x1+nx*hw0*.6,y1+ny*hw0*.6],[x2+nx*hw*.38,y2+ny*hw*.38],
+             [x2-nx*hw*.38,y2-ny*hw*.38],[x1-nx*hw0*.6,y1-ny*hw0*.6]], C_HOT, .95*q);
+    /* 刃口火星：只在主体边缘，不铺满 */
+    for (var i=0;i<4;i++){
+      var tt=(i+1)/5, ex=lerp(x1,x2,tt), ey=lerp(y1,y2,tt);
+      m.r(ex+nx*hw*.8-1, ey+ny*hw*.8-1, 2,2, C_HOT, .8*q);
+    }
+  }
+  /* 命中：白色旋转球，3 帧 */
+  if (f>=6 && f<=8) hitBall(m,182,p.hy-3, f===6?6:f===7?8:6, f*0.9, f===8?.6:1);
+  /* 消散：碎成 10 粒 */
+  if (f>=9 && f<=13){
+    var fa = 1-(f-9)/4, fr = 3+(f-9)*3.4;
+    for (var i=0;i<10;i++){
+      var an = i*(Math.PI*2/10)+f*0.35;
+      m.d(182+Math.cos(an)*fr, p.hy-3+Math.sin(an)*fr*0.62, 1.6, C_HOT, fa*0.9);
+    }
+  }
+  if (f>=6&&f<=9) dmg(m,'-12',188,p.hy-12-clamp(f-6,0,3),C_HOT);
+}
+
+/* ================= 法师 · 法器 ================= */
+/* 灵珠 mage_1 —— 原型：传奇「火球术」（tao_33：起→涨→缩→碎散）。
+   实证要点：珠是**实体**，从手边凝出来 → 飞到目标 → 炸成一团同色相火焰 → 碎散。14 帧。 */
+var S_MAGE = { total:14, hit:8, phases:[0,2,8,11] };
+function drawMage(m,f){
+  bg(m);
+  var C_MAIN = '#9B7BE0', C_HOT = '#FFFFFF';
+  var charge = f<2 ? f/2 : 1;
+  var p = hero(m,104,138,f<2?-4:3,{len:22,shaft:'#2A3140',tip:'orb',edge:'#C0A8E0'},
+    f<2?lerp(-1.2,-0.3,charge):-0.3,{body:'#2A3140',trim:'#C0A8E0'});
+  enemy(m,182,138,f>=8&&f<=9,'#C0A8E0');
+  if (f<2){
+    /* 起手：手边一点光，很小 */
+    m.d(p.tx,p.ty,1.5+charge*1.5,C_MAIN,.6+.4*charge);
+  } else if (f<8){
+    /* 飞行：珠 + 3 段渐弱拖尾（不是碎屑雨） */
+    var q = clamp((f-2)/6,0,1);
+    var bx = lerp(p.tx,180,q), by = lerp(p.ty,112,q);
+    for (var k=1;k<=3;k++){
+      var kk = q - k*0.07; if (kk<0) continue;
+      var tx=lerp(p.tx,180,kk), ty=lerp(p.ty,112,kk);
+      m.o(tx,ty, 5.2-k*1.0, 4.6-k*0.9, C_MAIN, (0.62-k*0.15));
+    }
+    m.d(bx,by,5,C_MAIN,1); m.d(bx,by,2,C_HOT,1);
+  }
+  /* 命中：炸成一团火焰（主色相三段：暗紫→紫→白热），只此一团 */
+  if (f>=8 && f<=11){
+    var a = f===8?1:f===9?.9:f===10?.55:.25;
+    var rr = f===8?13:f===9?15:f===10?12:7;
+    m.o(180,112, rr*1.25, 2.4, '#FFFFFF', a*0.75);   /* 冲击环 */
+    flame(m,180,112,rr,'#5B3F96',C_MAIN,C_HOT,a);
+  }
+  /* 消散：12 粒 */
+  if (f>=11 && f<=13){
+    var fa = 1-(f-11)/3;
+    for (var i=0;i<12;i++){
+      var an = i*(Math.PI*2/12)+f*0.4;
+      m.d(180+Math.cos(an)*(6+f*3.2), 112+Math.sin(an)*(4+f*2.0), 1.5, C_HOT, fa*.85);
+    }
+  }
+  if (f>=8&&f<=11) dmg(m,'-18',188,100-clamp(f-8,0,3),'#C0A8E0');
+}
+
+/* ================= 道士 · 棍杖 ================= */
+/* 缠棍 staff_6 —— 原型：传奇「施毒术」绿阵（tao_06）+ 旋风（tao_19）。
+   实证要点：状态靠**地面法阵 + 目标身上一个小标记**读，不靠持续烟花。16 帧。 */
+var S_STAFF = { total:16, hit:10, phases:[0,4,10,13] };
+function drawStaff(m,f){
+  bg(m);
+  var C_MAIN = '#4FBFA0';
+  var lift = f<4 ? ease(f/4) : 1;
+  var ang  = f<4 ? lerp(-0.7,-1.5,lift) : (f<10 ? -1.5 : lerp(-1.5,-0.6,(f-10)/6));
+  var p = hero(m,104,138,-3*lift,{len:28,shaft:'#2A3140',tip:'flag',edge:C_MAIN},ang,
+    {body:'#2A3140',trim:C_MAIN});
+  enemy(m,182,138,f>=10&&f<=11,C_MAIN);
+  /* 主体一：贴地法阵 —— f4 展开、f12 收拢、f15 消失 */
+  if (f>=4 && f<=15){
+    var g = f<4 ? 0 : f<8 ? ease((f-4)/4) : f<12 ? 1 : 1-ease((f-12)/4);
+    if (g>0.02) seal(m,182,136, 40*g, 40*0.32*g, C_MAIN, 0.85*g, 6);
+  }
+  /* 主体二：魂幡（棍杖的魂幡意象）自法阵旋向目标 */
+  if (f>=6 && f<=12){
+    var q = f<=10 ? clamp((f-6)/4,0,1) : 1-(f-10)/2;
+    var fx = lerp(150,180,q), fy = lerp(128,112,q)-Math.sin(q*Math.PI)*10;
+    var c = ctxOf(m);
+    c.save(); c.globalAlpha=.9*q; c.fillStyle=C_MAIN;
+    c.beginPath(); c.moveTo(fx,fy); c.lineTo(fx+4,fy+2); c.lineTo(fx+3,fy+19); c.lineTo(fx-1,fy+15);
+    c.closePath(); c.fill(); c.restore(); m.calls++; m.colors.add(C_MAIN);
+    if (f>=10) m.a(180,124,9,-.3,Math.PI*1.2,2,C_MAIN,.9*q);
+  }
+  /* 状态标记：目标身上一个「缚」，不压血条 */
+  /* 状态标记：放在怪物右侧空处，不压本体也不压血条 */
+  if (f>=10){
+    m.r(196,110,12,12,'#12161F',.8);
+    m.txt('缚',197,120,C_MAIN,10,1);
+  }
+  if (f>=10&&f<=13) dmg(m,'-9',212,100-clamp(f-10,0,3),C_MAIN);
+}
+
+/* ================= 刺客 · 暗器 ================= */
+/* 飞蝗 dart_1 —— 原型：传奇暗器弹道（warrior_09）+ 白色旋转爆点（warrior2_08）。
+   实证要点：一柄刀飞出去 → 一点白 → 白色旋转球 → 碎散。12 帧。 */
+var S_DART = { total:12, hit:6, phases:[0,2,6,9] };
+function drawDart(m,f){
+  bg(m);
+  var C_MAIN = '#D8E4EE';
+  var wind = f<2 ? f/2 : 1;
+  var ang = f<2 ? lerp(0.2,-1.2,wind) : -0.15;
+  var p = hero(m,104,138,-5*wind,{len:12,shaft:'#2A3140',tip:'knife',edge:C_MAIN},ang,
+    {body:'#2A3140',trim:C_MAIN});
+  enemy(m,182,138,f>=6&&f<=7,C_MAIN);
+  if (f>=2 && f<=6){
+    var q = clamp((f-2)/4,0,1);
+    var bx = lerp(p.tx,180,q), by = lerp(p.ty,116,q);
+    /* 拖尾：3 段渐弱短线，不是粒子雨 */
+    for (var k=1;k<=3;k++){
+      var kk=q-k*0.11; if(kk<0) continue;
+      m.l(lerp(p.tx,180,kk)+4, lerp(p.ty,116,kk), lerp(p.tx,180,kk), lerp(p.ty,116,kk), 1.4, C_MAIN, .38-k*.1);
+    }
+    var c = ctxOf(m); c.save(); c.translate(bx,by); c.rotate(f*1.1);
+    c.fillStyle=C_MAIN; c.beginPath(); c.moveTo(7,0); c.lineTo(-4,-3); c.lineTo(-2,0); c.lineTo(-4,3); c.closePath(); c.fill();
+    c.restore(); m.calls++; m.colors.add(C_MAIN);
+  }
+  if (f>=6 && f<=8) hitBall(m,180,116, f===6?5:f===7?7:5, f*0.9, f===8?.6:1);
+  if (f>=9 && f<=11){
+    var fa = 1-(f-9)/3;
+    for (var i=0;i<9;i++){
+      var an = i*(Math.PI*2/9)+f*0.4;
+      m.d(180+Math.cos(an)*(4+f*3), 116+Math.sin(an)*(3+f*1.8), 1.4, C_MAIN, fa*.85);
+    }
+  }
+  if (f>=6&&f<=8) dmg(m,'-15',188,102-(f-6)*3,'#E8DFC8');
+}
+
+/* ================= 范围招原型（法师 · 法器） ================= */
+/* 冰封 mage_6 —— 原型：传奇「冰咆哮」（tao_39：地面染色 + 多根同形落柱 + 中心旋涡）。
+   实证要点：范围招不是「满屏碎屑」，而是 3 根**同形**落柱依次砸下 + 地面法阵。18 帧。 */
+var S_ZONE = { total:18, hit:10, phases:[0,5,10,14] };
+function drawZone(m,f){
+  bg(m);
+  var C_MAIN = '#5C9BE0';
+  var lift = f<4 ? ease(f/4) : 1;
+  var p = hero(m,104,138,-2*lift,{len:24,shaft:'#2A3140',tip:'orb',edge:C_MAIN},
+    f<4?lerp(-1.5,-0.8,lift):-0.8,{body:'#2A3140',trim:C_MAIN});
+  enemy(m,182,138,f>=10&&f<=11,C_MAIN);
+  /* 主体一：地面法阵（f5 展开，f15 收） */
+  if (f>=5 && f<=17){
+    var g = f<5?0 : f<9 ? ease((f-5)/4) : f<15 ? 1 : 1-ease((f-15)/3);
+    if (g>0.02) seal(m,182,136, 52*g, 52*0.32*g, C_MAIN, 0.8*g, 6);
+  }
+  /* 主体二：3 根同形落柱，依次砸下（不是同时、不是不同形） */
+  /* [落地时刻, 落点 x] —— 之前写成 [落点, 时刻]，取反导致一根都没画出来 */
+  var pillars = [[8,142],[10,182],[12,222]];
+  for (var i=0;i<pillars.length;i++){
+    var pf = pillars[i][0], px = pillars[i][1];
+    if (f >= pf-2 && f <= pf+5){
+      var k = f < pf ? (f-(pf-2))/2 : 1 - (f-pf)/6;
+      if (k>0){
+        var h = 64*k;
+        poly(m, [[px-11,138],[px-5,138-h],[px+5,138-h],[px+11,138]], C_MAIN, .95*k);
+        poly(m, [[px-4,138],[px-2,138-h],[px+2,138-h],[px+4,138]], '#FFFFFF', .95*k);
+        /* 落地冲击环 */
+        m.ell(px,138, 15*k, 15*0.32*k, 2.4, '#FFFFFF', .9*k);
+      }
+    }
+  }
+  if (f>=10&&f<=13) dmg(m,'-24',188,98-clamp(f-10,0,3),C_MAIN);
+}
+
+/* ---------- 真实素材帧动画：验证「直接拿传奇素材做帧序列」这条路 ----------
+   流程：黑键 GIF → 抠透明 → PNG 序列 → 预加载 Image → 逐帧 drawImage。
+   这是游戏内 drawOverlay 走的同一条路（CV.renderCanvas(octx, prims, ...)），
+   只不过把矢量图元换成位图帧。 */
+var SEQ_BASE = 'legend-ref/frames/';
+var SEQS = {
+  blade: { dir:'blade', n:8,  w:127, h:160, scale:1.0, ax:186, ay:118, label:'战士 · 半月弯刀蓝月牙（8 帧）' },
+  fire : { dir:'fire',  n:10, w:165, h:162, scale:1.0, ax:180, ay:118, label:'法师 · 火球起涨缩碎散（10 帧）' },
+  seal : { dir:'seal',  n:16, w:512, h:230, scale:0.42,ax:182, ay:128, label:'道士 · 地面绿法阵（16 帧）' },
+  ai   : { dir:'ai',    n:2,  w:340, h:337, scale:1, ax:0, ay:0, label:'手绘/AI 位图 2 张关键帧 + 程序化运动' }
+};
+var SEQ_IMG = {};
+(function preloadSeqs(){
+  Object.keys(SEQS).forEach(function(k){
+    var s = SEQS[k], arr = [];
+    SEQ_IMG[k] = arr;
+    for (var i=0;i<s.n;i++){
+      var im = new Image();
+      im.src = SEQ_BASE + s.dir + '/' + ('0'+i).slice(-2) + '.png';
+      /* 素材是异步加载的：就绪后必须重绘一次，
+         否则 QS 带 f（暂停）时首帧还没到，画面是空的 */
+      im.onload = function(){ if (typeof render === 'function') render(); };
+      arr.push(im);
+    }
+  });
+})();
+function drawSeqFrame(ctx, key, f){
+  var s = SEQS[key], arr = SEQ_IMG[key];
+  if (!arr || !arr.length) return false;
+  var idx = Math.min(arr.length-1, Math.floor(f / 14 * arr.length));
+  var im = arr[idx];
+  if (!im.complete || !im.naturalWidth) return false;
+  var w = im.naturalWidth * s.scale, h = im.naturalHeight * s.scale;
+  ctx.drawImage(im, s.ax - w/2, s.ay - h/2, w, h);
+  return true;
+}
+/* 素材 tab 的底：只画场景与人物，特效交给真实帧 */
+function drawRealBase(m, f){
+  bg(m);
+  var lean = f<2 ? -4 : 4;
+  var ang  = f<2 ? lerp(-0.6,-1.3, f/2) : lerp(-1.3,-0.1, clamp((f-2)/4,0,1));
+  hero(m,104,138,lean,{len:26,shaft:'#8A8268',tip:'blade',edge:'#E8DFC8'},ang,
+    {body:'#8A8268',trim:'#8A8268'});
+  enemy(m,182,138,false,'#E8DFC8');
+}
+
+/* ---------- 位图 sprite 路线：2 张手绘/AI 关键帧 + 程序化运动 ---------- */
+function drawImgScaled(ctx, im, cx, cy, sc, alpha, rot){
+  if (!im || !im.complete || !im.naturalWidth) return false;
+  var w = im.naturalWidth * sc, h = im.naturalHeight * sc;
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.translate(cx, cy);
+  if (rot) ctx.rotate(rot);
+  ctx.drawImage(im, -w/2, -h/2, w, h);
+  ctx.restore();
+  return true;
+}
+function drawSpriteRoute(m, f){
+  bg(m);
+  var lean = f<3 ? -5 : lerp(-5, 6, clamp((f-3)/4,0,1));
+  var ang  = f<3 ? lerp(-0.7,-1.35, f/3) : lerp(-1.35,-0.15, clamp((f-3)/4,0,1));
+  hero(m,104,138,lean,{len:26,shaft:'#8A8268',tip:'blade',edge:'#E8DFC8'},ang,
+    {body:'#8A8268',trim:'#8A8268'});
+  enemy(m,182,138,f>=7&&f<=8,'#E8DFC8');
+  var A = SEQ_IMG.ai[0], B = SEQ_IMG.ai[1];
+  if (f<=2){                       /* 起手：小而暗的一弯，贴在刀上 */
+    drawImgScaled(ctxOf(m), A, 130, 116, 0.13+0.03*f, 0.35+0.22*f, 0);
+  } else if (f<=5){                /* 抽出并放大 */
+    var t=(f-2)/3;
+    drawImgScaled(ctxOf(m), A, lerp(130,148,t), lerp(116,112,t), 0.16+0.07*t, 0.6, 0);
+    drawImgScaled(ctxOf(m), B, lerp(130,148,t), lerp(116,112,t), 0.20+0.16*t, 0.45+0.55*t, 0);
+  } else if (f<=8){                /* 全盛：一道厚月牙扫过 */
+    var t2=(f-5)/3;
+    /* 尺寸必须按我们 320x180 的画布重新定 —— 传奇素材是给 800x600 场景画的，
+       等比缩小会糊、放大就糊满屏。这里把月牙宽压到约 140px（画布 44%）。 */
+    drawImgScaled(ctxOf(m), B, lerp(148,182,t2), lerp(112,110,t2), 0.34+0.10*t2, 1-0.18*t2, -0.12*t2);
+  }
+  /* 消散：碎成 12 粒 */
+  if (f>=9 && f<=13){
+    var fa = 1-(f-9)/4;
+    for (var i=0;i<12;i++){
+      var an = i*(Math.PI*2/12)+f*0.35;
+      m.d(182+Math.cos(an)*(5+f*4), 110+Math.sin(an)*(3+f*2.4), 1.6, '#FFD9A8', fa*0.9);
+    }
+  }
+  if (f>=7&&f<=10) m.txt('-12',198,96-clamp(f-7,0,3),'#E8DFC8',11,1);
+}
+
+function sampleById(id){ for (var i=0;i<SAMPLES.length;i++) if (SAMPLES[i].id===id) return SAMPLES[i]; return null; }
+
+/* ---------- 注册表 ---------- */
+var SAMPLES = [
+  { id:'sword_1', fam:'战士', name:'破锋式', S:S_SWORD, draw:drawSword,
+    proto:'<b>实拍原型：传奇「刺杀剑术」直线剑气 + 「半月弯刀」厚月牙。</b><br>实证三点：① 剑气是<b>厚实的锥形</b>（8~13px，带白芯），不是 1px 细线；② <b>起手 3 帧画面大面积留空</b>，只在人身上；③ 命中不是满屏闪，是<b>一个白色旋转球</b>，末帧碎成 10 粒。<br>新语法：14 帧 / 0.45s，战士族主色橙红 + 白热高光。' },
+  { id:'mage_1', fam:'法师', name:'灵珠', S:S_MAGE, draw:drawMage,
+    proto:'<b>实拍原型：传奇「火球术」（起→涨→缩→碎散） + 「雷电术」瞬发瞬灭。</b><br>实证三点：① 珠是<b>实体</b>，从手边凝出来再飞出去；② 命中后炸成一团<b>同色相</b>火焰（暗紫→紫→白热），不是多色并列；③ 拖尾是<b>3 段渐弱</b>，不是粒子雨。<br>新语法：14 帧，法师族主色符紫 + 白。' },
+  { id:'staff_6', fam:'道士 · 棍杖 + 魂幡意象', name:'缠棍', S:S_STAFF, draw:drawStaff,
+    proto:'<b>实拍原型：传奇「施毒术」绿阵 + 「冰咆哮」地面法阵。</b><br>实证三点：① 范围/状态靠<b>贴地法阵</b>读（外环 + 内环 + 纹样），不靠满屏烟花；② 状态标记是<b>目标身上一个小方标</b>；③ 法阵会<b>收拢</b>，不是一直转。<br>兵器 ID 仍是棍杖（staff_6），魂幡只作演出意象，数值与技能表不变。' },
+  { id:'dart_1', fam:'刺客', name:'飞蝗', S:S_DART, draw:drawDart,
+    proto:'<b>实拍原型：传奇暗器弹道 + 白色旋转爆点。</b><br>实证三点：① 暗器有<b>实体形状</b>（能看到刀身），不是光点；② 拖尾 3 段渐弱；③ 命中 = 白球 → 碎散。<br>新语法：12 帧，刺客族主色冷白。' },
+  { id:'mage_6', fam:'法师 · 范围招原型', name:'冰封', S:S_ZONE, draw:drawZone,
+    proto:'<b>实拍原型：传奇「冰咆哮」（地面染色 + 多根同形落柱 + 中心旋涡）。</b><br>实证三点：① 范围招 = <b>几根同形落柱</b>依次砸下，不是不同形状各来一套；② 地面一圈<b>法阵</b>罩住范围；③ 柱子落地有<b>白色冲击环</b>。<br>这一招是 80 招里 24 个 aoe 招的通用语法。' },
+  { id:'sword_1', fam:'真实素材 · 帧动画', name:'月牙刀光', S:{total:14, hit:4, phases:[0,2,4,8]},
+    draw:drawRealBase, seq:'blade', cmp:'sword_1', noDmg:true,
+    proto:'<b>验证「直接拿传奇素材做帧动画」。</b>左边是现在 CINE 矢量层画的同一族招式，右边是<b>真实传奇 GIF 抠成透明 PNG 序列后逐帧 drawImage</b>。<br>流程：黑键 GIF → 亮度抠透明 → PNG 序列 → 预加载 Image → 逐帧 drawImage —— 和游戏内 <code>drawOverlay</code> 走的是同一条渲染路径。<br><b>看点在风格是否搭</b>：像素素材 vs 我们的矢量扁平画面。' },
+  { id:'mage_1', fam:'真实素材 · 帧动画', name:'火球', S:{total:14, hit:5, phases:[0,2,5,9]},
+    draw:drawRealBase, seq:'fire', cmp:'mage_1', noDmg:true,
+    proto:'<b>法师火球（真实素材帧）。</b>起 → 涨 → 缩 → 碎散，10 帧。<br>这是「一招只有 1 个主体形状」的最干净样本：<b>全程只有一颗球</b>，颜色是红→橙→黄同色相渐变。<br>如果走素材路线，<b>这种基础形状 sprite 是最值得先做的一批</b>。' },
+  { id:'sword_1', fam:'位图 sprite 路线', name:'月牙刀光', S:{total:14, hit:6, phases:[0,3,6,10]},
+    draw:drawSpriteRoute, seq:null, cmp:'sword_1',
+    proto:'<b>验证第三条路：少量位图 + 程序化运动。</b>左边是<b>纯矢量</b>画的新语法，右边只用 <b>2 张手绘/AI 位图</b>（一小弯 + 一大弯月牙），中间靠<b>缩放 / 位移 / 交叉淡入 / 旋转</b>程序化补出 14 帧动画。<br>这就是<b>传奇自己的做法</b>：素材库只有十几套基础形状，靠组合出所有技能，而不是 80 招各画一套。<br><b>产能账</b>：2 张图出一招；24 套基础形状 × 8~12 帧 ≈ 240 帧覆盖全部 80 招，不是 1120 帧。' },
+  { id:'staff_6', fam:'真实素材 · 帧动画', name:'绿法阵', S:{total:14, hit:6, phases:[0,3,6,10]},
+    draw:drawRealBase, seq:'seal', cmp:'staff_6', noDmg:true,
+    proto:'<b>道士地面法阵（真实素材帧）。</b>外圈 + 内圈 + 纹样，贴地椭圆，16 帧。<br>范围招与状态招的通用件 —— 我们 24 个 aoe 招 + 若干 ctrl/buff 招都能靠它换色换大小复用。<br>注意：素材本身是<b>2.5D 俯视</b>的椭圆，和我们横版侧视要压扁的 <code>fy=0.32</code> 规则对得上。' }
+];
+
+/* ---------- 页面 ---------- */
+var cur = 0, f = 0, playing = true, last = 0;
+var oldCv = document.getElementById('oldCv'), newCv = document.getElementById('newCv');
+var oldCtx = oldCv.getContext('2d'), newCtx = newCv.getContext('2d');
+var tabs = document.getElementById('tabs');
+SAMPLES.forEach(function(s,i){
+  var b=document.createElement('button'); b.textContent=(i+1)+' · '+s.fam.split(' ')[0]+' · '+s.name;
+  b.onclick=function(){cur=i;f=0;buildPhases();render();syncTabs();}; tabs.appendChild(b);
+});
+function syncTabs(){ [].forEach.call(tabs.children,function(b,i){b.className=i===cur?'on':'';}); }
+
+function render(){
+  var s = SAMPLES[cur];
+  oldCtx.clearRect(0,0,320,180);
+  var mo = new Meter(oldCtx);
+  if (s.cmp){
+    /* 素材 tab：左边放**同族的矢量新语法**，直接和右边真实素材对照 */
+    var cs = sampleById(s.cmp);
+    cs.draw(mo, Math.min(f, cs.S.total-1));
+    document.getElementById('oldMeter').innerHTML =
+      '矢量新语法 <b class="good">'+cs.name+'</b> · 图元 <b class="good">'+mo.calls+'</b> · 颜色 <b class="good">'+mo.colors.size+'</b>';
+  } else {
+    var oldFrame = CineVFX.frame(s.id, Math.min(f, CineVFX.total(s.id)-1)).prims;
+    CineVFX.renderCanvas(oldCtx, oldFrame, 0,0,1);
+    var oldColors = new Set(oldFrame.map(function(p){return p.c;}));
+    document.getElementById('oldMeter').innerHTML =
+      '图元 <b class="bad">'+oldFrame.length+'</b> · 颜色 <b class="bad">'+oldColors.size+'</b> · 帧数 <b class="bad">'+CineVFX.total(s.id)+'</b>';
+  }
+
+  var mn = new Meter(newCtx); mn.ctx=newCtx; s.draw(mn,f);
+  if (s.seq) drawSeqFrame(newCtx, s.seq, f);
+  document.getElementById('newMeter').innerHTML = s.seq
+    ? '位图帧 <b class="good">'+(SEQS[s.seq].n)+'</b> 张 · 序列 <b class="good">'+SEQS[s.seq].label+'</b> · 帧数 <b class="good">'+s.S.total+'</b>'
+    : '图元 <b class="good">'+mn.calls+'</b> · 颜色 <b class="good">'+mn.colors.size+'</b> · 帧数 <b class="good">'+s.S.total+'</b>' +
+      ' · 碎屑 <b class="good">'+mn.small+'</b>';
+
+  document.getElementById('proto').innerHTML = s.proto;
+  document.getElementById('frameNo').textContent = 'f '+f+' / '+(s.S.total-1)+' · 判定帧 '+s.S.hit;
+  var seek=document.getElementById('seek'); seek.max=s.S.total-1; seek.value=f;
+}
+
+function buildPhases(){
+  var s=SAMPLES[cur], box=document.getElementById('phases'); box.innerHTML='';
+  s.S.phases.forEach(function(pf){
+    var d=document.createElement('div'); d.className='ph';
+    var lb=document.createElement('div'); lb.className='lb'; lb.textContent='f '+pf+' · '+
+      (pf<s.S.hit?'起手/飞行':pf===s.S.hit?'命中':'收势'); d.appendChild(lb);
+    var row=document.createElement('div'); row.className='row';
+    [0,1].forEach(function(k){
+      var cv=document.createElement('canvas'); cv.width=160; cv.height=90;
+      var c=cv.getContext('2d'); c.imageSmoothingEnabled=false;
+      if(k===0){
+        if (s.cmp){
+          var cs2=sampleById(s.cmp);
+          cs2.draw(new Meter(c), Math.min(pf, cs2.S.total-1));
+        } else {
+          var oldFrame=CineVFX.frame(s.id,Math.min(pf,CineVFX.total(s.id)-1)).prims;
+          CineVFX.renderCanvas(c,oldFrame,0,0,.5);
+        }
+      } else {
+        var m=new Meter(c); s.draw(m,pf);
+        if (s.seq) drawSeqFrame(c, s.seq, pf);
+      }
+      row.appendChild(cv);
+    });
+    d.appendChild(row); box.appendChild(d);
+  });
+}
+function tick(ts){
+  if(playing && ts-last > 1000/30){
+    var s=SAMPLES[cur]; f=(f+1)%s.S.total; last=ts; render();
+  }
+  requestAnimationFrame(tick);
+}
+document.getElementById('play').onclick=function(){
+  playing=!playing; this.textContent=playing?'暂停':'播放';
+};
+document.getElementById('seek').oninput=function(){ f=+this.value; playing=false;
+  document.getElementById('play').textContent='播放'; render(); };
+
+var qp = new URLSearchParams(location.search);
+if (qp.has('tab')) cur = clamp(+qp.get('tab')||0, 0, SAMPLES.length-1);
+if (qp.has('f')) { f = +qp.get('f')||0; playing = false; }
+syncTabs(); buildPhases(); render(); requestAnimationFrame(tick);
+window.__wbReady = true;
+</script>
+</body>
+</html>

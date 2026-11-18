@@ -1,0 +1,142 @@
+{
+ "ai_seal": {
+  "before": {
+   "size": [
+    300,
+    129
+   ],
+   "mainHue": 120,
+   "huePurity": 0.532,
+   "hueSpread": 2,
+   "hotPct": 0.135,
+   "satMed": 0.833,
+   "valMed": 0.773,
+   "alphaFill": 0.768
+  },
+  "after": {
+   "size": [
+    300,
+    129
+   ],
+   "mainHue": 120,
+   "huePurity": 0.914,
+   "hueSpread": 2,
+   "hotPct": 0.123,
+   "satMed": 0.928,
+   "valMed": 0.769,
+   "alphaFill": 0.768
+  }
+ },
+ "ai_blade_b": {
+  "before": {
+   "size": [
+    340,
+    337
+   ],
+   "mainHue": 0,
+   "huePurity": 0.666,
+   "hueSpread": 3,
+   "hotPct": 0.381,
+   "satMed": 0.482,
+   "valMed": 0.984,
+   "alphaFill": 0.374
+  },
+  "after": {
+   "size": [
+    340,
+    337
+   ],
+   "mainHue": 0,
+   "huePurity": 0.891,
+   "hueSpread": 3,
+   "hotPct": 0.388,
+   "satMed": 0.595,
+   "valMed": 0.984,
+   "alphaFill": 0.374
+  }
+ },
+ "ai_fireball": {
+  "before": {
+   "size": [
+    130,
+    131
+   ],
+   "mainHue": 0,
+   "huePurity": 0.892,
+   "hueSpread": 2,
+   "hotPct": 0.083,
+   "satMed": 0.899,
+   "valMed": 0.792,
+   "alphaFill": 0.779
+  },
+  "after": {
+   "size": [
+    130,
+    131
+   ],
+   "mainHue": 0,
+   "huePurity": 0.932,
+   "hueSpread": 2,
+   "hotPct": 0.134,
+   "satMed": 0.925,
+   "valMed": 0.784,
+   "alphaFill": 0.779
+  }
+ },
+ "ai_blade_a": {
+  "before": {
+   "size": [
+    150,
+    136
+   ],
+   "mainHue": 0,
+   "huePurity": 0.882,
+   "hueSpread": 2,
+   "hotPct": 0.281,
+   "satMed": 0.648,
+   "valMed": 0.969,
+   "alphaFill": 0.458
+  },
+  "after": {
+   "size": [
+    150,
+    136
+   ],
+   "mainHue": 0,
+   "huePurity": 0.966,
+   "hueSpread": 1,
+   "hotPct": 0.191,
+   "satMed": 0.747,
+   "valMed": 0.965,
+   "alphaFill": 0.458
+  }
+ },
+ "ai_thunder": {
+  "before": {
+   "size": [
+    120,
+    433
+   ],
+   "mainHue": 180,
+   "huePurity": 0.641,
+   "hueSpread": 3,
+   "hotPct": 0.192,
+   "satMed": 0.551,
+   "valMed": 0.804,
+   "alphaFill": 0.732
+  },
+  "after": {
+   "size": [
+    120,
+    433
+   ],
+   "mainHue": 180,
+   "huePurity": 0.974,
+   "hueSpread": 1,
+   "hotPct": 0.146,
+   "satMed": 0.671,
+   "valMed": 0.804,
+   "alphaFill": 0.732
+  }
+ }
+}
